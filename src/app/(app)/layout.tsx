@@ -2,8 +2,10 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { requireProfile, hasRole } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getClientsMini } from "@/lib/data/queries";
 import { AppNav } from "@/components/app-nav";
 import { LogoWordmark } from "@/components/logo";
+import { CommandPalette } from "@/components/command-palette";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -11,10 +13,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const profile = await requireProfile();
   const supabase = await getServerSupabase();
 
-  const { count } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .is("read_at", null);
+  const [{ count }, clientsMini] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .is("read_at", null),
+    getClientsMini(),
+  ]);
 
   return (
     <div className="flex min-h-screen">
@@ -31,6 +36,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/10 bg-bg/60 px-4 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-2 md:hidden">
             <LogoWordmark />
+          </div>
+          <div className="hidden md:block">
+            <CommandPalette clients={clientsMini} />
           </div>
           <div className="ml-auto flex items-center gap-4">
             <Link

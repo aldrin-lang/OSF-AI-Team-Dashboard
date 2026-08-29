@@ -141,3 +141,22 @@ export async function getOptions(kind: string): Promise<string[]> {
 export function profileMap(profiles: Profile[]): Map<string, Profile> {
   return new Map(profiles.map((p) => [p.id, p]));
 }
+
+export async function getClientsMini(): Promise<
+  { id: string; name: string; country: string | null; stage: string | null }[]
+> {
+  const supabase = await getServerSupabase();
+  const [{ data }, stages] = await Promise.all([
+    supabase.from("clients").select("id, name, country, stage_id").eq("pipeline", "ai").order("name"),
+    getStages("ai"),
+  ]);
+  const stageName = new Map(stages.map((s) => [s.id, s.name]));
+  return ((data as { id: string; name: string; country: string | null; stage_id: string | null }[]) ?? []).map(
+    (c) => ({
+      id: c.id,
+      name: c.name,
+      country: c.country,
+      stage: c.stage_id ? stageName.get(c.stage_id) ?? null : null,
+    }),
+  );
+}

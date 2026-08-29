@@ -3,16 +3,16 @@ import Link from "next/link";
 import { Users, ListChecks, Clock, AlertTriangle, Rocket } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getStages } from "@/lib/data/queries";
+import { getStages, getProfiles, profileMap } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Donut } from "@/components/ui/donut";
 import { Badge } from "@/components/ui/badge";
 import { CLIENT_STATUS } from "@/lib/labels";
-import { daysSince, formatDate } from "@/lib/utils";
+import { daysSince, formatDate, relativeTime, initials } from "@/lib/utils";
 import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
-import type { Client, Concern, PipelineStage, Task } from "@/lib/types";
+import type { ActivityRow, Client, Concern, PipelineStage, Task } from "@/lib/types";
 
 export const metadata = { title: "My Desk · OSF AI Team Dashboard" };
 
@@ -28,22 +28,36 @@ export default async function MyDeskPage() {
   const profile = await requireProfile();
   const supabase = await getServerSupabase();
 
-  const [{ data: allClients }, { data: myTasks }, { data: openConcerns }, stages] =
-    await Promise.all([
-      supabase.from("clients").select("*").eq("pipeline", "ai"),
-      supabase
-        .from("tasks")
-        .select("*")
-        .eq("assignee_id", profile.id)
-        .eq("status", "open")
-        .order("due_date", { ascending: true, nullsFirst: false }),
-      supabase.from("concerns").select("*").neq("status", "resolved").order("severity", { ascending: false }),
-      getStages("ai"),
-    ]);
+  const [
+    { data: allClients },
+    { data: myTasks },
+    { data: openConcerns },
+    { data: activityRows },
+    stages,
+    profiles,
+  ] = await Promise.all([
+    supabase.from("clients").select("*").eq("pipeline", "ai"),
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("assignee_id", profile.id)
+      .eq("status", "open")
+      .order("due_date", { ascending: true, nullsFirst: false }),
+    supabase.from("concerns").select("*").neq("status", "resolved").order("severity", { ascending: false }),
+    supabase
+      .from("activity_log")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(12),
+    getStages("ai"),
+    getProfiles(),
+  ]);
 
   const clients = (allClients as Client[]) ?? [];
   const tasks = (myTasks as Task[]) ?? [];
   const concerns = (openConcerns as Concern[]) ?? [];
+  const activity = (activityRows as ActivityRow[]) ?? [];
+  const pm = profileMap(profiles);
   const stageById = new Map<string, PipelineStage>(stages.map((s) => [s.id, s]));
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
   const mine = clients.filter((c) => c.manager_id === profile.id);
@@ -228,6 +242,32 @@ export default async function MyDeskPage() {
           </CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Team activity</CardTitle>
+          <Link href="/notifications" className="text-xs font-medium text-brand-300 hover:text-brand-200">
+            Notifications →
+          </Link>
+        </CardHeader>
+        <CardBody className="p-0">
+          {activity.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-ink-faint">No activity yet.</p>
+          ) : (
+            <ul className="divide-y divide-white/5">
+              {activity.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 px-5 py-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-ink-muted">
+                    {initials(a.actor_id ? pm.get(a.actor_id)?.full_name ?? "·" : "·")}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">{a.summary}</span>
+                  <span className="shrink-0 text-xs text-ink-faint">{relativeTime(a.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 }
