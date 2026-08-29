@@ -18,8 +18,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface/60 pb-4 backdrop-blur-sm md:flex">
-        <div className="flex h-16 items-center border-b border-line px-5">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent pb-4 backdrop-blur-xl md:flex">
+        <div className="flex h-16 items-center border-b border-white/10 px-5">
           <LogoWordmark />
         </div>
         <div className="pt-4">
@@ -28,7 +28,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/70 px-4 backdrop-blur-md md:px-8">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/10 bg-bg/60 px-4 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-2 md:hidden">
             <LogoWordmark />
           </div>
@@ -46,7 +46,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
               ) : null}
             </Link>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 shadow-[0_6px_16px_-6px_rgba(43,127,255,0.7)]">
                 {initials(profile.full_name || profile.email)}
               </span>
               <div className="hidden text-right leading-tight sm:block">

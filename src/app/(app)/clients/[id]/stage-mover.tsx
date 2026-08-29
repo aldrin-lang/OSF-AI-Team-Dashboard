@@ -20,7 +20,7 @@ export function StageMover({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="rounded-lg border border-line bg-surface p-3">
+    <div className="glass rounded-xl p-3">
       <p className="mb-2 text-xs font-medium text-ink-faint">Pipeline stage</p>
       <div className="flex flex-wrap gap-1.5">
         {stages.map((s) => {

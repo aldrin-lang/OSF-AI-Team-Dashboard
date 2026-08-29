@@ -29,12 +29,12 @@ type Card = {
 };
 
 const ACCENTS = [
-  "bg-brand-500",
-  "bg-navy-700",
-  "bg-accent-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-sky-500",
+  "from-brand-400 to-brand-600",
+  "from-cyan-300 to-cyan-500",
+  "from-violet-400 to-violet-600",
+  "from-accent-400 to-accent-600",
+  "from-emerald-300 to-emerald-500",
+  "from-rose-400 to-rose-600",
 ];
 
 export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card[] }) {
@@ -111,20 +111,22 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-surface/70 backdrop-blur-sm transition-colors ${
-        isOver ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
+      className={`glass flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl transition-all ${
+        isOver ? "-translate-y-0.5 border-brand-400/60 ring-2 ring-brand-500/30" : ""
       }`}
     >
-      <div className={`h-1 ${accent}`} />
-      <div className="flex items-center justify-between px-3 py-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{stage.name}</p>
-        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-ink-muted">
+      <div className={`h-1 bg-gradient-to-r ${accent}`} />
+      <div className="flex items-center justify-between px-3.5 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+          {stage.name}
+        </p>
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-ink">
           {cards.length}
         </span>
       </div>
       <div className="flex flex-1 flex-col gap-2 px-3 pb-3">
         {cards.length === 0 && (
-          <p className="rounded-lg border border-dashed border-line py-6 text-center text-xs text-ink-faint">
+          <p className="rounded-xl border border-dashed border-white/12 py-7 text-center text-xs text-ink-faint">
             Drop here
           </p>
         )}
@@ -158,8 +160,10 @@ function CardChip({
   const over = slaDays != null && d != null && d > slaDays;
   return (
     <div
-      className={`cursor-grab rounded-lg border bg-surface p-2.5 text-sm shadow-sm transition-shadow active:cursor-grabbing ${
-        dragging ? "border-brand-400 shadow-md" : "border-line hover:shadow-md"
+      className={`cursor-grab rounded-xl border bg-white/[0.05] p-3 text-sm backdrop-blur-sm transition-all active:cursor-grabbing ${
+        dragging
+          ? "border-brand-400/70 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.8),0_0_20px_-4px_rgba(43,127,255,0.5)]"
+          : "border-white/10 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08]"
       }`}
     >
       <Link

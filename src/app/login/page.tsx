@@ -49,7 +49,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
           <p className="mt-1 text-sm text-ink-muted">
             Internal team access only. Accounts are created by an admin.
           </p>
-          <div className="mt-6 rounded-xl border border-line bg-surface p-6 shadow-sm">
+          <div className="mt-6 glass rounded-2xl p-6">
             <LoginForm next={next} />
           </div>
         </div>

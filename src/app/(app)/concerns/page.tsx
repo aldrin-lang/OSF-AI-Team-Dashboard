@@ -67,7 +67,7 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
       {concerns.length === 0 ? (
         <EmptyState>No concerns here.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-line bg-surface/70 backdrop-blur-sm">
+        <div className="glass overflow-x-auto rounded-2xl">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-faint">

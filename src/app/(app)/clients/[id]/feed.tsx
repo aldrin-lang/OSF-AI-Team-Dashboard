@@ -62,7 +62,7 @@ export function Feed({
         />
         <div className="flex items-center justify-between gap-2">
           <select
-            className="h-8 rounded border border-line bg-surface px-1 text-xs"
+            className="h-8 rounded-lg border border-white/12 bg-white/[0.05] px-1 text-xs"
             value=""
             onChange={(e) => {
               if (e.target.value && !selected.includes(e.target.value))

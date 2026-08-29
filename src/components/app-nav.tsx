@@ -23,9 +23,9 @@ const MAIN = [
 
 function itemClass(active: boolean) {
   return cn(
-    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
     active
-      ? "bg-brand-500 text-white shadow-[0_8px_24px_-8px_rgba(43,127,255,0.7)]"
+      ? "bg-gradient-to-r from-brand-500/90 to-brand-600/70 text-white shadow-[0_10px_30px_-10px_rgba(43,127,255,0.8),0_1px_0_0_rgba(255,255,255,0.2)_inset] ring-1 ring-inset ring-white/15"
       : "text-ink-muted hover:bg-white/[0.06] hover:text-ink",
   );
 }
@@ -45,7 +45,7 @@ export function AppNav({ isManager }: { isManager: boolean }) {
             : pathname.startsWith(item.match ?? item.href);
           return (
             <Link key={item.label} href={item.href} className={itemClass(active)}>
-              <item.icon className="h-4 w-4 shrink-0" />
+              <item.icon className="h-[18px] w-[18px] shrink-0" />
               {item.label}
             </Link>
           );
@@ -58,12 +58,12 @@ export function AppNav({ isManager }: { isManager: boolean }) {
       <div className="flex flex-col gap-1">
         {isManager && (
           <Link href="/admin" className={itemClass(pathname.startsWith("/admin"))}>
-            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <ShieldCheck className="h-[18px] w-[18px] shrink-0" />
             Admin
           </Link>
         )}
         <Link href="/settings" className={itemClass(pathname.startsWith("/settings"))}>
-          <Settings className="h-4 w-4 shrink-0" />
+          <Settings className="h-[18px] w-[18px] shrink-0" />
           Settings
         </Link>
       </div>

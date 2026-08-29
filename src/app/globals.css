@@ -1,35 +1,33 @@
 @import "tailwindcss";
 
 /* ===========================================================================
-   OSF AI Team Dashboard — dark theme
-   OutsourceForce.ai brand: navy base, blue #2b7fff accent, orange #f2691f alerts
+   OSF AI Team Dashboard — modern glass / depth theme
+   OutsourceForce.ai: navy base · electric blue #2b7fff · orange #f2691f
    =========================================================================== */
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  /* surfaces */
-  --color-bg: #0b162c;
-  --color-surface: #121f38;
-  --color-surface-2: #17264180;
+  --color-bg: #070d1c;
+  --color-surface: #0f1a33;
   --color-line: #ffffff14;
-  --color-line-strong: #ffffff26;
+  --color-line-strong: #ffffff2b;
 
-  /* text */
-  --color-ink: #eef2fb;
-  --color-ink-muted: #93a3c4;
-  --color-ink-faint: #64749a;
+  --color-ink: #f2f5fc;
+  --color-ink-muted: #9db0d4;
+  --color-ink-faint: #6379a1;
 
-  /* brand */
   --color-brand-50: #eef5ff;
   --color-brand-100: #d9e8ff;
   --color-brand-200: #b7d3ff;
-  --color-brand-300: #83b4ff;
-  --color-brand-400: #4d90ff;
+  --color-brand-300: #86b6ff;
+  --color-brand-400: #4d93ff;
   --color-brand-500: #2b7fff;
   --color-brand-600: #1563ea;
   --color-brand-700: #124fc0;
 
+  --color-cyan-400: #22d3ee;
+  --color-violet-400: #a78bfa;
   --color-navy-700: #17305a;
   --color-navy-800: #14284d;
   --color-navy-900: #0f1e3a;
@@ -48,9 +46,50 @@ body {
   color: var(--color-ink);
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(60rem 40rem at 85% -10%, #1d3a7a33, transparent 60%),
-    radial-gradient(50rem 40rem at -10% 110%, #f2691f1a, transparent 55%);
+    radial-gradient(48rem 32rem at 78% -12%, rgba(43, 127, 255, 0.28), transparent 60%),
+    radial-gradient(42rem 30rem at 108% 40%, rgba(167, 139, 250, 0.14), transparent 60%),
+    radial-gradient(46rem 36rem at -12% 112%, rgba(242, 105, 31, 0.16), transparent 58%),
+    linear-gradient(180deg, #0a1123 0%, #070d1c 100%);
   background-attachment: fixed;
+}
+
+/* faint dot grid over the whole app */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(60rem 50rem at 50% 0%, #000 30%, transparent 75%);
+}
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- reusable depth utilities ---- */
+@utility glass {
+  background-image: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.035) 40%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+    0 24px 60px -30px rgba(0, 0, 0, 0.85),
+    0 8px 24px -16px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+}
+
+@utility card-glow {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
+    0 30px 70px -30px rgba(0, 0, 0, 0.9),
+    0 0 40px -12px rgba(43, 127, 255, 0.35);
 }
 
 * {
@@ -59,3 +98,4 @@ body {
 }
 ::-webkit-scrollbar { height: 8px; width: 8px; }
 ::-webkit-scrollbar-thumb { background: #ffffff26; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #ffffff40; }

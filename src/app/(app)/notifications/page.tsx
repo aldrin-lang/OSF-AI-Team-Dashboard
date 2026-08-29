@@ -36,7 +36,7 @@ export default async function NotificationsPage() {
       {rows.length === 0 ? (
         <EmptyState>No notifications yet.</EmptyState>
       ) : (
-        <ul className="divide-y divide-white/10 rounded-lg border border-line bg-surface">
+        <ul className="glass divide-y divide-white/10 rounded-2xl">
           {rows.map((n) => (
             <li key={n.id} className={n.read_at ? "" : "bg-blue-50/40"}>
               <Link
