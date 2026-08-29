@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { getServerSupabase, getAdminSupabase } from "@/lib/supabase/server";
 import { requireActorRole } from "@/lib/server/rbac";
 
@@ -18,6 +18,7 @@ export async function inviteMember(formData: FormData): Promise<void> {
   });
   if (error) throw new Error(error.message);
 
+  updateTag("profiles");
   revalidatePath("/admin");
 }
 
@@ -28,6 +29,7 @@ export async function setMemberRole(formData: FormData) {
   if (!id || !["admin", "manager", "member"].includes(role)) return;
   const supabase = await getServerSupabase();
   await supabase.from("profiles").update({ role }).eq("id", id);
+  updateTag("profiles");
   revalidatePath("/admin");
 }
 
@@ -38,6 +40,7 @@ export async function setMemberActive(formData: FormData) {
   if (!id) return;
   const supabase = await getServerSupabase();
   await supabase.from("profiles").update({ active }).eq("id", id);
+  updateTag("profiles");
   revalidatePath("/admin");
 }
 
@@ -53,6 +56,7 @@ export async function updateStage(formData: FormData) {
     .from("pipeline_stages")
     .update({ name, sla_days: Number.isFinite(sla_days as number) ? sla_days : null })
     .eq("id", id);
+  updateTag("lookups");
   revalidatePath("/admin");
   revalidatePath("/pipeline");
 }
@@ -64,6 +68,7 @@ export async function addOption(formData: FormData) {
   if (!kind || !value) return;
   const supabase = await getServerSupabase();
   await supabase.from("option_lists").insert({ kind, value, position: 99 });
+  updateTag("lookups");
   revalidatePath("/admin");
 }
 
@@ -73,5 +78,6 @@ export async function removeOption(formData: FormData) {
   if (!id) return;
   const supabase = await getServerSupabase();
   await supabase.from("option_lists").update({ active: false }).eq("id", id);
+  updateTag("lookups");
   revalidatePath("/admin");
 }

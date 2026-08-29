@@ -5,7 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getStages } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardHeader, CardTitle, CardBody, EmptyState } from "@/components/ui/primitives";
+import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/badge";
 import { CLIENT_STATUS } from "@/lib/labels";
 import { daysSince, formatDate } from "@/lib/utils";
@@ -79,9 +79,7 @@ export default async function MyDeskPage() {
           </CardHeader>
           <CardBody className="p-0">
             {tasks.length === 0 ? (
-              <div className="px-4 py-6">
-                <EmptyState>No open tasks assigned to you.</EmptyState>
-              </div>
+              <p className="px-5 py-5 text-sm text-slate-400">No open tasks assigned to you.</p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {tasks.map((t) => (
@@ -149,9 +147,9 @@ export default async function MyDeskPage() {
         </CardHeader>
         <CardBody className="p-0">
           {clients.length === 0 ? (
-            <div className="px-4 py-6">
-              <EmptyState>No clients assigned to you yet.</EmptyState>
-            </div>
+            <p className="px-5 py-5 text-sm text-slate-400">
+              No clients assigned to you yet. Open a client and set yourself as Manager.
+            </p>
           ) : (
             <table className="w-full text-sm">
               <thead>

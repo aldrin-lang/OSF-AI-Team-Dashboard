@@ -1,4 +1,10 @@
 import { getServerSupabase } from "@/lib/supabase/server";
+import {
+  getStagesCached,
+  getStageGatesCached,
+  getOptionsCached,
+  getProfilesCached,
+} from "@/lib/data/cached";
 import type {
   ActivityRow,
   ChecklistItem,
@@ -15,26 +21,16 @@ import type {
 } from "@/lib/types";
 
 export async function getProfiles(): Promise<Profile[]> {
-  const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("full_name", { ascending: true });
-  return (data as Profile[]) ?? [];
+  return getProfilesCached();
 }
 
 export async function getStages(pipeline?: PipelineType): Promise<PipelineStage[]> {
-  const supabase = await getServerSupabase();
-  let q = supabase.from("pipeline_stages").select("*").order("position", { ascending: true });
-  if (pipeline) q = q.eq("pipeline", pipeline);
-  const { data } = await q;
-  return (data as PipelineStage[]) ?? [];
+  const all = await getStagesCached();
+  return pipeline ? all.filter((s) => s.pipeline === pipeline) : all;
 }
 
 export async function getStageGates(): Promise<StageGate[]> {
-  const supabase = await getServerSupabase();
-  const { data } = await supabase.from("stage_gates").select("*");
-  return (data as StageGate[]) ?? [];
+  return getStageGatesCached();
 }
 
 export interface ClientListFilters {
@@ -139,14 +135,7 @@ export async function getGlobalActivity(limit = 100): Promise<ActivityRow[]> {
 }
 
 export async function getOptions(kind: string): Promise<string[]> {
-  const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("option_lists")
-    .select("value")
-    .eq("kind", kind)
-    .eq("active", true)
-    .order("position");
-  return ((data as { value: string }[]) ?? []).map((r) => r.value);
+  return getOptionsCached(kind);
 }
 
 export function profileMap(profiles: Profile[]): Map<string, Profile> {

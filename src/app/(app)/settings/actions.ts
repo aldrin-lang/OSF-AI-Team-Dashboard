@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireActor } from "@/lib/server/rbac";
 
@@ -39,6 +39,7 @@ export async function updateMyName(formData: FormData) {
   const full_name = String(formData.get("full_name") ?? "").trim();
   if (!full_name) return;
   await supabase.from("profiles").update({ full_name }).eq("id", actor.id);
+  updateTag("profiles");
   revalidatePath("/settings");
   revalidatePath("/", "layout");
 }

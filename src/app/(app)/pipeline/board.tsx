@@ -28,6 +28,15 @@ type Card = {
   status: string;
 };
 
+const ACCENTS = [
+  "bg-brand-500",
+  "bg-navy-700",
+  "bg-accent-500",
+  "bg-emerald-500",
+  "bg-violet-500",
+  "bg-sky-500",
+];
+
 export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card[] }) {
   const router = useRouter();
   const [cards, setCards] = useState(initial);
@@ -52,7 +61,9 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
 
     const prev = card.stageId;
     setCards((cs) =>
-      cs.map((c) => (c.id === cardId ? { ...c, stageId: toStageId, stageEnteredAt: new Date().toISOString() } : c)),
+      cs.map((c) =>
+        c.id === cardId ? { ...c, stageId: toStageId, stageEnteredAt: new Date().toISOString() } : c,
+      ),
     );
     const res = await moveClientStage({ clientId: cardId, toStageId });
     if (!res.ok) {
@@ -66,14 +77,17 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
   return (
     <div>
       {error && (
-        <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+          {error}
+        </p>
       )}
       <DndContext sensors={sensors} onDragStart={onStart} onDragEnd={onEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {stages.map((st) => (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {stages.map((st, i) => (
             <Column
               key={st.id}
               stage={st}
+              accent={ACCENTS[i % ACCENTS.length]}
               cards={cards.filter((c) => c.stageId === st.id)}
             />
           ))}
@@ -84,20 +98,36 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
   );
 }
 
-function Column({ stage, cards }: { stage: Stage; cards: Card[] }) {
+function Column({
+  stage,
+  cards,
+  accent,
+}: {
+  stage: Stage;
+  cards: Card[];
+  accent: string;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-64 shrink-0 flex-col rounded-lg border p-2 ${
-        isOver ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-slate-100/50"
+      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-colors ${
+        isOver ? "border-brand-400 ring-2 ring-brand-200" : "border-slate-200/70"
       }`}
     >
-      <div className="mb-2 flex items-center justify-between px-1">
-        <p className="text-xs font-semibold text-slate-700">{stage.name}</p>
-        <span className="rounded bg-slate-200 px-1.5 text-xs text-slate-600">{cards.length}</span>
+      <div className={`h-1 ${accent}`} />
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{stage.name}</p>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+          {cards.length}
+        </span>
       </div>
-      <div className="flex flex-1 flex-col gap-2">
+      <div className="flex flex-1 flex-col gap-2 px-3 pb-3">
+        {cards.length === 0 && (
+          <p className="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
+            Drop here
+          </p>
+        )}
         {cards.map((c) => (
           <DraggableCard key={c.id} card={c} slaDays={stage.slaDays} />
         ))}
@@ -109,12 +139,7 @@ function Column({ stage, cards }: { stage: Stage; cards: Card[] }) {
 function DraggableCard({ card, slaDays }: { card: Card; slaDays: number | null }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id });
   return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className={isDragging ? "opacity-30" : ""}
-    >
+    <div ref={setNodeRef} {...attributes} {...listeners} className={isDragging ? "opacity-30" : ""}>
       <CardChip card={card} slaDays={slaDays} />
     </div>
   );
@@ -133,20 +158,26 @@ function CardChip({
   const over = slaDays != null && d != null && d > slaDays;
   return (
     <div
-      className={`rounded-md border bg-white p-2 text-sm shadow-sm ${
-        dragging ? "border-slate-900" : "border-slate-200"
+      className={`cursor-grab rounded-lg border bg-white p-2.5 text-sm shadow-sm transition-shadow active:cursor-grabbing ${
+        dragging ? "border-brand-400 shadow-md" : "border-slate-200 hover:shadow-md"
       }`}
     >
       <Link
         href={`/clients/${card.id}`}
-        className="font-medium text-slate-900 hover:underline"
+        className="font-medium text-navy-800 hover:text-brand-600"
         onClick={(e) => e.stopPropagation()}
       >
         {card.name}
       </Link>
-      <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
-        <span>{card.manager ?? "Unassigned"}</span>
-        <span className={over ? "text-red-600" : ""}>{d != null ? `${d}d` : ""}</span>
+      <div className="mt-1.5 flex items-center justify-between text-xs">
+        <span className="text-slate-400">{card.manager ?? "Unassigned"}</span>
+        <span
+          className={`rounded px-1.5 py-0.5 font-medium ${
+            over ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-400"
+          }`}
+        >
+          {d != null ? `${d}d` : "—"}
+        </span>
       </div>
     </div>
   );
