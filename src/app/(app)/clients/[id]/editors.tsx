@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/primitives";
@@ -27,21 +27,28 @@ function Disclosure({ label, children }: { label: string; children: React.ReactN
 export function EditClientPanel({
   client,
   profiles,
+  canEditCommercials,
 }: {
   client: Client;
   profiles: { id: string; name: string }[];
+  canEditCommercials: boolean;
 }) {
   const router = useRouter();
+  const [pending, start] = useTransition();
+  const [saved, setSaved] = useState(false);
   return (
-    <Disclosure label="Edit details">
-      <form
-        action={async (fd) => {
+    <form
+      action={(fd) =>
+        start(async () => {
           await updateClient(fd);
+          setSaved(true);
           router.refresh();
-        }}
-        className="space-y-3"
-      >
-        <input type="hidden" name="id" value={client.id} />
+          setTimeout(() => setSaved(false), 2500);
+        })
+      }
+      className="space-y-3"
+    >
+      <input type="hidden" name="id" value={client.id} />
         <div>
           <Label>Name</Label>
           <Input name="name" defaultValue={client.name} />
@@ -97,21 +104,23 @@ export function EditClientPanel({
             ))}
           </Select>
         </div>
-        <div className="rounded-md bg-slate-50 p-2">
-          <p className="mb-2 text-xs font-medium text-slate-500">Commercials (manager/admin only)</p>
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-semibold text-slate-500">
+            Commercials {canEditCommercials ? "" : "(read-only — manager/admin can edit)"}
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>Setup fee</Label>
-              <Input name="setup_fee" type="number" step="0.01" defaultValue={client.setup_fee ?? ""} />
+              <Label>Setup fee (£)</Label>
+              <Input name="setup_fee" type="number" step="0.01" defaultValue={client.setup_fee ?? ""} disabled={!canEditCommercials} />
             </div>
             <div>
-              <Label>Daily rate</Label>
-              <Input name="daily_rate" type="number" step="0.01" defaultValue={client.daily_rate ?? ""} />
+              <Label>Daily rate (£)</Label>
+              <Input name="daily_rate" type="number" step="0.01" defaultValue={client.daily_rate ?? ""} disabled={!canEditCommercials} />
             </div>
           </div>
           <div className="mt-2">
             <Label>Hiring fee status</Label>
-            <Select name="hiring_fee_status" defaultValue={client.hiring_fee_status}>
+            <Select name="hiring_fee_status" defaultValue={client.hiring_fee_status} disabled={!canEditCommercials}>
               {Object.entries(HIRING_FEE_STATUS).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v.label}
@@ -122,11 +131,11 @@ export function EditClientPanel({
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div>
               <Label>Invoice</Label>
-              <Input name="hiring_fee_invoice" defaultValue={client.hiring_fee_invoice ?? ""} />
+              <Input name="hiring_fee_invoice" defaultValue={client.hiring_fee_invoice ?? ""} disabled={!canEditCommercials} />
             </div>
             <div>
               <Label>Paid</Label>
-              <Input name="hiring_fee_paid" defaultValue={client.hiring_fee_paid ?? ""} />
+              <Input name="hiring_fee_paid" defaultValue={client.hiring_fee_paid ?? ""} disabled={!canEditCommercials} />
             </div>
           </div>
         </div>
@@ -134,11 +143,13 @@ export function EditClientPanel({
           <Label>Remarks</Label>
           <Textarea name="remarks" defaultValue={client.remarks ?? ""} />
         </div>
-        <Button size="sm" type="submit">
-          Save
-        </Button>
-      </form>
-    </Disclosure>
+        <div className="flex items-center gap-3">
+          <Button size="sm" type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save changes"}
+          </Button>
+          {saved && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
+        </div>
+    </form>
   );
 }
 

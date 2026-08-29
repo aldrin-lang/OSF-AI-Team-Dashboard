@@ -1,5 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
+import { Users, ListChecks, Clock, AlertTriangle } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getStages } from "@/lib/data/queries";
@@ -64,14 +65,11 @@ export default async function MyDeskPage() {
         subtitle="Your clients, tasks and anything that needs attention"
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Clients you manage" value={clients.length} href="/clients" />
-        <Stat label="Open tasks" value={tasks.length} tone={tasks.length ? "amber" : "neutral"} />
-        <Stat
-          label="Past SLA"
-          value={overSla.length}
-          tone={overSla.length ? "red" : "neutral"}
-        />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Clients you manage" value={clients.length} href="/clients" icon={Users} tone="brand" />
+        <Stat label="Open tasks" value={tasks.length} icon={ListChecks} tone={tasks.length ? "amber" : "neutral"} />
+        <Stat label="Past SLA" value={overSla.length} icon={Clock} tone={overSla.length ? "red" : "neutral"} />
+        <Stat label="Open concerns" value={concerns.length} href="/concerns" icon={AlertTriangle} tone={concerns.length ? "red" : "neutral"} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -198,19 +196,32 @@ function Stat({
   label,
   value,
   href,
+  icon: Icon,
   tone = "neutral",
 }: {
   label: string;
   value: number;
   href?: string;
-  tone?: "neutral" | "amber" | "red";
+  icon: React.ComponentType<{ className?: string }>;
+  tone?: "neutral" | "brand" | "amber" | "red";
 }) {
-  const toneClass =
-    tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-600" : "text-slate-900";
+  const chip =
+    tone === "red"
+      ? "bg-red-50 text-red-600"
+      : tone === "amber"
+        ? "bg-accent-500/10 text-accent-600"
+        : tone === "brand"
+          ? "bg-brand-50 text-brand-600"
+          : "bg-slate-100 text-slate-500";
   const inner = (
-    <Card className="px-4 py-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{value}</p>
+    <Card className="flex items-center gap-4 px-5 py-4 transition-shadow hover:shadow-md">
+      <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${chip}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div>
+        <p className="text-2xl font-semibold tracking-tight text-navy-800">{value}</p>
+        <p className="text-xs text-slate-500">{label}</p>
+      </div>
     </Card>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;

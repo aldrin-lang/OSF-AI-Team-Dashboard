@@ -2,21 +2,15 @@ import { requireRole } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getStages } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardHeader, CardTitle, CardBody, Input, Select } from "@/components/ui/primitives";
+import { Card, CardHeader, CardTitle, CardBody, Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
-import {
-  inviteMember,
-  setMemberRole,
-  setMemberActive,
-  updateStage,
-  addOption,
-  removeOption,
-} from "./actions";
+import { inviteMember, updateStage, addOption, removeOption } from "./actions";
+import { RoleSelect, ActiveToggle } from "./member-controls";
 import type { OptionRow, Profile } from "@/lib/types";
 
-export const metadata = { title: "Admin · AI Receptionist Ops" };
+export const metadata = { title: "Admin · OSF AI Team Dashboard" };
 
 export default async function AdminPage() {
   const me = await requireRole("manager");
@@ -77,37 +71,18 @@ export default async function AdminPage() {
                   <td className="py-2 text-slate-500">{m.email}</td>
                   <td className="py-2">
                     {isAdmin ? (
-                      <form action={setMemberRole} className="inline">
-                        <input type="hidden" name="id" value={m.id} />
-                        <Select
-                          name="role"
-                          defaultValue={m.role}
-                          className="h-7 w-28 text-xs"
-                          onChange={(e) => e.currentTarget.form?.requestSubmit()}
-                        >
-                          <option value="member">member</option>
-                          <option value="manager">manager</option>
-                          <option value="admin">admin</option>
-                        </Select>
-                      </form>
+                      <RoleSelect id={m.id} role={m.role} />
                     ) : (
                       <span className="capitalize">{m.role}</span>
                     )}
                   </td>
                   <td className="py-2">
-                    {isAdmin ? (
-                      <form action={setMemberActive} className="inline">
-                        <input type="hidden" name="id" value={m.id} />
-                        <input type="hidden" name="active" value={(!m.active).toString()} />
-                        <button className="text-xs text-slate-500 hover:text-slate-900">
-                          {m.active ? "Deactivate" : "Reactivate"}
-                        </button>
-                      </form>
-                    ) : (
+                    <div className="flex items-center gap-2">
                       <Badge tone={m.active ? "green" : "neutral"}>
                         {m.active ? "Active" : "Inactive"}
                       </Badge>
-                    )}
+                      {isAdmin && m.id !== me.id && <ActiveToggle id={m.id} active={m.active} />}
+                    </div>
                   </td>
                 </tr>
               ))}

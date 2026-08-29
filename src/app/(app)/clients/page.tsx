@@ -15,6 +15,9 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
   const sp = await props.searchParams;
   const pipeline = (sp.type === "va" ? "va" : "ai") as PipelineType;
   const get = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : undefined);
+  // VA history is huge and mostly closed — default to active unless "all" or an explicit status.
+  const showAll = get("all") === "1";
+  const activeOnly = pipeline === "va" && !showAll;
 
   const [profiles, stages, clients] = await Promise.all([
     getProfiles(),
@@ -27,6 +30,7 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
       stageId: get("stage"),
       status: get("status"),
       search: get("q"),
+      activeOnly,
     }),
   ]);
   const pm = profileMap(profiles);
@@ -36,11 +40,21 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
     <div className="space-y-5">
       <PageHeader
         title="Clients"
-        subtitle={`${clients.length} ${pipeline === "ai" ? "AI receptionist" : "virtual assistant"} client${clients.length === 1 ? "" : "s"}`}
+        subtitle={`${clients.length} ${pipeline === "ai" ? "AI receptionist" : "virtual assistant"} client${clients.length === 1 ? "" : "s"}${activeOnly ? " · active only" : ""}`}
         actions={
-          <Link href={`/clients/new?type=${pipeline}`}>
-            <Button size="sm">New client</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {pipeline === "va" && (
+              <Link
+                href={`/clients?type=va${showAll ? "" : "&all=1"}`}
+                className="text-xs font-medium text-slate-500 hover:text-navy-800"
+              >
+                {showAll ? "Hide closed" : "Show all history"}
+              </Link>
+            )}
+            <Link href={`/clients/new?type=${pipeline}`}>
+              <Button size="sm">New client</Button>
+            </Link>
+          </div>
         }
       />
 

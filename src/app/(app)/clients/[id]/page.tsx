@@ -1,7 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getClientDetail, getClientFeed, getProfiles, getStages, profileMap } from "@/lib/data/queries";
-import { checkStageGate } from "@/lib/server/gates";
+import { requireProfile, hasRole } from "@/lib/auth";
+import {
+  getClientDetail,
+  getClientFeed,
+  getProfiles,
+  getStages,
+  getStageGates,
+  profileMap,
+} from "@/lib/data/queries";
+import { checkAllStageGates } from "@/lib/server/gates";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/badge";
@@ -17,22 +25,21 @@ import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
 
 export default async function ClientDetailPage(props: PageProps<"/clients/[id]">) {
   const { id } = await props.params;
+  const me = await requireProfile();
   const detail = await getClientDetail(id);
   if (!detail) notFound();
 
   const { client, lines, placements, checklist, tasks, concerns, stage } = detail;
-  const [profiles, stages, feed] = await Promise.all([
+  const [profiles, stages, gates, feed] = await Promise.all([
     getProfiles(),
     getStages(client.pipeline),
+    getStageGates(),
     getClientFeed(id),
   ]);
   const pm = profileMap(profiles);
 
-  // Pre-compute which target stages are reachable (gate check).
-  const gateResults = await Promise.all(
-    stages.map(async (s) => [s.id, await checkStageGate(id, s.id)] as const),
-  );
-  const gateMap = new Map(gateResults);
+  // Which target stages are reachable — evaluated in memory, no extra queries.
+  const gateMap = checkAllStageGates(stages, gates, checklist);
 
   const statusMeta = CLIENT_STATUS[client.status];
   const dis = daysSince(client.stage_entered_at);
@@ -196,35 +203,14 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Details</CardTitle>
+              <CardTitle>Client details</CardTitle>
             </CardHeader>
             <CardBody>
               <EditClientPanel
                 client={client}
+                canEditCommercials={hasRole(me, "manager")}
                 profiles={profiles.map((p) => ({ id: p.id, name: p.full_name || p.email }))}
               />
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Commercials</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <dl className="grid grid-cols-2 gap-y-2 text-sm">
-                <Field label="Setup fee" value={client.setup_fee != null ? `£${client.setup_fee}` : null} />
-                <Field label="Daily rate" value={client.daily_rate != null ? `£${client.daily_rate}` : null} />
-                <div>
-                  <dt className="text-xs text-slate-400">Hiring fee</dt>
-                  <dd>
-                    <Badge tone={HIRING_FEE_STATUS[client.hiring_fee_status].tone}>
-                      {HIRING_FEE_STATUS[client.hiring_fee_status].label}
-                    </Badge>
-                  </dd>
-                </div>
-                <Field label="Invoice" value={client.hiring_fee_invoice} />
-                <Field label="Paid" value={client.hiring_fee_paid} />
-              </dl>
             </CardBody>
           </Card>
 

@@ -45,6 +45,7 @@ export interface ClientListFilters {
   stageId?: string;
   status?: string;
   search?: string;
+  activeOnly?: boolean;
 }
 
 export async function getClients(filters: ClientListFilters): Promise<Client[]> {
@@ -55,6 +56,7 @@ export async function getClients(filters: ClientListFilters): Promise<Client[]> 
   if (filters.source) q = q.eq("source", filters.source);
   if (filters.stageId) q = q.eq("stage_id", filters.stageId);
   if (filters.status) q = q.eq("status", filters.status);
+  else if (filters.activeOnly) q = q.not("status", "in", "(withdrawn,rejected,churned)");
   if (filters.search) q = q.ilike("name", `%${filters.search}%`);
   const { data } = await q.order("updated_at", { ascending: false });
   return (data as Client[]) ?? [];
