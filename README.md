@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Receptionist Ops
 
-## Getting Started
+Internal team dashboard for running AI receptionist **and** virtual-assistant client
+onboarding, plus post-go-live client concerns. Staff only — this is **not** the
+client-facing portal.
 
-First, run the development server:
+Replaces the "AI Closed Sales / Onboarding Cal" spreadsheet tab.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Stack
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Next.js 16 (App Router, Server Components + Server Actions)
+- Supabase — Postgres, Auth (email + password, invite-only), RLS
+- Resend — notification + digest email
+- Vercel — hosting + one daily cron
+- Tailwind CSS
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+This is a **brand-new project**, completely separate from `client-portal` /
+`client-portal-pqb7` / Supabase `cjaqdxfqjxnepjentgwb`. Nothing here touches those.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Features
 
-## Learn More
+| Area | What |
+|---|---|
+| My Desk | Your clients, tasks, past-SLA + stale flags, this week's go-lives |
+| Pipeline | Kanban board, drag between stages, stage gates enforced |
+| Clients | Filterable table + full detail page (systems, build checklist, commercials, updates feed) |
+| Concerns | Post-go-live issue tracker with severity, owner, resolution, discussion |
+| Reports | Stage timing, bottlenecks, go-lives/month, manager load, fees |
+| Admin | Team + roles, pipeline stages & SLAs, dropdown options, audit log |
+| Settings | Per-user notification preferences (in-app / email / digest cadence) |
 
-To learn more about Next.js, take a look at the following resources:
+## Local development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. `npm install`
+2. Create `.env.local` from `.env.example` and fill in the **new** Supabase project keys.
+3. Apply the schema (see `SETUP.md`).
+4. `npm run dev` → http://localhost:3000
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Key conventions
 
-## Deploy on Vercel
+- **Runtime config**: the browser Supabase client reads its URL/key from
+  `GET /api/public-config` at runtime, not from build-time `NEXT_PUBLIC_` inlining
+  (unreliable on this Vercel account).
+- **Audit trail**: every mutating Server Action calls `logActivity()`
+  (`src/lib/server/activity.ts`) → `activity_log`, which powers the per-client and
+  global updates feeds.
+- **Stage gates**: `src/lib/server/gates.ts` blocks a client from moving past a stage
+  until the required checklist items are `done`. Configure in Admin.
+- **Auth guard**: `src/proxy.ts` (Next 16's renamed middleware).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `SETUP.md` for provisioning the remote Supabase / GitHub / Vercel projects and
+importing the spreadsheet.
