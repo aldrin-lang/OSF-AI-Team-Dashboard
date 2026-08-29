@@ -25,8 +25,8 @@ function itemClass(active: boolean) {
   return cn(
     "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
     active
-      ? "bg-gradient-to-r from-brand-500/90 to-brand-600/70 text-white shadow-[0_10px_30px_-10px_rgba(43,127,255,0.8),0_1px_0_0_rgba(255,255,255,0.2)_inset] ring-1 ring-inset ring-white/15"
-      : "text-ink-muted hover:bg-white/[0.06] hover:text-ink",
+      ? "bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-[0_10px_24px_-10px_rgba(43,127,255,0.65),0_1px_0_0_rgba(255,255,255,0.3)_inset] ring-1 ring-inset ring-white/20"
+      : "text-ink-muted hover:bg-fill hover:text-ink",
   );
 }
 

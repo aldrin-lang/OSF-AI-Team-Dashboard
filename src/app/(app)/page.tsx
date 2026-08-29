@@ -126,7 +126,7 @@ export default async function MyDeskPage() {
         <Card className="lg:col-span-2" glow>
           <CardHeader>
             <CardTitle>Pipeline distribution</CardTitle>
-            <Link href="/pipeline" className="text-xs font-medium text-brand-300 hover:text-brand-200">
+            <Link href="/pipeline" className="text-xs font-medium text-brand-600 hover:text-brand-800">
               Open board →
             </Link>
           </CardHeader>
@@ -149,7 +149,7 @@ export default async function MyDeskPage() {
                 const st = c.stage_id ? stageById.get(c.stage_id) : null;
                 return (
                   <Row key={c.id} href={`/clients/${c.id}`} name={c.name}>
-                    <span className="text-xs text-rose-300">
+                    <span className="text-xs text-rose-600">
                       {daysSince(c.stage_entered_at)}d · {st?.name}
                     </span>
                   </Row>
@@ -166,7 +166,7 @@ export default async function MyDeskPage() {
             <Section title="Go-live this week" empty="Nothing scheduled.">
               {goLives.map((c) => (
                 <Row key={c.id} href={`/clients/${c.id}`} name={c.name}>
-                  <span className="text-xs text-emerald-300">{formatDate(c.start_date)}</span>
+                  <span className="text-xs text-emerald-700">{formatDate(c.start_date)}</span>
                 </Row>
               ))}
             </Section>
@@ -184,7 +184,7 @@ export default async function MyDeskPage() {
             {tasks.length === 0 ? (
               <p className="px-5 py-6 text-sm text-ink-faint">No open tasks assigned to you.</p>
             ) : (
-              <ul className="divide-y divide-white/5">
+              <ul className="divide-y divide-line">
                 {tasks.map((t) => (
                   <li key={t.id} className="flex items-center gap-3 px-5 py-3">
                     <TaskCheckbox id={t.id} status={t.status} clientId={t.client_id} />
@@ -193,7 +193,7 @@ export default async function MyDeskPage() {
                       {t.client_id && (
                         <Link
                           href={`/clients/${t.client_id}`}
-                          className="text-xs text-ink-faint hover:text-brand-300"
+                          className="text-xs text-ink-faint hover:text-brand-700"
                         >
                           {clientName.get(t.client_id) ?? "client"}
                         </Link>
@@ -220,7 +220,7 @@ export default async function MyDeskPage() {
                 None assigned to you yet — open a client and set yourself as Manager.
               </p>
             ) : (
-              <ul className="divide-y divide-white/5">
+              <ul className="divide-y divide-line">
                 {mine.map((c) => {
                   const st = c.stage_id ? stageById.get(c.stage_id) : null;
                   const meta = CLIENT_STATUS[c.status];
@@ -228,7 +228,7 @@ export default async function MyDeskPage() {
                     <li key={c.id} className="flex items-center gap-3 px-5 py-3">
                       <Link
                         href={`/clients/${c.id}`}
-                        className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:text-brand-300"
+                        className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:text-brand-700"
                       >
                         {c.name}
                       </Link>
@@ -246,7 +246,7 @@ export default async function MyDeskPage() {
       <Card>
         <CardHeader>
           <CardTitle>Team activity</CardTitle>
-          <Link href="/notifications" className="text-xs font-medium text-brand-300 hover:text-brand-200">
+          <Link href="/notifications" className="text-xs font-medium text-brand-600 hover:text-brand-800">
             Notifications →
           </Link>
         </CardHeader>
@@ -254,10 +254,10 @@ export default async function MyDeskPage() {
           {activity.length === 0 ? (
             <p className="px-5 py-6 text-sm text-ink-faint">No activity yet.</p>
           ) : (
-            <ul className="divide-y divide-white/5">
+            <ul className="divide-y divide-line">
               {activity.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 px-5 py-2.5">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-ink-muted">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-fill-strong text-[10px] font-semibold text-ink-muted">
                     {initials(a.actor_id ? pm.get(a.actor_id)?.full_name ?? "·" : "·")}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">{a.summary}</span>
@@ -308,7 +308,7 @@ function Row({
   return (
     <Link
       href={href}
-      className="-mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
+      className="-mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-fill"
     >
       <span className="truncate text-sm font-medium text-ink">{name}</span>
       <span className="shrink-0">{children}</span>

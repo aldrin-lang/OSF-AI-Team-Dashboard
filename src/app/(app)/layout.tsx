@@ -23,8 +23,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent pb-4 backdrop-blur-xl md:flex">
-        <div className="relative flex h-16 items-center border-b border-white/10 px-5">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-gradient-to-b from-slate-50 to-white pb-4 backdrop-blur-xl md:flex">
+        <div className="relative flex h-16 items-center border-b border-line px-5">
           <LogoWordmark />
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
@@ -34,7 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/10 bg-bg/60 px-4 backdrop-blur-xl md:px-8">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/60 px-4 backdrop-blur-xl md:px-8">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-2 md:hidden">
             <LogoWordmark />
@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <div className="ml-auto flex items-center gap-4">
             <Link
               href="/notifications"
-              className="relative rounded-lg p-2 text-ink-muted hover:bg-white/[0.06] hover:text-ink"
+              className="relative rounded-lg p-2 text-ink-muted hover:bg-fill-strong hover:text-ink"
               aria-label="Notifications"
             >
               <Bell className="h-[18px] w-[18px]" />
@@ -56,7 +56,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
               ) : null}
             </Link>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 shadow-[0_6px_16px_-6px_rgba(43,127,255,0.7)]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-semibold text-white ring-1 ring-inset ring-white/40 shadow-[0_6px_16px_-8px_rgba(43,127,255,0.6)]">
                 {initials(profile.full_name || profile.email)}
               </span>
               <div className="hidden text-right leading-tight sm:block">

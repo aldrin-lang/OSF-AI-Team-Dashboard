@@ -78,7 +78,7 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
   return (
     <div>
       {error && (
-        <p className="mb-3 rounded-xl border border-rose-400/25 bg-rose-500/15 px-3 py-2 text-sm text-rose-300">
+        <p className="mb-3 rounded-xl border border-rose-400/25 bg-rose-50 px-3 py-2 text-sm text-rose-600">
           {error}
         </p>
       )}
@@ -133,13 +133,13 @@ function Column({
         <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
           {stage.name}
         </p>
-        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-ink">
+        <span className="rounded-full bg-fill-strong px-2 py-0.5 text-xs font-semibold text-ink">
           {cards.length}
         </span>
       </div>
       <div className="flex flex-1 flex-col gap-2 px-3 pb-3">
         {cards.length === 0 && (
-          <p className="rounded-xl border border-dashed border-white/12 py-7 text-center text-xs text-ink-faint">
+          <p className="rounded-xl border border-dashed border-line py-7 text-center text-xs text-ink-faint">
             Drop here
           </p>
         )}
@@ -175,9 +175,9 @@ function DraggableCard({
 }
 
 const RISK_DOT: Record<Card["risk"], string> = {
-  ok: "bg-emerald-400/70",
-  watch: "bg-accent-400",
-  risk: "bg-rose-400",
+  ok: "bg-emerald-400",
+  watch: "bg-accent-500",
+  risk: "bg-rose-500",
 };
 
 function CardChip({
@@ -193,10 +193,10 @@ function CardChip({
   const over = slaDays != null && d != null && d > slaDays;
   return (
     <div
-      className={`group cursor-pointer rounded-xl border bg-white/[0.05] p-3 text-sm backdrop-blur-sm transition-all ${
+      className={`group cursor-pointer rounded-xl border bg-white p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all ${
         dragging
-          ? "border-brand-400/70 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.8),0_0_20px_-4px_rgba(43,127,255,0.5)]"
-          : "border-white/10 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08]"
+          ? "rotate-1 border-brand-300 shadow-[0_18px_36px_-14px_rgba(15,23,42,0.35),0_0_0_1px_rgba(43,127,255,0.25)]"
+          : "border-line hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_8px_20px_-8px_rgba(15,23,42,0.18)]"
       }`}
     >
       <div className="flex items-center gap-2">
@@ -205,7 +205,7 @@ function CardChip({
         <Link
           href={`/clients/${card.id}`}
           onClick={(e) => e.stopPropagation()}
-          className="opacity-0 transition-opacity hover:text-brand-300 group-hover:opacity-100"
+          className="opacity-0 transition-opacity hover:text-brand-700 group-hover:opacity-100"
           title="Open full page"
         >
           <ExternalLink className="h-3.5 w-3.5 text-ink-faint" />
@@ -215,7 +215,7 @@ function CardChip({
         <span className="text-ink-faint">{card.manager ?? "Unassigned"}</span>
         <span
           className={`rounded-md px-1.5 py-0.5 font-medium ${
-            over ? "bg-rose-500/15 text-rose-300" : "bg-white/[0.05] text-ink-faint"
+            over ? "bg-rose-50 text-rose-600" : "bg-fill text-ink-faint"
           }`}
         >
           {d != null ? `${d}d` : "—"}

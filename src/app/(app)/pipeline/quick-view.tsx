@@ -57,10 +57,10 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
 
   return (
     <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <aside className="glass absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl border-l border-white/10 p-5">
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose} />
+      <aside className="glass absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl border-l border-line p-5">
         {loading && <p className="text-sm text-ink-muted">Loading…</p>}
-        {err && <p className="text-sm text-rose-300">{err}</p>}
+        {err && <p className="text-sm text-rose-600">{err}</p>}
 
         {data && (
           <>
@@ -73,7 +73,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
               </div>
               <button
                 onClick={onClose}
-                className="rounded-lg p-1.5 text-ink-muted hover:bg-white/10 hover:text-ink"
+                className="rounded-lg p-1.5 text-ink-muted hover:bg-fill-strong hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -87,7 +87,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
               )}
               <Link
                 href={`/clients/${data.client.id}`}
-                className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand-300 hover:text-brand-200"
+                className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-800"
               >
                 Open full page <ExternalLink className="h-3 w-3" />
               </Link>
@@ -95,9 +95,9 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
 
             {/* Next action */}
             <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-accent-500/25 bg-accent-500/10 p-3">
-              <Zap className="mt-0.5 h-4 w-4 shrink-0 text-accent-400" />
+              <Zap className="mt-0.5 h-4 w-4 shrink-0 text-accent-600" />
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-accent-400">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-accent-600">
                   Next action
                 </p>
                 <p className="text-sm text-ink">{data.nextAction.label}</p>
@@ -130,8 +130,8 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
                         current
                           ? "bg-gradient-to-b from-brand-400 to-brand-600 text-white"
                           : s.allowed
-                            ? "bg-white/[0.06] text-ink-muted hover:bg-white/[0.12]"
-                            : "cursor-not-allowed bg-white/[0.03] text-ink-faint",
+                            ? "bg-fill-strong text-ink-muted hover:bg-fill-strong"
+                            : "cursor-not-allowed bg-fill text-ink-faint",
                       ].join(" ")}
                     >
                       {s.name}
@@ -182,10 +182,10 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
                 {data.lines.map((l) => (
                   <div
                     key={l.id}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5"
+                    className="rounded-xl border border-line bg-fill p-2.5"
                   >
                     <div className="flex items-center gap-2">
-                      <Phone className="h-3.5 w-3.5 shrink-0 text-brand-300" />
+                      <Phone className="h-3.5 w-3.5 shrink-0 text-brand-600" />
                       <Input
                         defaultValue={l.label ?? ""}
                         placeholder="Name / label (e.g. Shannon)"
@@ -211,7 +211,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
                             refresh();
                           })
                         }
-                        className="rounded p-1 text-ink-faint hover:bg-white/10 hover:text-rose-300"
+                        className="rounded p-1 text-ink-faint hover:bg-fill-strong hover:text-rose-600"
                         title="Remove"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -272,7 +272,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
                       refresh();
                     })
                   }
-                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 py-2 text-xs font-medium text-ink-muted hover:border-brand-400/40 hover:text-brand-300"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2 text-xs font-medium text-ink-muted hover:border-brand-400/40 hover:text-brand-700"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add AI phone
                 </button>
@@ -297,7 +297,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
                           refresh();
                         })
                       }
-                      className="h-4 w-4 rounded border-white/20 accent-brand-500"
+                      className="h-4 w-4 rounded border-line-strong accent-brand-500"
                     />
                     <span className={it.status === "done" ? "text-ink-faint line-through" : "text-ink-muted"}>
                       {it.label}

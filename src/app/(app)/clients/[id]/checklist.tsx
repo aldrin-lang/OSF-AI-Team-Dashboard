@@ -27,7 +27,7 @@ export function Checklist({ clientId, items }: { clientId: string; items: Item[]
   }
 
   return (
-    <ul className="divide-y divide-white/5">
+    <ul className="divide-y divide-line">
       {items.map((it) => (
         <li key={it.id} className="flex items-center gap-3 px-4 py-2.5">
           <input
@@ -70,7 +70,7 @@ export function Checklist({ clientId, items }: { clientId: string; items: Item[]
                 router.refresh();
               })
             }
-            className="h-7 rounded-lg border border-white/12 bg-white/[0.05] px-1 text-xs"
+            className="h-7 rounded-lg border border-line bg-fill px-1 text-xs"
           >
             {ORDER.map((s) => (
               <option key={s} value={s}>

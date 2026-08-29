@@ -62,7 +62,7 @@ export function Feed({
         />
         <div className="flex items-center justify-between gap-2">
           <select
-            className="h-8 rounded-lg border border-white/12 bg-white/[0.05] px-1 text-xs"
+            className="h-8 rounded-lg border border-line bg-fill px-1 text-xs"
             value=""
             onChange={(e) => {
               if (e.target.value && !selected.includes(e.target.value))
@@ -96,7 +96,7 @@ export function Feed({
           <li key={m.id} className="flex gap-3 text-sm">
             <span
               className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                m.kind === "comment" ? "bg-brand-500" : "bg-white/25"
+                m.kind === "comment" ? "bg-brand-500" : "bg-slate-200"
               }`}
             />
             <div className="min-w-0">

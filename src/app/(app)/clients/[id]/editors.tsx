@@ -114,7 +114,7 @@ export function EditClientPanel({
             ))}
           </Select>
         </div>
-        <div className="rounded-lg bg-white/[0.03] p-3">
+        <div className="rounded-lg bg-fill p-3">
           <p className="mb-2 text-xs font-semibold text-ink-muted">
             Commercials {canEditCommercials ? "" : "(read-only — manager/admin can edit)"}
           </p>
@@ -157,7 +157,7 @@ export function EditClientPanel({
           <Button size="sm" type="submit" disabled={pending}>
             {pending ? "Saving…" : "Save changes"}
           </Button>
-          {saved && <span className="text-xs font-medium text-emerald-400">Saved ✓</span>}
+          {saved && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
         </div>
     </form>
   );

@@ -36,12 +36,12 @@ export default async function NotificationsPage() {
       {rows.length === 0 ? (
         <EmptyState>No notifications yet.</EmptyState>
       ) : (
-        <ul className="glass divide-y divide-white/10 rounded-2xl">
+        <ul className="glass divide-y divide-line rounded-2xl">
           {rows.map((n) => (
             <li key={n.id} className={n.read_at ? "" : "bg-blue-50/40"}>
               <Link
                 href={n.link ?? "/"}
-                className="block px-4 py-3 hover:bg-white/[0.04]"
+                className="block px-4 py-3 hover:bg-fill"
                 {...(!n.read_at ? {} : {})}
               >
                 <div className="flex items-center justify-between">

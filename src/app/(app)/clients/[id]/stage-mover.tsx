@@ -43,8 +43,8 @@ export function StageMover({
                 isCurrent
                   ? "bg-brand-500 text-white"
                   : s.allowed
-                    ? "bg-white/[0.06] text-ink-muted hover:bg-white/[0.1]"
-                    : "bg-white/[0.03] text-ink-faint cursor-not-allowed",
+                    ? "bg-fill-strong text-ink-muted hover:bg-fill-strong"
+                    : "bg-fill text-ink-faint cursor-not-allowed",
               ].join(" ")}
             >
               {s.name}
@@ -52,7 +52,7 @@ export function StageMover({
           );
         })}
       </div>
-      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

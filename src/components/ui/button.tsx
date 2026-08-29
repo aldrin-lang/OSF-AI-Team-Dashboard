@@ -6,12 +6,13 @@ type Size = "sm" | "md" | "icon";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-gradient-to-b from-brand-400 to-brand-600 text-white shadow-[0_8px_24px_-6px_rgba(43,127,255,0.55),0_1px_0_0_rgba(255,255,255,0.25)_inset] hover:from-brand-300 hover:to-brand-500 hover:shadow-[0_10px_30px_-6px_rgba(43,127,255,0.7)] disabled:opacity-50",
-  secondary: "border border-white/12 bg-white/[0.06] text-ink hover:bg-white/[0.12]",
-  outline: "border border-white/20 bg-transparent text-ink hover:bg-white/[0.06]",
-  ghost: "text-ink-muted hover:bg-white/[0.06] hover:text-ink",
+    "bg-gradient-to-b from-brand-400 to-brand-600 text-white shadow-[0_1px_0_0_rgba(255,255,255,0.35)_inset,0_8px_20px_-6px_rgba(43,127,255,0.5)] hover:from-brand-500 hover:to-brand-700 hover:shadow-[0_10px_26px_-6px_rgba(43,127,255,0.6)] disabled:opacity-50",
+  secondary:
+    "border border-line bg-white text-ink shadow-sm hover:bg-slate-50",
+  outline: "border border-line-strong bg-transparent text-ink hover:bg-slate-50",
+  ghost: "text-ink-muted hover:bg-fill hover:text-ink",
   danger:
-    "bg-gradient-to-b from-red-400 to-red-600 text-white shadow-[0_8px_24px_-8px_rgba(239,68,68,0.6)] hover:from-red-300 hover:to-red-500",
+    "bg-gradient-to-b from-rose-400 to-rose-600 text-white shadow-[0_8px_20px_-8px_rgba(244,63,94,0.55)] hover:from-rose-500 hover:to-rose-700",
 };
 
 const SIZES: Record<Size, string> = {

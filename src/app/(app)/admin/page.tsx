@@ -162,7 +162,7 @@ export default async function AdminPage() {
                     {isAdmin && (
                       <form action={removeOption} className="inline">
                         <input type="hidden" name="id" value={o.id} />
-                        <button className="text-xs text-ink-faint hover:text-red-400">remove</button>
+                        <button className="text-xs text-ink-faint hover:text-red-600">remove</button>
                       </form>
                     )}
                   </li>
@@ -190,14 +190,14 @@ export default async function AdminPage() {
           <p className="text-xs text-ink-faint">
             Variables:{" "}
             {TEMPLATE_VARS.map((v) => (
-              <code key={v.key} className="mx-0.5 rounded bg-white/[0.06] px-1 text-[11px] text-brand-300">
+              <code key={v.key} className="mx-0.5 rounded bg-fill-strong px-1 text-[11px] text-brand-600">
                 {`{{${v.key}}}`}
               </code>
             ))}
           </p>
 
           {emailTemplates.map((t) => (
-            <details key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <details key={t.id} className="rounded-xl border border-line bg-fill p-3">
               <summary className="flex cursor-pointer items-center gap-2 text-sm text-ink">
                 <span className="font-medium">{t.name}</span>
                 {t.trigger !== "manual" && (
@@ -249,8 +249,8 @@ export default async function AdminPage() {
           ))}
 
           {isAdmin && (
-            <details className="rounded-xl border border-dashed border-white/15 p-3">
-              <summary className="cursor-pointer text-sm font-medium text-brand-300">
+            <details className="rounded-xl border border-dashed border-line p-3">
+              <summary className="cursor-pointer text-sm font-medium text-brand-600">
                 + New template
               </summary>
               <form action={saveEmailTemplate} className="mt-3 space-y-2">

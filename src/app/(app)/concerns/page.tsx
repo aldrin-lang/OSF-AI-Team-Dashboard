@@ -81,7 +81,7 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
             </thead>
             <tbody>
               {concerns.map((c) => (
-                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-white/[0.04]">
+                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-fill">
                   <td className="px-4 py-2.5 text-ink-muted">{clientName.get(c.client_id) ?? "—"}</td>
                   <td className="px-4 py-2.5">
                     <Link href={`/concerns/${c.id}`} className="font-medium text-ink hover:underline">

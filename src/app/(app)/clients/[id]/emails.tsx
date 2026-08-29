@@ -60,11 +60,11 @@ export function ClientEmails({
               </option>
             ))}
           </Select>
-          <Sparkles className="h-4 w-4 text-accent-400" />
+          <Sparkles className="h-4 w-4 text-accent-600" />
         </div>
       )}
 
-      {err && <p className="text-sm text-rose-300">{err}</p>}
+      {err && <p className="text-sm text-rose-600">{err}</p>}
 
       {drafts.length === 0 && sent.length === 0 && (
         <p className="text-sm text-ink-faint">
@@ -84,7 +84,7 @@ export function ClientEmails({
                 router.refresh();
               })
             }
-            className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+            className="space-y-3 rounded-xl border border-line bg-fill p-3"
           >
             <input type="hidden" name="id" value={d.id} />
             <input type="hidden" name="client_id" value={clientId} />
@@ -110,11 +110,11 @@ export function ClientEmails({
             </div>
           </form>
         ) : (
-          <div key={d.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <div key={d.id} className="rounded-xl border border-line bg-fill p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Mail className="h-3.5 w-3.5 shrink-0 text-brand-300" />
+                  <Mail className="h-3.5 w-3.5 shrink-0 text-brand-600" />
                   <p className="truncate text-sm font-medium text-ink">{d.subject}</p>
                   <Badge tone="amber">Draft</Badge>
                 </div>
@@ -164,7 +164,7 @@ export function ClientEmails({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sent</p>
           {sent.map((s) => (
             <div key={s.id} className="flex items-center gap-2 text-sm">
-              <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+              <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
               <span className="min-w-0 flex-1 truncate text-ink-muted">{s.subject}</span>
               <span className="shrink-0 text-xs text-ink-faint">
                 {s.sent_by ? `${peopleNames[s.sent_by] ?? ""} · ` : ""}

@@ -84,11 +84,11 @@ export default async function ReportsPage() {
                 <tr key={r.stage.id} className="border-t border-line">
                   <td className="py-2 text-ink-muted">{r.stage.name}</td>
                   <td className="py-2">
-                    <span className="inline-block h-2 rounded bg-white/25 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
+                    <span className="inline-block h-2 rounded bg-slate-200 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
                     <span className="ml-2">{r.count}</span>
                   </td>
                   <td className="py-2 text-ink-muted">{r.avg}d</td>
-                  <td className={`py-2 ${r.overSla ? "text-red-400" : "text-ink-faint"}`}>{r.overSla}</td>
+                  <td className={`py-2 ${r.overSla ? "text-red-600" : "text-ink-faint"}`}>{r.overSla}</td>
                 </tr>
               ))}
             </tbody>

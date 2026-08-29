@@ -31,7 +31,7 @@ export function Donut({
             cy={size / 2}
             r={r}
             fill="none"
-            stroke="rgba(255,255,255,0.06)"
+            stroke="rgba(15,23,42,0.07)"
             strokeWidth={thickness}
           />
           {data.map((d, i) => {

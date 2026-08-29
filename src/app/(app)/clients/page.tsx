@@ -78,9 +78,9 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                 const over = st?.sla_days != null && dis != null && dis > st.sla_days;
                 const meta = CLIENT_STATUS[c.status];
                 return (
-                  <tr key={c.id} className="border-b border-line last:border-0 hover:bg-white/[0.04]">
+                  <tr key={c.id} className="border-b border-line last:border-0 hover:bg-fill">
                     <td className="px-4 py-3">
-                      <Link href={`/clients/${c.id}`} className="font-medium text-ink hover:text-brand-300 hover:underline">
+                      <Link href={`/clients/${c.id}`} className="font-medium text-ink hover:text-brand-700 hover:underline">
                         {c.company_name || c.name}
                       </Link>
                       <p className="text-xs text-ink-faint">
@@ -88,7 +88,7 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                       </p>
                     </td>
                     <td className="px-4 py-3 text-ink-muted">{st?.name ?? "—"}</td>
-                    <td className={`px-4 py-3 ${over ? "font-medium text-red-400" : "text-ink-muted"}`}>
+                    <td className={`px-4 py-3 ${over ? "font-medium text-red-600" : "text-ink-muted"}`}>
                       {dis != null ? `${dis}d` : "—"}
                     </td>
                     <td className="px-4 py-3 text-ink-muted">

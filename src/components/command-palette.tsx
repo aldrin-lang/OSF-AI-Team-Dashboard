@@ -54,20 +54,20 @@ export function CommandPalette({ clients }: { clients: Item[] }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="hidden items-center gap-2 rounded-lg border border-white/12 bg-white/[0.04] px-3 py-1.5 text-xs text-ink-faint transition-colors hover:border-white/20 hover:text-ink-muted sm:flex"
+        className="hidden items-center gap-2 rounded-lg border border-line bg-fill px-3 py-1.5 text-xs text-ink-faint transition-colors hover:border-line-strong hover:text-ink-muted sm:flex"
       >
         <Search className="h-3.5 w-3.5" />
         Search clients
-        <kbd className="rounded border border-white/15 bg-white/[0.06] px-1 text-[10px]">⌘K</kbd>
+        <kbd className="rounded border border-line bg-fill-strong px-1 text-[10px]">⌘K</kbd>
       </button>
     );
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div className="glass relative w-full max-w-lg overflow-hidden rounded-2xl">
-        <div className="flex items-center gap-2 border-b border-white/10 px-4">
+        <div className="flex items-center gap-2 border-b border-line px-4">
           <Search className="h-4 w-4 text-ink-faint" />
           <input
             ref={inputRef}
@@ -95,7 +95,7 @@ export function CommandPalette({ clients }: { clients: Item[] }) {
                 onClick={() => go(c)}
                 onMouseEnter={() => setI(idx)}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm ${
-                  idx === i ? "bg-white/[0.08] text-ink" : "text-ink-muted"
+                  idx === i ? "bg-fill-strong text-ink" : "text-ink-muted"
                 }`}
               >
                 <span className="flex-1 truncate font-medium">{c.name}</span>

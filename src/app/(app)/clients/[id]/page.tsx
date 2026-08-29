@@ -76,7 +76,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
           <span className="text-sm text-ink-muted">
             {dis}d in <strong className="text-ink-muted">{stage.name}</strong>
             {stage.sla_days != null && dis != null && dis > stage.sla_days && (
-              <span className="ml-1 text-red-400">(past {stage.sla_days}d SLA)</span>
+              <span className="ml-1 text-red-600">(past {stage.sla_days}d SLA)</span>
             )}
           </span>
         )}
@@ -246,7 +246,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                   <Link
                     key={c.id}
                     href={`/concerns/${c.id}`}
-                    className="block rounded px-2 py-1 text-sm hover:bg-white/[0.04]"
+                    className="block rounded px-2 py-1 text-sm hover:bg-fill"
                   >
                     {c.title}
                   </Link>
