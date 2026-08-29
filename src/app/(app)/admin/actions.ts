@@ -11,7 +11,7 @@ export async function inviteMember(formData: FormData): Promise<void> {
   if (!email) throw new Error("Email required");
 
   const admin = getAdminSupabase();
-  const redirectTo = `${process.env.APP_URL ?? ""}/login`;
+  const redirectTo = `${process.env.APP_URL ?? ""}/auth/confirm?next=/settings`;
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { full_name: fullName },
     redirectTo,
