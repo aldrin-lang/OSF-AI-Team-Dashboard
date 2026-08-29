@@ -1,0 +1,288 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { getClientDetail, getClientFeed, getProfiles, getStages, profileMap } from "@/lib/data/queries";
+import { checkStageGate } from "@/lib/server/gates";
+import { PageHeader } from "@/components/page-header";
+import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
+import { Badge } from "@/components/ui/badge";
+import { CLIENT_STATUS, RB_STATUS, BUILD_STATUS, HIRING_FEE_STATUS } from "@/lib/labels";
+import { formatDate, daysSince } from "@/lib/utils";
+import { ghlLinks } from "@/lib/ghl";
+import { StageMover } from "./stage-mover";
+import { Checklist } from "./checklist";
+import { Feed } from "./feed";
+import { EditClientPanel, LinesEditor, PlacementsEditor } from "./editors";
+import { TaskAdder } from "./task-adder";
+import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
+
+export default async function ClientDetailPage(props: PageProps<"/clients/[id]">) {
+  const { id } = await props.params;
+  const detail = await getClientDetail(id);
+  if (!detail) notFound();
+
+  const { client, lines, placements, checklist, tasks, concerns, stage } = detail;
+  const [profiles, stages, feed] = await Promise.all([
+    getProfiles(),
+    getStages(client.pipeline),
+    getClientFeed(id),
+  ]);
+  const pm = profileMap(profiles);
+
+  // Pre-compute which target stages are reachable (gate check).
+  const gateResults = await Promise.all(
+    stages.map(async (s) => [s.id, await checkStageGate(id, s.id)] as const),
+  );
+  const gateMap = new Map(gateResults);
+
+  const statusMeta = CLIENT_STATUS[client.status];
+  const dis = daysSince(client.stage_entered_at);
+  const openConcerns = concerns.filter((c) => c.status !== "resolved");
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title={client.name}
+        subtitle={[client.industry, client.country].filter(Boolean).join(" · ") || undefined}
+        actions={
+          <Link
+            href={`/clients?type=${client.pipeline}`}
+            className="text-sm text-neutral-500 hover:text-neutral-900"
+          >
+            All clients
+          </Link>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
+        <span className="text-sm text-neutral-500">
+          Manager: {client.manager_id ? pm.get(client.manager_id)?.full_name ?? "—" : "Unassigned"}
+        </span>
+        {stage && (
+          <span className="text-sm text-neutral-500">
+            {dis}d in <strong className="text-neutral-700">{stage.name}</strong>
+            {stage.sla_days != null && dis != null && dis > stage.sla_days && (
+              <span className="ml-1 text-red-600">(past {stage.sla_days}d SLA)</span>
+            )}
+          </span>
+        )}
+      </div>
+
+      <StageMover
+        clientId={id}
+        currentStageId={client.stage_id}
+        stages={stages.map((s) => ({
+          id: s.id,
+          name: s.name,
+          allowed: gateMap.get(s.id)?.allowed ?? true,
+          blockedBy: gateMap.get(s.id)?.blockedBy ?? [],
+        }))}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Build checklist</CardTitle>
+            </CardHeader>
+            <CardBody className="p-0">
+              <Checklist
+                clientId={id}
+                items={checklist.map((i) => ({
+                  id: i.id,
+                  key: i.key,
+                  label: i.label,
+                  status: i.status,
+                  completedBy: i.completed_by ? pm.get(i.completed_by)?.full_name ?? null : null,
+                  completedAt: i.completed_at,
+                }))}
+              />
+            </CardBody>
+          </Card>
+
+          {client.pipeline === "ai" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Phone lines &amp; systems</CardTitle>
+              </CardHeader>
+              <CardBody className="space-y-4">
+                {lines.length === 0 && (
+                  <p className="text-sm text-neutral-400">No phone lines added yet.</p>
+                )}
+                {lines.map((l) => {
+                  const g = ghlLinks(l.ghl_location_id);
+                  return (
+                    <div key={l.id} className="rounded-md border border-neutral-200 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-neutral-900">
+                          {l.label || l.ai_phone_number || "Line"}
+                        </p>
+                        <Badge tone={RB_STATUS[l.regulatory_bundle_status].tone}>
+                          RB: {RB_STATUS[l.regulatory_bundle_status].label}
+                        </Badge>
+                      </div>
+                      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <Field label="AI phone #" value={l.ai_phone_number} />
+                        <Field label="Twilio subaccount" value={l.twilio_subaccount} />
+                        <Field label="Booking system" value={l.booking_system} />
+                        <Field label="GHL location" value={l.ghl_location_id} />
+                        <div className="col-span-2 flex flex-wrap gap-2 pt-1">
+                          {l.dashboard_url && (
+                            <a className="text-blue-600 hover:underline" href={l.dashboard_url} target="_blank" rel="noreferrer">
+                              Dashboard ↗
+                            </a>
+                          )}
+                          {g && (
+                            <>
+                              <a className="text-blue-600 hover:underline" href={g.conversations} target="_blank" rel="noreferrer">GHL conversations ↗</a>
+                              <a className="text-blue-600 hover:underline" href={g.knowledgeBase} target="_blank" rel="noreferrer">KB ↗</a>
+                              <a className="text-blue-600 hover:underline" href={g.voiceAi} target="_blank" rel="noreferrer">Voice AI ↗</a>
+                            </>
+                          )}
+                        </div>
+                      </dl>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <Badge tone={BUILD_STATUS[l.prompt_status].tone}>Prompt: {BUILD_STATUS[l.prompt_status].label}</Badge>
+                        <Badge tone={BUILD_STATUS[l.kb_status].tone}>KB: {BUILD_STATUS[l.kb_status].label}</Badge>
+                        <Badge tone={BUILD_STATUS[l.workflow_status].tone}>Workflow: {BUILD_STATUS[l.workflow_status].label}</Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+                <LinesEditor clientId={id} lines={lines} />
+              </CardBody>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>VA placements</CardTitle>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                {placements.length === 0 && (
+                  <p className="text-sm text-neutral-400">No placements yet.</p>
+                )}
+                {placements.map((p) => (
+                  <div key={p.id} className="rounded-md border border-neutral-200 p-3 text-xs">
+                    <p className="text-sm font-semibold text-neutral-900">{p.va_name || "VA"}</p>
+                    <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1">
+                      <Field label="Role" value={p.role} />
+                      <Field label="Employment" value={p.employment_type} />
+                      <Field label="Email" value={p.va_email} />
+                      <Field label="Status" value={p.placement_status} />
+                    </dl>
+                  </div>
+                ))}
+                <PlacementsEditor clientId={id} placements={placements} />
+              </CardBody>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Updates</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <Feed
+                entity="client"
+                entityId={id}
+                activity={feed.activity}
+                comments={feed.comments}
+                people={profiles.map((p) => ({ id: p.id, name: p.full_name || p.email }))}
+              />
+            </CardBody>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <EditClientPanel
+                client={client}
+                profiles={profiles.map((p) => ({ id: p.id, name: p.full_name || p.email }))}
+              />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Commercials</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <dl className="grid grid-cols-2 gap-y-2 text-sm">
+                <Field label="Setup fee" value={client.setup_fee != null ? `£${client.setup_fee}` : null} />
+                <Field label="Daily rate" value={client.daily_rate != null ? `£${client.daily_rate}` : null} />
+                <div>
+                  <dt className="text-xs text-neutral-400">Hiring fee</dt>
+                  <dd>
+                    <Badge tone={HIRING_FEE_STATUS[client.hiring_fee_status].tone}>
+                      {HIRING_FEE_STATUS[client.hiring_fee_status].label}
+                    </Badge>
+                  </dd>
+                </div>
+                <Field label="Invoice" value={client.hiring_fee_invoice} />
+                <Field label="Paid" value={client.hiring_fee_paid} />
+              </dl>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Tasks</CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              {tasks.length === 0 && <p className="text-sm text-neutral-400">No tasks.</p>}
+              <ul className="space-y-1.5">
+                {tasks.map((t) => (
+                  <li key={t.id} className="flex items-start gap-2 text-sm">
+                    <TaskCheckbox id={t.id} status={t.status} clientId={id} />
+                    <span className={t.status === "done" ? "text-neutral-400 line-through" : ""}>
+                      {t.title}
+                      {t.due_date && (
+                        <span className="ml-1 text-xs text-neutral-400">· {formatDate(t.due_date)}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <TaskAdder
+                clientId={id}
+                profiles={profiles.map((p) => ({ id: p.id, name: p.full_name || p.email }))}
+              />
+            </CardBody>
+          </Card>
+
+          {openConcerns.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Open concerns</CardTitle>
+              </CardHeader>
+              <CardBody className="space-y-1.5">
+                {openConcerns.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/concerns/${c.id}`}
+                    className="block rounded px-2 py-1 text-sm hover:bg-neutral-50"
+                  >
+                    {c.title}
+                  </Link>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <dt className="text-xs text-neutral-400">{label}</dt>
+      <dd className="text-neutral-800">{value || "—"}</dd>
+    </div>
+  );
+}
