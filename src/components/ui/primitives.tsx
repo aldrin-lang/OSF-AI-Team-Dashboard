@@ -33,12 +33,22 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
   );
 }
 
-export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+export function CardTitle({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h2
-      className={cn("text-[13px] font-semibold uppercase tracking-wide text-ink-muted", className)}
+      className={cn(
+        "flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-ink-muted",
+        className,
+      )}
       {...props}
-    />
+    >
+      <span className="h-1 w-1 rounded-full bg-accent-500/90" />
+      {children}
+    </h2>
   );
 }
 

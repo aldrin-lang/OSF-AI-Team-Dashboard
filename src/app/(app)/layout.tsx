@@ -24,8 +24,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent pb-4 backdrop-blur-xl md:flex">
-        <div className="flex h-16 items-center border-b border-white/10 px-5">
+        <div className="relative flex h-16 items-center border-b border-white/10 px-5">
           <LogoWordmark />
+          <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
         <div className="pt-4">
           <AppNav isManager={hasRole(profile, "manager")} />
@@ -34,6 +35,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/10 bg-bg/60 px-4 backdrop-blur-xl md:px-8">
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-2 md:hidden">
             <LogoWordmark />
           </div>
