@@ -14,7 +14,7 @@ function Disclosure({ label, children }: { label: string; children: React.ReactN
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="text-xs font-medium text-slate-500 hover:text-slate-900"
+        className="text-xs font-medium text-ink-muted hover:text-ink"
       >
         {open ? "− " : "+ "}
         {label}
@@ -104,8 +104,8 @@ export function EditClientPanel({
             ))}
           </Select>
         </div>
-        <div className="rounded-lg bg-slate-50 p-3">
-          <p className="mb-2 text-xs font-semibold text-slate-500">
+        <div className="rounded-lg bg-white/[0.03] p-3">
+          <p className="mb-2 text-xs font-semibold text-ink-muted">
             Commercials {canEditCommercials ? "" : "(read-only — manager/admin can edit)"}
           </p>
           <div className="grid grid-cols-2 gap-2">
@@ -147,7 +147,7 @@ export function EditClientPanel({
           <Button size="sm" type="submit" disabled={pending}>
             {pending ? "Saving…" : "Save changes"}
           </Button>
-          {saved && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
+          {saved && <span className="text-xs font-medium text-emerald-400">Saved ✓</span>}
         </div>
     </form>
   );
@@ -164,7 +164,7 @@ function LineForm({ clientId, line }: { clientId: string; line?: ClientLine }) {
         await upsertLine(fd);
         router.refresh();
       }}
-      className="space-y-2 rounded-md border border-slate-200 p-2"
+      className="space-y-2 rounded-md border border-line p-2"
     >
       <input type="hidden" name="client_id" value={clientId} />
       {line && <input type="hidden" name="id" value={line.id} />}
@@ -253,7 +253,7 @@ function PlacementForm({ clientId, placement }: { clientId: string; placement?: 
         await upsertPlacement(fd);
         router.refresh();
       }}
-      className="space-y-2 rounded-md border border-slate-200 p-2"
+      className="space-y-2 rounded-md border border-line p-2"
     >
       <input type="hidden" name="client_id" value={clientId} />
       {placement && <input type="hidden" name="id" value={placement.id} />}

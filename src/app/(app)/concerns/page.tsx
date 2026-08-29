@@ -48,15 +48,15 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
           </Link>
         }
       />
-      <div className="flex gap-2 border-b border-slate-200 text-sm">
+      <div className="flex gap-2 border-b border-line text-sm">
         {tabs.map((t) => (
           <Link
             key={t.key}
             href={`/concerns?status=${t.key}`}
             className={`-mb-px border-b-2 px-3 py-2 font-medium ${
               statusFilter === t.key
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-400 hover:text-slate-700"
+                ? "border-brand-500 text-ink"
+                : "border-transparent text-ink-faint hover:text-ink-muted"
             }`}
           >
             {t.label}
@@ -67,10 +67,10 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
       {concerns.length === 0 ? (
         <EmptyState>No concerns here.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-surface/70 backdrop-blur-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs text-slate-400">
+              <tr className="border-b border-line text-left text-xs text-ink-faint">
                 <th className="px-4 py-2.5 font-medium">Client</th>
                 <th className="px-4 py-2.5 font-medium">Concern</th>
                 <th className="px-4 py-2.5 font-medium">Severity</th>
@@ -81,23 +81,23 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
             </thead>
             <tbody>
               {concerns.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-2.5 text-slate-600">{clientName.get(c.client_id) ?? "—"}</td>
+                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-white/[0.04]">
+                  <td className="px-4 py-2.5 text-ink-muted">{clientName.get(c.client_id) ?? "—"}</td>
                   <td className="px-4 py-2.5">
-                    <Link href={`/concerns/${c.id}`} className="font-medium text-slate-900 hover:underline">
+                    <Link href={`/concerns/${c.id}`} className="font-medium text-ink hover:underline">
                       {c.title}
                     </Link>
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge tone={CONCERN_SEVERITY[c.severity].tone}>{CONCERN_SEVERITY[c.severity].label}</Badge>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-600">
+                  <td className="px-4 py-2.5 text-ink-muted">
                     {c.owner_id ? pm.get(c.owner_id)?.full_name ?? "—" : "—"}
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge tone={CONCERN_STATUS[c.status].tone}>{CONCERN_STATUS[c.status].label}</Badge>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-400">{relativeTime(c.raised_at)}</td>
+                  <td className="px-4 py-2.5 text-ink-faint">{relativeTime(c.raised_at)}</td>
                 </tr>
               ))}
             </tbody>

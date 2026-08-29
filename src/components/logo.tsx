@@ -26,8 +26,8 @@ export function LogoWordmark({ className }: { className?: string }) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <Logo size={26} />
-      <span className="text-[15px] font-semibold leading-none tracking-tight text-navy-800">
-        OutsourceForce<span className="text-brand-500">.ai</span>
+      <span className="text-[15px] font-semibold leading-none tracking-tight text-ink">
+        OutsourceForce<span className="text-brand-400">.ai</span>
       </span>
     </div>
   );

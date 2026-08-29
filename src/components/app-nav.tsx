@@ -25,8 +25,8 @@ function itemClass(active: boolean) {
   return cn(
     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
     active
-      ? "bg-brand-500 text-white shadow-sm shadow-brand-500/30"
-      : "text-slate-600 hover:bg-slate-100 hover:text-navy-800",
+      ? "bg-brand-500 text-white shadow-[0_8px_24px_-8px_rgba(43,127,255,0.7)]"
+      : "text-ink-muted hover:bg-white/[0.06] hover:text-ink",
   );
 }
 
@@ -35,7 +35,7 @@ export function AppNav({ isManager }: { isManager: boolean }) {
 
   return (
     <nav className="flex flex-1 flex-col px-3">
-      <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+      <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
         Operations
       </p>
       <div className="flex flex-col gap-1">
@@ -52,7 +52,7 @@ export function AppNav({ isManager }: { isManager: boolean }) {
         })}
       </div>
 
-      <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+      <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
         Account
       </p>
       <div className="flex flex-col gap-1">

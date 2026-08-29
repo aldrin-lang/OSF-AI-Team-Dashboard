@@ -51,7 +51,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
         title={client.name}
         subtitle={[client.industry, client.country].filter(Boolean).join(" · ") || undefined}
         actions={
-          <Link href="/clients" className="text-sm text-slate-500 hover:text-slate-900">
+          <Link href="/clients" className="text-sm text-ink-muted hover:text-ink">
             All clients
           </Link>
         }
@@ -59,14 +59,14 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
 
       <div className="flex flex-wrap items-center gap-3">
         <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
-        <span className="text-sm text-slate-500">
+        <span className="text-sm text-ink-muted">
           Manager: {client.manager_id ? pm.get(client.manager_id)?.full_name ?? "—" : "Unassigned"}
         </span>
         {stage && (
-          <span className="text-sm text-slate-500">
-            {dis}d in <strong className="text-slate-700">{stage.name}</strong>
+          <span className="text-sm text-ink-muted">
+            {dis}d in <strong className="text-ink-muted">{stage.name}</strong>
             {stage.sla_days != null && dis != null && dis > stage.sla_days && (
-              <span className="ml-1 text-red-600">(past {stage.sla_days}d SLA)</span>
+              <span className="ml-1 text-red-400">(past {stage.sla_days}d SLA)</span>
             )}
           </span>
         )}
@@ -110,14 +110,14 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
               </CardHeader>
               <CardBody className="space-y-4">
                 {lines.length === 0 && (
-                  <p className="text-sm text-slate-400">No phone lines added yet.</p>
+                  <p className="text-sm text-ink-faint">No phone lines added yet.</p>
                 )}
                 {lines.map((l) => {
                   const g = ghlLinks(l.ghl_location_id);
                   return (
-                    <div key={l.id} className="rounded-md border border-slate-200 p-3">
+                    <div key={l.id} className="rounded-md border border-line p-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">
+                        <p className="text-sm font-semibold text-ink">
                           {l.label || l.ai_phone_number || "Line"}
                         </p>
                         <Badge tone={RB_STATUS[l.regulatory_bundle_status].tone}>
@@ -131,15 +131,15 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                         <Field label="GHL location" value={l.ghl_location_id} />
                         <div className="col-span-2 flex flex-wrap gap-2 pt-1">
                           {l.dashboard_url && (
-                            <a className="text-blue-600 hover:underline" href={l.dashboard_url} target="_blank" rel="noreferrer">
+                            <a className="text-brand-400 hover:underline" href={l.dashboard_url} target="_blank" rel="noreferrer">
                               Dashboard ↗
                             </a>
                           )}
                           {g && (
                             <>
-                              <a className="text-blue-600 hover:underline" href={g.conversations} target="_blank" rel="noreferrer">GHL conversations ↗</a>
-                              <a className="text-blue-600 hover:underline" href={g.knowledgeBase} target="_blank" rel="noreferrer">KB ↗</a>
-                              <a className="text-blue-600 hover:underline" href={g.voiceAi} target="_blank" rel="noreferrer">Voice AI ↗</a>
+                              <a className="text-brand-400 hover:underline" href={g.conversations} target="_blank" rel="noreferrer">GHL conversations ↗</a>
+                              <a className="text-brand-400 hover:underline" href={g.knowledgeBase} target="_blank" rel="noreferrer">KB ↗</a>
+                              <a className="text-brand-400 hover:underline" href={g.voiceAi} target="_blank" rel="noreferrer">Voice AI ↗</a>
                             </>
                           )}
                         </div>
@@ -191,15 +191,15 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
               <CardTitle>Tasks</CardTitle>
             </CardHeader>
             <CardBody className="space-y-3">
-              {tasks.length === 0 && <p className="text-sm text-slate-400">No tasks.</p>}
+              {tasks.length === 0 && <p className="text-sm text-ink-faint">No tasks.</p>}
               <ul className="space-y-1.5">
                 {tasks.map((t) => (
                   <li key={t.id} className="flex items-start gap-2 text-sm">
                     <TaskCheckbox id={t.id} status={t.status} clientId={id} />
-                    <span className={t.status === "done" ? "text-slate-400 line-through" : ""}>
+                    <span className={t.status === "done" ? "text-ink-faint line-through" : ""}>
                       {t.title}
                       {t.due_date && (
-                        <span className="ml-1 text-xs text-slate-400">· {formatDate(t.due_date)}</span>
+                        <span className="ml-1 text-xs text-ink-faint">· {formatDate(t.due_date)}</span>
                       )}
                     </span>
                   </li>
@@ -222,7 +222,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                   <Link
                     key={c.id}
                     href={`/concerns/${c.id}`}
-                    className="block rounded px-2 py-1 text-sm hover:bg-slate-50"
+                    className="block rounded px-2 py-1 text-sm hover:bg-white/[0.04]"
                   >
                     {c.title}
                   </Link>
@@ -239,8 +239,8 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs text-slate-400">{label}</dt>
-      <dd className="text-slate-800">{value || "—"}</dd>
+      <dt className="text-xs text-ink-faint">{label}</dt>
+      <dd className="text-ink">{value || "—"}</dd>
     </div>
   );
 }

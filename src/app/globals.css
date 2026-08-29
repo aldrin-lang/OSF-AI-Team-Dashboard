@@ -1,20 +1,26 @@
 @import "tailwindcss";
 
 /* ===========================================================================
-   OutsourceForce.ai brand palette
-   Navy #14284d · Blue #2b7fff · Orange #f2691f · plus black / white / greys
+   OSF AI Team Dashboard — dark theme
+   OutsourceForce.ai brand: navy base, blue #2b7fff accent, orange #f2691f alerts
    =========================================================================== */
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-navy-50: #eef2f9;
-  --color-navy-100: #d6e0f0;
-  --color-navy-600: #1e3a6b;
-  --color-navy-700: #17305a;
-  --color-navy-800: #14284d;
-  --color-navy-900: #0f1e3a;
+  /* surfaces */
+  --color-bg: #0b162c;
+  --color-surface: #121f38;
+  --color-surface-2: #17264180;
+  --color-line: #ffffff14;
+  --color-line-strong: #ffffff26;
 
+  /* text */
+  --color-ink: #eef2fb;
+  --color-ink-muted: #93a3c4;
+  --color-ink-faint: #64749a;
+
+  /* brand */
   --color-brand-50: #eef5ff;
   --color-brand-100: #d9e8ff;
   --color-brand-200: #b7d3ff;
@@ -23,26 +29,33 @@
   --color-brand-500: #2b7fff;
   --color-brand-600: #1563ea;
   --color-brand-700: #124fc0;
-  --color-brand-800: #14439b;
+
+  --color-navy-700: #17305a;
+  --color-navy-800: #14284d;
+  --color-navy-900: #0f1e3a;
 
   --color-accent-400: #ff8a3d;
   --color-accent-500: #f2691f;
   --color-accent-600: #d9540f;
-
-  --color-canvas: #f6f8fc;
 }
 
 html {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
-  background: var(--color-canvas);
-  color: #14284d;
+  min-height: 100%;
+  color: var(--color-ink);
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(60rem 40rem at 85% -10%, #1d3a7a33, transparent 60%),
+    radial-gradient(50rem 40rem at -10% 110%, #f2691f1a, transparent 55%);
+  background-attachment: fixed;
 }
 
-/* Thin, unobtrusive scrollbars for the board / wide tables */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #ffffff26 transparent;
 }
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-thumb { background: #ffffff26; border-radius: 9999px; }

@@ -45,7 +45,7 @@ export default async function SettingsPage() {
               Save
             </Button>
           </form>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-ink-faint">
             {profile.email} · role: {profile.role}
           </p>
         </CardBody>
@@ -59,7 +59,7 @@ export default async function SettingsPage() {
           <form action={saveNotificationPrefs} className="space-y-4">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-slate-400">
+                <tr className="text-left text-xs text-ink-faint">
                   <th className="pb-2 font-medium">Notify me when…</th>
                   <th className="pb-2 text-center font-medium">In-app</th>
                   <th className="pb-2 text-center font-medium">Email</th>
@@ -67,17 +67,17 @@ export default async function SettingsPage() {
               </thead>
               <tbody>
                 {EVENTS.map((e) => (
-                  <tr key={e.key} className="border-t border-slate-100">
-                    <td className="py-2 text-slate-700">
+                  <tr key={e.key} className="border-t border-line">
+                    <td className="py-2 text-ink-muted">
                       {e.label}
-                      {e.hint && <span className="ml-1 text-xs text-slate-400">({e.hint})</span>}
+                      {e.hint && <span className="ml-1 text-xs text-ink-faint">({e.hint})</span>}
                     </td>
                     <td className="py-2 text-center">
                       <input
                         type="checkbox"
                         name={`${e.key}_in_app`}
                         defaultChecked={val(`${e.key}_in_app`)}
-                        className="h-4 w-4 accent-slate-900"
+                        className="h-4 w-4 accent-brand-500"
                       />
                     </td>
                     <td className="py-2 text-center">
@@ -85,7 +85,7 @@ export default async function SettingsPage() {
                         type="checkbox"
                         name={`${e.key}_email`}
                         defaultChecked={val(`${e.key}_email`)}
-                        className="h-4 w-4 accent-slate-900"
+                        className="h-4 w-4 accent-brand-500"
                       />
                     </td>
                   </tr>

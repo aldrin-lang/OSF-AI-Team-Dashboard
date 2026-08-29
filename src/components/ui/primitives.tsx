@@ -5,7 +5,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        "rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-900/[0.04]",
+        "rounded-2xl border border-line bg-surface/70 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_10px_30px_-15px_rgba(0,0,0,0.6)] backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -17,7 +17,7 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
   return (
     <div
       className={cn(
-        "flex items-center justify-between border-b border-slate-100 px-5 py-3.5",
+        "flex items-center justify-between border-b border-line px-5 py-3.5",
         className,
       )}
       {...props}
@@ -26,7 +26,7 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn("text-sm font-semibold text-navy-800", className)} {...props} />;
+  return <h2 className={cn("text-sm font-semibold text-ink", className)} {...props} />;
 }
 
 export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -34,7 +34,7 @@ export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 }
 
 const fieldBase =
-  "w-full rounded-lg border border-slate-300 bg-white text-sm text-navy-800 placeholder:text-slate-400 focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/40 disabled:bg-slate-100";
+  "w-full rounded-lg border border-line-strong bg-white/[0.03] text-sm text-ink placeholder:text-ink-faint focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/40 disabled:opacity-50";
 
 export const Input = React.forwardRef<
   HTMLInputElement,
@@ -56,7 +56,11 @@ export const Select = React.forwardRef<
   HTMLSelectElement,
   React.SelectHTMLAttributes<HTMLSelectElement>
 >(({ className, children, ...props }, ref) => (
-  <select ref={ref} className={cn("h-9 px-2", fieldBase, className)} {...props}>
+  <select
+    ref={ref}
+    className={cn("h-9 px-2 [&>option]:bg-surface [&>option]:text-ink", fieldBase, className)}
+    {...props}
+  >
     {children}
   </select>
 ));
@@ -65,7 +69,7 @@ Select.displayName = "Select";
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn("mb-1 block text-xs font-medium text-slate-600", className)}
+      className={cn("mb-1 block text-xs font-medium text-ink-muted", className)}
       {...props}
     />
   );
@@ -73,7 +77,7 @@ export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLab
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
+    <div className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-ink-faint">
       {children}
     </div>
   );

@@ -32,7 +32,7 @@ export default async function ConcernDetailPage(props: PageProps<"/concerns/[id]
         title={c.title}
         subtitle={client ? `${client.name}` : undefined}
         actions={
-          <Link href="/concerns" className="text-sm text-slate-500 hover:text-slate-900">
+          <Link href="/concerns" className="text-sm text-ink-muted hover:text-ink">
             All concerns
           </Link>
         }
@@ -41,15 +41,15 @@ export default async function ConcernDetailPage(props: PageProps<"/concerns/[id]
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <Badge tone={CONCERN_STATUS[c.status].tone}>{CONCERN_STATUS[c.status].label}</Badge>
         <Badge tone={CONCERN_SEVERITY[c.severity].tone}>{CONCERN_SEVERITY[c.severity].label}</Badge>
-        {c.type && <span className="text-slate-500">{c.type}</span>}
-        <span className="text-slate-400">Raised {formatDate(c.raised_at)}</span>
-        {c.raised_by && <span className="text-slate-400">by {pm.get(c.raised_by)?.full_name ?? "—"}</span>}
+        {c.type && <span className="text-ink-muted">{c.type}</span>}
+        <span className="text-ink-faint">Raised {formatDate(c.raised_at)}</span>
+        {c.raised_by && <span className="text-ink-faint">by {pm.get(c.raised_by)?.full_name ?? "—"}</span>}
       </div>
 
       {c.description && (
         <Card>
           <CardBody>
-            <p className="whitespace-pre-wrap text-sm text-slate-700">{c.description}</p>
+            <p className="whitespace-pre-wrap text-sm text-ink-muted">{c.description}</p>
           </CardBody>
         </Card>
       )}

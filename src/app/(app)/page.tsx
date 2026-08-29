@@ -79,25 +79,25 @@ export default async function MyDeskPage() {
           </CardHeader>
           <CardBody className="p-0">
             {tasks.length === 0 ? (
-              <p className="px-5 py-5 text-sm text-slate-400">No open tasks assigned to you.</p>
+              <p className="px-5 py-5 text-sm text-ink-faint">No open tasks assigned to you.</p>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-white/5">
                 {tasks.map((t) => (
                   <li key={t.id} className="flex items-center gap-3 px-4 py-2.5">
                     <TaskCheckbox id={t.id} status={t.status} clientId={t.client_id} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-slate-900">{t.title}</p>
+                      <p className="truncate text-sm text-ink">{t.title}</p>
                       {t.client_id && (
                         <Link
                           href={`/clients/${t.client_id}`}
-                          className="text-xs text-slate-400 hover:text-slate-700"
+                          className="text-xs text-ink-faint hover:text-ink-muted"
                         >
                           {clientName.get(t.client_id) ?? "client"}
                         </Link>
                       )}
                     </div>
                     {t.due_date && (
-                      <span className="text-xs text-slate-400">{formatDate(t.due_date)}</span>
+                      <span className="text-xs text-ink-faint">{formatDate(t.due_date)}</span>
                     )}
                   </li>
                 ))}
@@ -116,7 +116,7 @@ export default async function MyDeskPage() {
                 const st = c.stage_id ? stageById.get(c.stage_id) : null;
                 return (
                   <Row key={c.id} href={`/clients/${c.id}`} name={c.name}>
-                    <span className="text-xs text-red-600">
+                    <span className="text-xs text-red-400">
                       {daysSince(c.stage_entered_at)}d in {st?.name}
                     </span>
                   </Row>
@@ -126,14 +126,14 @@ export default async function MyDeskPage() {
             <Section title="Open concerns" empty="No open concerns.">
               {concerns.map((c) => (
                 <Row key={c.id} href={`/concerns/${c.id}`} name={clientName.get(c.client_id) ?? "client"}>
-                  <span className="text-xs text-slate-500">{c.title}</span>
+                  <span className="text-xs text-ink-muted">{c.title}</span>
                 </Row>
               ))}
             </Section>
             <Section title="Go-live this week" empty="No go-lives scheduled.">
               {goLives.map((c) => (
                 <Row key={c.id} href={`/clients/${c.id}`} name={c.name}>
-                  <span className="text-xs text-slate-500">{formatDate(c.start_date)}</span>
+                  <span className="text-xs text-ink-muted">{formatDate(c.start_date)}</span>
                 </Row>
               ))}
             </Section>
@@ -147,13 +147,13 @@ export default async function MyDeskPage() {
         </CardHeader>
         <CardBody className="p-0">
           {clients.length === 0 ? (
-            <p className="px-5 py-5 text-sm text-slate-400">
+            <p className="px-5 py-5 text-sm text-ink-faint">
               No clients assigned to you yet. Open a client and set yourself as Manager.
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
+                <tr className="border-b border-line text-left text-xs text-ink-faint">
                   <th className="px-4 py-2 font-medium">Client</th>
                   <th className="px-4 py-2 font-medium">Stage</th>
                   <th className="px-4 py-2 font-medium">In stage</th>
@@ -165,14 +165,14 @@ export default async function MyDeskPage() {
                   const st = c.stage_id ? stageById.get(c.stage_id) : null;
                   const meta = CLIENT_STATUS[c.status];
                   return (
-                    <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50">
+                    <tr key={c.id} className="border-b border-line hover:bg-white/[0.04]">
                       <td className="px-4 py-2">
-                        <Link href={`/clients/${c.id}`} className="font-medium text-slate-900 hover:underline">
+                        <Link href={`/clients/${c.id}`} className="font-medium text-ink hover:underline">
                           {c.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-2 text-slate-600">{st?.name ?? "—"}</td>
-                      <td className="px-4 py-2 text-slate-500">
+                      <td className="px-4 py-2 text-ink-muted">{st?.name ?? "—"}</td>
+                      <td className="px-4 py-2 text-ink-muted">
                         {daysSince(c.stage_entered_at)}d
                       </td>
                       <td className="px-4 py-2">
@@ -205,20 +205,20 @@ function Stat({
 }) {
   const chip =
     tone === "red"
-      ? "bg-red-50 text-red-600"
+      ? "bg-red-500/15 text-red-400 ring-red-400/20"
       : tone === "amber"
-        ? "bg-accent-500/10 text-accent-600"
+        ? "bg-accent-500/15 text-accent-400 ring-accent-400/20"
         : tone === "brand"
-          ? "bg-brand-50 text-brand-600"
-          : "bg-slate-100 text-slate-500";
+          ? "bg-brand-500/15 text-brand-300 ring-brand-400/20"
+          : "bg-white/[0.06] text-ink-muted ring-white/10";
   const inner = (
-    <Card className="flex items-center gap-4 px-5 py-4 transition-shadow hover:shadow-md">
-      <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${chip}`}>
+    <Card className="flex items-center gap-4 px-5 py-4 transition-colors hover:border-line-strong">
+      <span className={`flex h-11 w-11 items-center justify-center rounded-xl ring-1 ${chip}`}>
         <Icon className="h-5 w-5" />
       </span>
       <div>
-        <p className="text-2xl font-semibold tracking-tight text-navy-800">{value}</p>
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-2xl font-semibold tracking-tight text-ink">{value}</p>
+        <p className="text-xs text-ink-muted">{label}</p>
       </div>
     </Card>
   );
@@ -237,11 +237,11 @@ function Section({
   const count = React.Children.toArray(children).length;
   return (
     <div>
-      <p className="mb-1 text-xs font-medium text-slate-400">{title}</p>
+      <p className="mb-1 text-xs font-medium text-ink-faint">{title}</p>
       {count > 0 ? (
         <div className="space-y-1">{children}</div>
       ) : (
-        <p className="text-sm text-slate-400">{empty}</p>
+        <p className="text-sm text-ink-faint">{empty}</p>
       )}
     </div>
   );
@@ -257,8 +257,8 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <Link href={href} className="flex items-center justify-between rounded px-2 py-1 hover:bg-slate-50">
-      <span className="text-sm font-medium text-slate-800">{name}</span>
+    <Link href={href} className="flex items-center justify-between rounded px-2 py-1 hover:bg-white/[0.04]">
+      <span className="text-sm font-medium text-ink">{name}</span>
       {children}
     </Link>
   );

@@ -58,10 +58,10 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
       {clients.length === 0 ? (
         <EmptyState>No clients match these filters.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-surface/70 backdrop-blur-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs text-slate-400">
+              <tr className="border-b border-line text-left text-xs text-ink-faint">
                 <th className="px-4 py-3 font-medium">Client</th>
                 <th className="px-4 py-3 font-medium">Stage</th>
                 <th className="px-4 py-3 font-medium">In stage</th>
@@ -78,22 +78,22 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                 const over = st?.sla_days != null && dis != null && dis > st.sla_days;
                 const meta = CLIENT_STATUS[c.status];
                 return (
-                  <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <tr key={c.id} className="border-b border-line last:border-0 hover:bg-white/[0.04]">
                     <td className="px-4 py-3">
-                      <Link href={`/clients/${c.id}`} className="font-medium text-navy-800 hover:text-brand-600 hover:underline">
+                      <Link href={`/clients/${c.id}`} className="font-medium text-ink hover:text-brand-300 hover:underline">
                         {c.name}
                       </Link>
-                      {c.industry && <p className="text-xs text-slate-400">{c.industry}</p>}
+                      {c.industry && <p className="text-xs text-ink-faint">{c.industry}</p>}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{st?.name ?? "—"}</td>
-                    <td className={`px-4 py-3 ${over ? "font-medium text-red-600" : "text-slate-500"}`}>
+                    <td className="px-4 py-3 text-ink-muted">{st?.name ?? "—"}</td>
+                    <td className={`px-4 py-3 ${over ? "font-medium text-red-400" : "text-ink-muted"}`}>
                       {dis != null ? `${dis}d` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-4 py-3 text-ink-muted">
                       {c.manager_id ? pm.get(c.manager_id)?.full_name ?? "—" : "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{c.country ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-600">{c.source ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink-muted">{c.country ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink-muted">{c.source ?? "—"}</td>
                     <td className="px-4 py-3">
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                     </td>

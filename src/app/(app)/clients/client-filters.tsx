@@ -80,7 +80,7 @@ export function ClientFilters({
       </Select>
       {Object.values(current).some(Boolean) && (
         <button
-          className="text-xs text-slate-500 hover:text-slate-900"
+          className="text-xs text-ink-muted hover:text-ink"
           onClick={() => router.push("/clients")}
         >
           Clear

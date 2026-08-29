@@ -72,7 +72,7 @@ export default async function ReportsPage() {
         <CardBody>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-slate-400">
+              <tr className="text-left text-xs text-ink-faint">
                 <th className="pb-2 font-medium">Stage</th>
                 <th className="pb-2 font-medium">Clients</th>
                 <th className="pb-2 font-medium">Avg days in stage</th>
@@ -81,14 +81,14 @@ export default async function ReportsPage() {
             </thead>
             <tbody>
               {perStage.map((r) => (
-                <tr key={r.stage.id} className="border-t border-slate-100">
-                  <td className="py-2 text-slate-700">{r.stage.name}</td>
+                <tr key={r.stage.id} className="border-t border-line">
+                  <td className="py-2 text-ink-muted">{r.stage.name}</td>
                   <td className="py-2">
-                    <span className="inline-block h-2 rounded bg-slate-300 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
+                    <span className="inline-block h-2 rounded bg-white/25 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
                     <span className="ml-2">{r.count}</span>
                   </td>
-                  <td className="py-2 text-slate-500">{r.avg}d</td>
-                  <td className={`py-2 ${r.overSla ? "text-red-600" : "text-slate-400"}`}>{r.overSla}</td>
+                  <td className="py-2 text-ink-muted">{r.avg}d</td>
+                  <td className={`py-2 ${r.overSla ? "text-red-400" : "text-ink-faint"}`}>{r.overSla}</td>
                 </tr>
               ))}
             </tbody>
@@ -103,13 +103,13 @@ export default async function ReportsPage() {
           </CardHeader>
           <CardBody>
             {months.length === 0 ? (
-              <p className="text-sm text-slate-400">No start dates recorded.</p>
+              <p className="text-sm text-ink-faint">No start dates recorded.</p>
             ) : (
               <ul className="space-y-1 text-sm">
                 {months.map(([m, n]) => (
                   <li key={m} className="flex items-center gap-2">
-                    <span className="w-16 text-slate-500">{m}</span>
-                    <span className="inline-block h-3 rounded bg-green-400" style={{ width: `${n * 18}px` }} />
+                    <span className="w-16 text-ink-muted">{m}</span>
+                    <span className="inline-block h-3 rounded bg-emerald-400" style={{ width: `${n * 18}px` }} />
                     <span>{n}</span>
                   </li>
                 ))}
@@ -128,10 +128,10 @@ export default async function ReportsPage() {
                 .sort((a, b) => b[1] - a[1])
                 .map(([id, n]) => (
                   <li key={id} className="flex items-center gap-2">
-                    <span className="w-28 truncate text-slate-500">
+                    <span className="w-28 truncate text-ink-muted">
                       {id === "unassigned" ? "Unassigned" : pm.get(id)?.full_name ?? "—"}
                     </span>
-                    <span className="inline-block h-3 rounded bg-blue-400" style={{ width: `${n * 18}px` }} />
+                    <span className="inline-block h-3 rounded bg-brand-400" style={{ width: `${n * 18}px` }} />
                     <span>{n}</span>
                   </li>
                 ))}
@@ -145,7 +145,7 @@ export default async function ReportsPage() {
           <CardTitle>Lost deals</CardTitle>
         </CardHeader>
         <CardBody>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-ink-muted">
             {withdrawn} withdrawn · {rejected} rejected
           </p>
         </CardBody>
@@ -157,9 +157,9 @@ export default async function ReportsPage() {
 function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <Card className="px-4 py-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
-      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+      <p className="text-xs text-ink-muted">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
+      {sub && <p className="text-xs text-ink-faint">{sub}</p>}
     </Card>
   );
 }

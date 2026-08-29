@@ -43,11 +43,11 @@ export default async function AdminPage() {
           {isAdmin && (
             <form action={inviteMember} className="flex flex-wrap items-end gap-2">
               <div>
-                <label className="text-xs text-slate-500">Full name</label>
+                <label className="text-xs text-ink-muted">Full name</label>
                 <Input name="full_name" className="w-40" />
               </div>
               <div>
-                <label className="text-xs text-slate-500">Email</label>
+                <label className="text-xs text-ink-muted">Email</label>
                 <Input name="email" type="email" className="w-56" required />
               </div>
               <Button size="sm" type="submit">
@@ -57,7 +57,7 @@ export default async function AdminPage() {
           )}
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-slate-400">
+              <tr className="text-left text-xs text-ink-faint">
                 <th className="pb-2 font-medium">Name</th>
                 <th className="pb-2 font-medium">Email</th>
                 <th className="pb-2 font-medium">Role</th>
@@ -66,9 +66,9 @@ export default async function AdminPage() {
             </thead>
             <tbody>
               {((members as Profile[]) ?? []).map((m) => (
-                <tr key={m.id} className="border-t border-slate-100">
+                <tr key={m.id} className="border-t border-line">
                   <td className="py-2">{m.full_name || "—"}</td>
-                  <td className="py-2 text-slate-500">{m.email}</td>
+                  <td className="py-2 text-ink-muted">{m.email}</td>
                   <td className="py-2">
                     {isAdmin ? (
                       <RoleSelect id={m.id} role={m.role} />
@@ -88,7 +88,7 @@ export default async function AdminPage() {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-faint">
             Invites use Supabase Auth. New members land as “member” — set their role above.
           </p>
         </CardBody>
@@ -101,7 +101,7 @@ export default async function AdminPage() {
         <CardBody className="space-y-4">
           {(["ai", "va"] as const).map((pipe) => (
             <div key={pipe}>
-              <p className="mb-1 text-xs font-medium uppercase text-slate-400">{pipe}</p>
+              <p className="mb-1 text-xs font-medium uppercase text-ink-faint">{pipe}</p>
               <div className="space-y-1">
                 {stages
                   .filter((s) => s.pipeline === pipe)
@@ -112,7 +112,7 @@ export default async function AdminPage() {
                       className="flex items-center gap-2 text-sm"
                     >
                       <input type="hidden" name="id" value={s.id} />
-                      <span className="w-6 text-xs text-slate-400">{s.position}</span>
+                      <span className="w-6 text-xs text-ink-faint">{s.position}</span>
                       <Input name="name" defaultValue={s.name} className="h-8 w-48" disabled={!isAdmin} />
                       <Input
                         name="sla_days"
@@ -142,7 +142,7 @@ export default async function AdminPage() {
         <CardBody className="grid gap-4 sm:grid-cols-2">
           {["source", "booking_system", "country", "concern_type"].map((kind) => (
             <div key={kind}>
-              <p className="mb-1 text-xs font-medium text-slate-500">{kind}</p>
+              <p className="mb-1 text-xs font-medium text-ink-muted">{kind}</p>
               <ul className="space-y-1">
                 {(optionsByKind.get(kind) ?? []).map((o) => (
                   <li key={o.id} className="flex items-center justify-between text-sm">
@@ -150,7 +150,7 @@ export default async function AdminPage() {
                     {isAdmin && (
                       <form action={removeOption} className="inline">
                         <input type="hidden" name="id" value={o.id} />
-                        <button className="text-xs text-slate-400 hover:text-red-600">remove</button>
+                        <button className="text-xs text-ink-faint hover:text-red-400">remove</button>
                       </form>
                     )}
                   </li>
@@ -178,9 +178,9 @@ export default async function AdminPage() {
           <ul className="space-y-1.5 text-sm">
             {((activity as { id: string; summary: string; verb: string; created_at: string }[]) ?? []).map(
               (a) => (
-                <li key={a.id} className="flex justify-between text-slate-600">
+                <li key={a.id} className="flex justify-between text-ink-muted">
                   <span>{a.summary}</span>
-                  <span className="text-xs text-slate-400">{relativeTime(a.created_at)}</span>
+                  <span className="text-xs text-ink-faint">{relativeTime(a.created_at)}</span>
                 </li>
               ),
             )}

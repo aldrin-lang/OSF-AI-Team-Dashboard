@@ -18,8 +18,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white pb-4 md:flex">
-        <div className="flex h-16 items-center border-b border-slate-100 px-5">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface/60 pb-4 backdrop-blur-sm md:flex">
+        <div className="flex h-16 items-center border-b border-line px-5">
           <LogoWordmark />
         </div>
         <div className="pt-4">
@@ -28,14 +28,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur md:px-8">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/70 px-4 backdrop-blur-md md:px-8">
           <div className="flex items-center gap-2 md:hidden">
             <LogoWordmark />
           </div>
           <div className="ml-auto flex items-center gap-4">
             <Link
               href="/notifications"
-              className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-navy-800"
+              className="relative rounded-lg p-2 text-ink-muted hover:bg-white/[0.06] hover:text-ink"
               aria-label="Notifications"
             >
               <Bell className="h-[18px] w-[18px]" />
@@ -46,17 +46,17 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
               ) : null}
             </Link>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-800 text-xs font-semibold text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
                 {initials(profile.full_name || profile.email)}
               </span>
               <div className="hidden text-right leading-tight sm:block">
-                <p className="text-xs font-semibold text-navy-800">
+                <p className="text-xs font-semibold text-ink">
                   {profile.full_name || profile.email}
                 </p>
-                <p className="text-[11px] capitalize text-slate-400">{profile.role}</p>
+                <p className="text-[11px] capitalize text-ink-faint">{profile.role}</p>
               </div>
               <form action={signOut}>
-                <button className="ml-1 text-xs font-medium text-slate-500 hover:text-navy-800">
+                <button className="ml-1 text-xs font-medium text-ink-muted hover:text-ink">
                   Sign out
                 </button>
               </form>

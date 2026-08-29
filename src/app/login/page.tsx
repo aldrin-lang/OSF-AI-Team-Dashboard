@@ -22,7 +22,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
             AI Team Dashboard
           </h2>
           <p className="mt-3 max-w-sm text-sm text-brand-100/80">
-            Track every AI receptionist and VA onboarding from sale to go-live — stages,
+            Track every AI receptionist onboarding from sale to go-live — stages,
             regulatory bundles, build checklists and client concerns in one place.
           </p>
         </div>
@@ -41,15 +41,15 @@ export default async function LoginPage(props: PageProps<"/login">) {
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-2 lg:hidden">
             <Logo size={26} />
-            <span className="font-semibold text-navy-800">
+            <span className="font-semibold text-ink">
               OutsourceForce<span className="text-brand-500">.ai</span>
             </span>
           </div>
-          <h1 className="text-lg font-semibold text-navy-800">Sign in</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-lg font-semibold text-ink">Sign in</h1>
+          <p className="mt-1 text-sm text-ink-muted">
             Internal team access only. Accounts are created by an admin.
           </p>
-          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mt-6 rounded-xl border border-line bg-surface p-6 shadow-sm">
             <LoginForm next={next} />
           </div>
         </div>

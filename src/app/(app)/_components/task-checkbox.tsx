@@ -23,7 +23,7 @@ export function TaskCheckbox({
           toggleTask({ id, status: status === "done" ? "open" : "done", clientId }),
         )
       }
-      className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+      className="h-4 w-4 rounded border-line-strong accent-brand-500"
       aria-label="Toggle task done"
     />
   );

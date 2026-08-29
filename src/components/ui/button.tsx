@@ -5,11 +5,12 @@ type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type Size = "sm" | "md" | "icon";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand-500 text-white hover:bg-brand-600 disabled:bg-brand-300 shadow-sm shadow-brand-500/20",
-  secondary: "bg-navy-50 text-navy-800 hover:bg-navy-100",
-  outline: "border border-slate-300 bg-white text-navy-800 hover:bg-slate-50",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-navy-800",
-  danger: "bg-red-600 text-white hover:bg-red-500",
+  primary:
+    "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-brand-500/50 shadow-[0_6px_20px_-6px_rgba(43,127,255,0.6)]",
+  secondary: "bg-white/[0.06] text-ink hover:bg-white/[0.12] border border-line",
+  outline: "border border-line-strong bg-transparent text-ink hover:bg-white/[0.06]",
+  ghost: "text-ink-muted hover:bg-white/[0.06] hover:text-ink",
+  danger: "bg-red-500 text-white hover:bg-red-400",
 };
 
 const SIZES: Record<Size, string> = {

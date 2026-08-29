@@ -12,12 +12,12 @@ import type {
 export type Tone = "neutral" | "blue" | "amber" | "green" | "red" | "purple";
 
 export const TONE_CLASS: Record<Tone, string> = {
-  neutral: "bg-slate-100 text-slate-600 ring-slate-200",
-  blue: "bg-brand-50 text-brand-700 ring-brand-200",
-  amber: "bg-accent-500/10 text-accent-600 ring-accent-500/25",
-  green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  red: "bg-red-50 text-red-700 ring-red-200",
-  purple: "bg-navy-100 text-navy-700 ring-navy-200",
+  neutral: "bg-white/[0.06] text-ink-muted ring-white/10",
+  blue: "bg-brand-500/15 text-brand-300 ring-brand-400/30",
+  amber: "bg-accent-500/15 text-accent-400 ring-accent-500/30",
+  green: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30",
+  red: "bg-red-500/15 text-red-300 ring-red-400/30",
+  purple: "bg-violet-500/15 text-violet-300 ring-violet-400/30",
 };
 
 export const CLIENT_STATUS: Record<ClientStatus, { label: string; tone: Tone }> = {

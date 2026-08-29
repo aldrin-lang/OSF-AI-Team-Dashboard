@@ -37,7 +37,7 @@ export function ActiveToggle({ id, active }: { id: string; active: boolean }) {
   return (
     <button
       disabled={pending}
-      className="text-xs font-medium text-slate-500 hover:text-navy-800 disabled:opacity-50"
+      className="text-xs font-medium text-ink-muted hover:text-ink disabled:opacity-50"
       onClick={() => {
         const fd = new FormData();
         fd.set("id", id);

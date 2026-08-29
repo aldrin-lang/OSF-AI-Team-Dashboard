@@ -77,7 +77,7 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
   return (
     <div>
       {error && (
-        <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+        <p className="mb-3 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300 ring-1 ring-red-200">
           {error}
         </p>
       )}
@@ -111,20 +111,20 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-colors ${
-        isOver ? "border-brand-400 ring-2 ring-brand-200" : "border-slate-200/70"
+      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-surface/70 backdrop-blur-sm transition-colors ${
+        isOver ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
       }`}
     >
       <div className={`h-1 ${accent}`} />
       <div className="flex items-center justify-between px-3 py-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{stage.name}</p>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{stage.name}</p>
+        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-ink-muted">
           {cards.length}
         </span>
       </div>
       <div className="flex flex-1 flex-col gap-2 px-3 pb-3">
         {cards.length === 0 && (
-          <p className="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
+          <p className="rounded-lg border border-dashed border-line py-6 text-center text-xs text-ink-faint">
             Drop here
           </p>
         )}
@@ -158,22 +158,22 @@ function CardChip({
   const over = slaDays != null && d != null && d > slaDays;
   return (
     <div
-      className={`cursor-grab rounded-lg border bg-white p-2.5 text-sm shadow-sm transition-shadow active:cursor-grabbing ${
-        dragging ? "border-brand-400 shadow-md" : "border-slate-200 hover:shadow-md"
+      className={`cursor-grab rounded-lg border bg-surface p-2.5 text-sm shadow-sm transition-shadow active:cursor-grabbing ${
+        dragging ? "border-brand-400 shadow-md" : "border-line hover:shadow-md"
       }`}
     >
       <Link
         href={`/clients/${card.id}`}
-        className="font-medium text-navy-800 hover:text-brand-600"
+        className="font-medium text-ink hover:text-brand-300"
         onClick={(e) => e.stopPropagation()}
       >
         {card.name}
       </Link>
       <div className="mt-1.5 flex items-center justify-between text-xs">
-        <span className="text-slate-400">{card.manager ?? "Unassigned"}</span>
+        <span className="text-ink-faint">{card.manager ?? "Unassigned"}</span>
         <span
           className={`rounded px-1.5 py-0.5 font-medium ${
-            over ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-400"
+            over ? "bg-red-500/15 text-red-400" : "bg-white/[0.03] text-ink-faint"
           }`}
         >
           {d != null ? `${d}d` : "—"}
