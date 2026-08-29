@@ -6,18 +6,19 @@ import type { Profile, UserRole } from "@/lib/types";
 /** Current auth user + profile row, or null. Memoised per request. */
 export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await getServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  // getClaims() verifies the JWT locally against the project's ES256 JWKS —
+  // no network round-trip to the auth server on every page load.
+  const { data, error } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (error || !userId) return null;
 
-  const { data } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
-  return (data as Profile | null) ?? null;
+  return (profile as Profile | null) ?? null;
 });
 
 /** Redirect to /login when signed out; to /inactive when the account is disabled. */
