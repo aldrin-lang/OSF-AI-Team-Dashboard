@@ -5,10 +5,10 @@ type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type Size = "sm" | "md" | "icon";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-neutral-900 text-white hover:bg-neutral-700 disabled:bg-neutral-400",
-  secondary: "bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
-  outline: "border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50",
-  ghost: "text-neutral-700 hover:bg-neutral-100",
+  primary: "bg-brand-500 text-white hover:bg-brand-600 disabled:bg-brand-300 shadow-sm shadow-brand-500/20",
+  secondary: "bg-navy-50 text-navy-800 hover:bg-navy-100",
+  outline: "border border-slate-300 bg-white text-navy-800 hover:bg-slate-50",
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-navy-800",
   danger: "bg-red-600 text-white hover:bg-red-500",
 };
 
@@ -29,7 +29,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:cursor-not-allowed disabled:opacity-70",
+        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-70",
         VARIANTS[variant],
         SIZES[size],
         className,

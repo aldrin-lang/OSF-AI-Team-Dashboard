@@ -90,12 +90,12 @@ function Column({ stage, cards }: { stage: Stage; cards: Card[] }) {
     <div
       ref={setNodeRef}
       className={`flex w-64 shrink-0 flex-col rounded-lg border p-2 ${
-        isOver ? "border-neutral-900 bg-neutral-50" : "border-neutral-200 bg-neutral-100/50"
+        isOver ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-slate-100/50"
       }`}
     >
       <div className="mb-2 flex items-center justify-between px-1">
-        <p className="text-xs font-semibold text-neutral-700">{stage.name}</p>
-        <span className="rounded bg-neutral-200 px-1.5 text-xs text-neutral-600">{cards.length}</span>
+        <p className="text-xs font-semibold text-slate-700">{stage.name}</p>
+        <span className="rounded bg-slate-200 px-1.5 text-xs text-slate-600">{cards.length}</span>
       </div>
       <div className="flex flex-1 flex-col gap-2">
         {cards.map((c) => (
@@ -134,17 +134,17 @@ function CardChip({
   return (
     <div
       className={`rounded-md border bg-white p-2 text-sm shadow-sm ${
-        dragging ? "border-neutral-900" : "border-neutral-200"
+        dragging ? "border-slate-900" : "border-slate-200"
       }`}
     >
       <Link
         href={`/clients/${card.id}`}
-        className="font-medium text-neutral-900 hover:underline"
+        className="font-medium text-slate-900 hover:underline"
         onClick={(e) => e.stopPropagation()}
       >
         {card.name}
       </Link>
-      <div className="mt-1 flex items-center justify-between text-xs text-neutral-400">
+      <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
         <span>{card.manager ?? "Unassigned"}</span>
         <span className={over ? "text-red-600" : ""}>{d != null ? `${d}d` : ""}</span>
       </div>

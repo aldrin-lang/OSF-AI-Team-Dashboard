@@ -23,11 +23,11 @@ export function Checklist({ clientId, items }: { clientId: string; items: Item[]
   const [pending, start] = useTransition();
 
   if (items.length === 0) {
-    return <p className="px-4 py-4 text-sm text-neutral-400">No checklist items.</p>;
+    return <p className="px-4 py-4 text-sm text-slate-400">No checklist items.</p>;
   }
 
   return (
-    <ul className="divide-y divide-neutral-100">
+    <ul className="divide-y divide-slate-100">
       {items.map((it) => (
         <li key={it.id} className="flex items-center gap-3 px-4 py-2.5">
           <input
@@ -44,14 +44,14 @@ export function Checklist({ clientId, items }: { clientId: string; items: Item[]
                 router.refresh();
               })
             }
-            className="h-4 w-4 rounded border-neutral-300 accent-neutral-900"
+            className="h-4 w-4 rounded border-slate-300 accent-slate-900"
           />
           <div className="min-w-0 flex-1">
-            <p className={`text-sm ${it.status === "done" ? "text-neutral-400 line-through" : "text-neutral-900"}`}>
+            <p className={`text-sm ${it.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
               {it.label}
             </p>
             {it.status === "done" && it.completedAt && (
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-slate-400">
                 {it.completedBy ? `${it.completedBy} · ` : ""}
                 {relativeTime(it.completedAt)}
               </p>
@@ -70,7 +70,7 @@ export function Checklist({ clientId, items }: { clientId: string; items: Item[]
                 router.refresh();
               })
             }
-            className="h-7 rounded border border-neutral-200 bg-white px-1 text-xs"
+            className="h-7 rounded border border-slate-200 bg-white px-1 text-xs"
           >
             {ORDER.map((s) => (
               <option key={s} value={s}>

@@ -65,8 +65,8 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
         subtitle={pipeline === "ai" ? "AI receptionist pipeline" : "Virtual assistant pipeline"}
         actions={
           <div className="flex gap-1 text-sm">
-            <Link href="/reports?type=ai" className={`rounded-md px-3 py-1.5 ${pipeline === "ai" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100"}`}>AI</Link>
-            <Link href="/reports?type=va" className={`rounded-md px-3 py-1.5 ${pipeline === "va" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100"}`}>VA</Link>
+            <Link href="/reports?type=ai" className={`rounded-md px-3 py-1.5 ${pipeline === "ai" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>AI</Link>
+            <Link href="/reports?type=va" className={`rounded-md px-3 py-1.5 ${pipeline === "va" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>VA</Link>
           </div>
         }
       />
@@ -85,7 +85,7 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
         <CardBody>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-neutral-400">
+              <tr className="text-left text-xs text-slate-400">
                 <th className="pb-2 font-medium">Stage</th>
                 <th className="pb-2 font-medium">Clients</th>
                 <th className="pb-2 font-medium">Avg days in stage</th>
@@ -94,14 +94,14 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
             </thead>
             <tbody>
               {perStage.map((r) => (
-                <tr key={r.stage.id} className="border-t border-neutral-100">
-                  <td className="py-2 text-neutral-700">{r.stage.name}</td>
+                <tr key={r.stage.id} className="border-t border-slate-100">
+                  <td className="py-2 text-slate-700">{r.stage.name}</td>
                   <td className="py-2">
-                    <span className="inline-block h-2 rounded bg-neutral-300 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
+                    <span className="inline-block h-2 rounded bg-slate-300 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
                     <span className="ml-2">{r.count}</span>
                   </td>
-                  <td className="py-2 text-neutral-500">{r.avg}d</td>
-                  <td className={`py-2 ${r.overSla ? "text-red-600" : "text-neutral-400"}`}>{r.overSla}</td>
+                  <td className="py-2 text-slate-500">{r.avg}d</td>
+                  <td className={`py-2 ${r.overSla ? "text-red-600" : "text-slate-400"}`}>{r.overSla}</td>
                 </tr>
               ))}
             </tbody>
@@ -116,12 +116,12 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
           </CardHeader>
           <CardBody>
             {months.length === 0 ? (
-              <p className="text-sm text-neutral-400">No start dates recorded.</p>
+              <p className="text-sm text-slate-400">No start dates recorded.</p>
             ) : (
               <ul className="space-y-1 text-sm">
                 {months.map(([m, n]) => (
                   <li key={m} className="flex items-center gap-2">
-                    <span className="w-16 text-neutral-500">{m}</span>
+                    <span className="w-16 text-slate-500">{m}</span>
                     <span className="inline-block h-3 rounded bg-green-400" style={{ width: `${n * 18}px` }} />
                     <span>{n}</span>
                   </li>
@@ -141,7 +141,7 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
                 .sort((a, b) => b[1] - a[1])
                 .map(([id, n]) => (
                   <li key={id} className="flex items-center gap-2">
-                    <span className="w-28 truncate text-neutral-500">
+                    <span className="w-28 truncate text-slate-500">
                       {id === "unassigned" ? "Unassigned" : pm.get(id)?.full_name ?? "—"}
                     </span>
                     <span className="inline-block h-3 rounded bg-blue-400" style={{ width: `${n * 18}px` }} />
@@ -158,7 +158,7 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
           <CardTitle>Lost deals</CardTitle>
         </CardHeader>
         <CardBody>
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm text-slate-600">
             {withdrawn} withdrawn · {rejected} rejected
           </p>
         </CardBody>
@@ -170,9 +170,9 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
 function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <Card className="px-4 py-3">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-neutral-900">{value}</p>
-      {sub && <p className="text-xs text-neutral-400">{sub}</p>}
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
+      {sub && <p className="text-xs text-slate-400">{sub}</p>}
     </Card>
   );
 }

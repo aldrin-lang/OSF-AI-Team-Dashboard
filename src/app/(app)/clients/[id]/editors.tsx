@@ -14,7 +14,7 @@ function Disclosure({ label, children }: { label: string; children: React.ReactN
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="text-xs font-medium text-neutral-500 hover:text-neutral-900"
+        className="text-xs font-medium text-slate-500 hover:text-slate-900"
       >
         {open ? "− " : "+ "}
         {label}
@@ -97,8 +97,8 @@ export function EditClientPanel({
             ))}
           </Select>
         </div>
-        <div className="rounded-md bg-neutral-50 p-2">
-          <p className="mb-2 text-xs font-medium text-neutral-500">Commercials (manager/admin only)</p>
+        <div className="rounded-md bg-slate-50 p-2">
+          <p className="mb-2 text-xs font-medium text-slate-500">Commercials (manager/admin only)</p>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label>Setup fee</Label>
@@ -153,7 +153,7 @@ function LineForm({ clientId, line }: { clientId: string; line?: ClientLine }) {
         await upsertLine(fd);
         router.refresh();
       }}
-      className="space-y-2 rounded-md border border-neutral-200 p-2"
+      className="space-y-2 rounded-md border border-slate-200 p-2"
     >
       <input type="hidden" name="client_id" value={clientId} />
       {line && <input type="hidden" name="id" value={line.id} />}
@@ -242,7 +242,7 @@ function PlacementForm({ clientId, placement }: { clientId: string; placement?: 
         await upsertPlacement(fd);
         router.refresh();
       }}
-      className="space-y-2 rounded-md border border-neutral-200 p-2"
+      className="space-y-2 rounded-md border border-slate-200 p-2"
     >
       <input type="hidden" name="client_id" value={clientId} />
       {placement && <input type="hidden" name="id" value={placement.id} />}

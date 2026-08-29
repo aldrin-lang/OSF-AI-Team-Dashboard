@@ -36,13 +36,13 @@ export default async function PipelinePage(props: PageProps<"/pipeline">) {
           <div className="flex gap-1 text-sm">
             <Link
               href="/pipeline?type=ai"
-              className={`rounded-md px-3 py-1.5 ${pipeline === "ai" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100"}`}
+              className={`rounded-md px-3 py-1.5 ${pipeline === "ai" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
             >
               AI
             </Link>
             <Link
               href="/pipeline?type=va"
-              className={`rounded-md px-3 py-1.5 ${pipeline === "va" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100"}`}
+              className={`rounded-md px-3 py-1.5 ${pipeline === "va" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
             >
               VA
             </Link>

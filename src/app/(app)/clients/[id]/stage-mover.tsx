@@ -20,8 +20,8 @@ export function StageMover({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-3">
-      <p className="mb-2 text-xs font-medium text-neutral-400">Pipeline stage</p>
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <p className="mb-2 text-xs font-medium text-slate-400">Pipeline stage</p>
       <div className="flex flex-wrap gap-1.5">
         {stages.map((s) => {
           const isCurrent = s.id === currentStageId;
@@ -41,10 +41,10 @@ export function StageMover({
               className={[
                 "rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 isCurrent
-                  ? "bg-neutral-900 text-white"
+                  ? "bg-slate-900 text-white"
                   : s.allowed
-                    ? "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                    : "bg-neutral-50 text-neutral-300 cursor-not-allowed",
+                    ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    : "bg-slate-50 text-slate-300 cursor-not-allowed",
               ].join(" ")}
             >
               {s.name}

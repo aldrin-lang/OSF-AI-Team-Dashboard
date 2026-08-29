@@ -26,7 +26,7 @@ export default async function NotificationsPage() {
         actions={
           unread ? (
             <form action={markAllRead}>
-              <button className="text-sm text-neutral-600 hover:text-neutral-900">
+              <button className="text-sm text-slate-600 hover:text-slate-900">
                 Mark all read
               </button>
             </form>
@@ -36,24 +36,24 @@ export default async function NotificationsPage() {
       {rows.length === 0 ? (
         <EmptyState>No notifications yet.</EmptyState>
       ) : (
-        <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
+        <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
           {rows.map((n) => (
             <li key={n.id} className={n.read_at ? "" : "bg-blue-50/40"}>
               <Link
                 href={n.link ?? "/"}
-                className="block px-4 py-3 hover:bg-neutral-50"
+                className="block px-4 py-3 hover:bg-slate-50"
                 {...(!n.read_at ? {} : {})}
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-neutral-900">{n.title}</p>
-                  <span className="text-xs text-neutral-400">{relativeTime(n.created_at)}</span>
+                  <p className="text-sm font-medium text-slate-900">{n.title}</p>
+                  <span className="text-xs text-slate-400">{relativeTime(n.created_at)}</span>
                 </div>
-                {n.body && <p className="mt-0.5 text-sm text-neutral-500">{n.body}</p>}
+                {n.body && <p className="mt-0.5 text-sm text-slate-500">{n.body}</p>}
               </Link>
               {!n.read_at && (
                 <form action={markRead} className="px-4 pb-2">
                   <input type="hidden" name="id" value={n.id} />
-                  <button className="text-xs text-neutral-400 hover:text-neutral-700">
+                  <button className="text-xs text-slate-400 hover:text-slate-700">
                     Mark read
                   </button>
                 </form>

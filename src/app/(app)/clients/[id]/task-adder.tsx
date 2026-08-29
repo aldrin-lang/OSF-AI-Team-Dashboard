@@ -24,7 +24,7 @@ export function TaskAdder({
         ref.current?.reset();
         router.refresh();
       }}
-      className="space-y-2 border-t border-neutral-100 pt-3"
+      className="space-y-2 border-t border-slate-100 pt-3"
     >
       <input type="hidden" name="client_id" value={clientId} />
       <Input name="title" placeholder="New task…" required className="h-8 text-xs" />

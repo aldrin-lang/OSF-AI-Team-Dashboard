@@ -26,7 +26,7 @@ export default async function NewConcernPage(props: PageProps<"/concerns/new">) 
       <PageHeader
         title="Raise a concern"
         actions={
-          <Link href="/concerns" className="text-sm text-neutral-500 hover:text-neutral-900">
+          <Link href="/concerns" className="text-sm text-slate-500 hover:text-slate-900">
             Cancel
           </Link>
         }

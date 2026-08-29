@@ -85,23 +85,23 @@ export default async function MyDeskPage() {
                 <EmptyState>No open tasks assigned to you.</EmptyState>
               </div>
             ) : (
-              <ul className="divide-y divide-neutral-100">
+              <ul className="divide-y divide-slate-100">
                 {tasks.map((t) => (
                   <li key={t.id} className="flex items-center gap-3 px-4 py-2.5">
                     <TaskCheckbox id={t.id} status={t.status} clientId={t.client_id} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-neutral-900">{t.title}</p>
+                      <p className="truncate text-sm text-slate-900">{t.title}</p>
                       {t.client_id && (
                         <Link
                           href={`/clients/${t.client_id}`}
-                          className="text-xs text-neutral-400 hover:text-neutral-700"
+                          className="text-xs text-slate-400 hover:text-slate-700"
                         >
                           {clientName.get(t.client_id) ?? "client"}
                         </Link>
                       )}
                     </div>
                     {t.due_date && (
-                      <span className="text-xs text-neutral-400">{formatDate(t.due_date)}</span>
+                      <span className="text-xs text-slate-400">{formatDate(t.due_date)}</span>
                     )}
                   </li>
                 ))}
@@ -130,14 +130,14 @@ export default async function MyDeskPage() {
             <Section title="Open concerns" empty="No open concerns.">
               {concerns.map((c) => (
                 <Row key={c.id} href={`/concerns/${c.id}`} name={clientName.get(c.client_id) ?? "client"}>
-                  <span className="text-xs text-neutral-500">{c.title}</span>
+                  <span className="text-xs text-slate-500">{c.title}</span>
                 </Row>
               ))}
             </Section>
             <Section title="Go-live this week" empty="No go-lives scheduled.">
               {goLives.map((c) => (
                 <Row key={c.id} href={`/clients/${c.id}`} name={c.name}>
-                  <span className="text-xs text-neutral-500">{formatDate(c.start_date)}</span>
+                  <span className="text-xs text-slate-500">{formatDate(c.start_date)}</span>
                 </Row>
               ))}
             </Section>
@@ -157,7 +157,7 @@ export default async function MyDeskPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-neutral-100 text-left text-xs text-neutral-400">
+                <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
                   <th className="px-4 py-2 font-medium">Client</th>
                   <th className="px-4 py-2 font-medium">Stage</th>
                   <th className="px-4 py-2 font-medium">In stage</th>
@@ -169,14 +169,14 @@ export default async function MyDeskPage() {
                   const st = c.stage_id ? stageById.get(c.stage_id) : null;
                   const meta = CLIENT_STATUS[c.status];
                   return (
-                    <tr key={c.id} className="border-b border-neutral-50 hover:bg-neutral-50">
+                    <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50">
                       <td className="px-4 py-2">
-                        <Link href={`/clients/${c.id}`} className="font-medium text-neutral-900 hover:underline">
+                        <Link href={`/clients/${c.id}`} className="font-medium text-slate-900 hover:underline">
                           {c.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-2 text-neutral-600">{st?.name ?? "—"}</td>
-                      <td className="px-4 py-2 text-neutral-500">
+                      <td className="px-4 py-2 text-slate-600">{st?.name ?? "—"}</td>
+                      <td className="px-4 py-2 text-slate-500">
                         {daysSince(c.stage_entered_at)}d
                       </td>
                       <td className="px-4 py-2">
@@ -206,10 +206,10 @@ function Stat({
   tone?: "neutral" | "amber" | "red";
 }) {
   const toneClass =
-    tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-600" : "text-neutral-900";
+    tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-600" : "text-slate-900";
   const inner = (
     <Card className="px-4 py-3">
-      <p className="text-xs text-neutral-500">{label}</p>
+      <p className="text-xs text-slate-500">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{value}</p>
     </Card>
   );
@@ -228,11 +228,11 @@ function Section({
   const count = React.Children.toArray(children).length;
   return (
     <div>
-      <p className="mb-1 text-xs font-medium text-neutral-400">{title}</p>
+      <p className="mb-1 text-xs font-medium text-slate-400">{title}</p>
       {count > 0 ? (
         <div className="space-y-1">{children}</div>
       ) : (
-        <p className="text-sm text-neutral-400">{empty}</p>
+        <p className="text-sm text-slate-400">{empty}</p>
       )}
     </div>
   );
@@ -248,8 +248,8 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <Link href={href} className="flex items-center justify-between rounded px-2 py-1 hover:bg-neutral-50">
-      <span className="text-sm font-medium text-neutral-800">{name}</span>
+    <Link href={href} className="flex items-center justify-between rounded px-2 py-1 hover:bg-slate-50">
+      <span className="text-sm font-medium text-slate-800">{name}</span>
       {children}
     </Link>
   );

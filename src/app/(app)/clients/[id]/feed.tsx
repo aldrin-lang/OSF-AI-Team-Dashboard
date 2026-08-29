@@ -62,7 +62,7 @@ export function Feed({
         />
         <div className="flex items-center justify-between gap-2">
           <select
-            className="h-8 rounded border border-neutral-200 bg-white px-1 text-xs"
+            className="h-8 rounded border border-slate-200 bg-white px-1 text-xs"
             value=""
             onChange={(e) => {
               if (e.target.value && !selected.includes(e.target.value))
@@ -81,7 +81,7 @@ export function Feed({
           </Button>
         </div>
         {selected.length > 0 && (
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-slate-500">
             Notifying: {selected.map((id) => nameById.get(id)).join(", ")}{" "}
             <button type="button" className="underline" onClick={() => setSelected([])}>
               clear
@@ -91,19 +91,19 @@ export function Feed({
       </form>
 
       <ul className="space-y-2.5">
-        {merged.length === 0 && <li className="text-sm text-neutral-400">No activity yet.</li>}
+        {merged.length === 0 && <li className="text-sm text-slate-400">No activity yet.</li>}
         {merged.map((m) => (
           <li key={m.id} className="flex gap-3 text-sm">
             <span
               className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                m.kind === "comment" ? "bg-blue-500" : "bg-neutral-300"
+                m.kind === "comment" ? "bg-blue-500" : "bg-slate-300"
               }`}
             />
             <div className="min-w-0">
-              <p className={m.kind === "comment" ? "text-neutral-900" : "text-neutral-600"}>
+              <p className={m.kind === "comment" ? "text-slate-900" : "text-slate-600"}>
                 {m.text}
               </p>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-slate-400">
                 {m.who ?? "System"} · {relativeTime(m.at)}
               </p>
             </div>

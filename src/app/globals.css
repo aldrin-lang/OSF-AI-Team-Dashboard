@@ -1,11 +1,48 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ===========================================================================
+   OutsourceForce.ai brand palette
+   Navy #14284d · Blue #2b7fff · Orange #f2691f · plus black / white / greys
+   =========================================================================== */
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-navy-50: #eef2f9;
+  --color-navy-100: #d6e0f0;
+  --color-navy-600: #1e3a6b;
+  --color-navy-700: #17305a;
+  --color-navy-800: #14284d;
+  --color-navy-900: #0f1e3a;
+
+  --color-brand-50: #eef5ff;
+  --color-brand-100: #d9e8ff;
+  --color-brand-200: #b7d3ff;
+  --color-brand-300: #83b4ff;
+  --color-brand-400: #4d90ff;
+  --color-brand-500: #2b7fff;
+  --color-brand-600: #1563ea;
+  --color-brand-700: #124fc0;
+  --color-brand-800: #14439b;
+
+  --color-accent-400: #ff8a3d;
+  --color-accent-500: #f2691f;
+  --color-accent-600: #d9540f;
+
+  --color-canvas: #f6f8fc;
 }
 
-/* Internal tool — light theme for now (visual design pass comes later). */
 html {
   color-scheme: light;
+}
+
+body {
+  background: var(--color-canvas);
+  color: #14284d;
+}
+
+/* Thin, unobtrusive scrollbars for the board / wide tables */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }

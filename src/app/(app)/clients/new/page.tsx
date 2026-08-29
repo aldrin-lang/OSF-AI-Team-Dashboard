@@ -23,7 +23,7 @@ export default async function NewClientPage(props: PageProps<"/clients/new">) {
         title="New client"
         subtitle={pipeline === "ai" ? "AI receptionist onboarding" : "Virtual assistant onboarding"}
         actions={
-          <Link href={`/clients?type=${pipeline}`} className="text-sm text-neutral-500 hover:text-neutral-900">
+          <Link href={`/clients?type=${pipeline}`} className="text-sm text-slate-500 hover:text-slate-900">
             Cancel
           </Link>
         }

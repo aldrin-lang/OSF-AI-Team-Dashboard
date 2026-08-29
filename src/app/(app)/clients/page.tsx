@@ -44,7 +44,7 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
         }
       />
 
-      <div className="flex gap-2 border-b border-neutral-200 text-sm">
+      <div className="flex gap-2 border-b border-slate-200 text-sm">
         <PipeTab active={pipeline === "ai"} href="/clients?type=ai" label="AI Receptionist" />
         <PipeTab active={pipeline === "va"} href="/clients?type=va" label="Virtual Assistant" />
       </div>
@@ -66,10 +66,10 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
       {clients.length === 0 ? (
         <EmptyState>No clients match these filters.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-neutral-200 text-left text-xs text-neutral-400">
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-400">
                 <th className="px-4 py-2.5 font-medium">Client</th>
                 <th className="px-4 py-2.5 font-medium">Stage</th>
                 <th className="px-4 py-2.5 font-medium">In stage</th>
@@ -86,22 +86,22 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                 const over = st?.sla_days != null && dis != null && dis > st.sla_days;
                 const meta = CLIENT_STATUS[c.status];
                 return (
-                  <tr key={c.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                  <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-2.5">
-                      <Link href={`/clients/${c.id}`} className="font-medium text-neutral-900 hover:underline">
+                      <Link href={`/clients/${c.id}`} className="font-medium text-slate-900 hover:underline">
                         {c.name}
                       </Link>
-                      {c.industry && <p className="text-xs text-neutral-400">{c.industry}</p>}
+                      {c.industry && <p className="text-xs text-slate-400">{c.industry}</p>}
                     </td>
-                    <td className="px-4 py-2.5 text-neutral-600">{st?.name ?? "—"}</td>
-                    <td className={`px-4 py-2.5 ${over ? "text-red-600 font-medium" : "text-neutral-500"}`}>
+                    <td className="px-4 py-2.5 text-slate-600">{st?.name ?? "—"}</td>
+                    <td className={`px-4 py-2.5 ${over ? "text-red-600 font-medium" : "text-slate-500"}`}>
                       {dis != null ? `${dis}d` : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-neutral-600">
+                    <td className="px-4 py-2.5 text-slate-600">
                       {c.manager_id ? pm.get(c.manager_id)?.full_name ?? "—" : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-neutral-600">{c.country ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-neutral-600">{c.source ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{c.country ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{c.source ?? "—"}</td>
                     <td className="px-4 py-2.5">
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                     </td>
@@ -122,8 +122,8 @@ function PipeTab({ active, href, label }: { active: boolean; href: string; label
       href={href}
       className={`-mb-px border-b-2 px-3 py-2 font-medium ${
         active
-          ? "border-neutral-900 text-neutral-900"
-          : "border-transparent text-neutral-400 hover:text-neutral-700"
+          ? "border-slate-900 text-slate-900"
+          : "border-transparent text-slate-400 hover:text-slate-700"
       }`}
     >
       {label}
