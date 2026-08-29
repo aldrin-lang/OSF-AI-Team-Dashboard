@@ -3,10 +3,10 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { X, ExternalLink, Zap, MessageSquarePlus } from "lucide-react";
+import { X, ExternalLink, Zap, MessageSquarePlus, Phone, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, Textarea } from "@/components/ui/primitives";
+import { Input, Select, Textarea } from "@/components/ui/primitives";
 import { RB_STATUS, CHECKLIST_STATUS, CLIENT_STATUS } from "@/lib/labels";
 import { relativeTime } from "@/lib/utils";
 import { moveClientStage, setChecklistStatus } from "../clients/actions";
@@ -14,6 +14,8 @@ import {
   getClientQuick,
   quickSetField,
   quickSetRb,
+  quickSaveLine,
+  quickDeleteLine,
   quickAddNote,
   type ClientQuick,
 } from "../clients/quick-actions";
@@ -175,24 +177,107 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
               </Section>
             </div>
 
-            {data.lines.map((l) => (
-              <Section key={l.id} label={`Regulatory Bundle — ${l.label || l.ai_phone_number || "line"}`}>
-                <Select
-                  value={l.regulatory_bundle_status}
+            <Section label={`AI phones${data.lines.length ? ` · ${data.lines.length}` : ""}`}>
+              <div className="space-y-2">
+                {data.lines.map((l) => (
+                  <div
+                    key={l.id}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 shrink-0 text-brand-300" />
+                      <Input
+                        defaultValue={l.label ?? ""}
+                        placeholder="Name / label (e.g. Shannon)"
+                        disabled={pending}
+                        className="h-8 flex-1 text-xs"
+                        onBlur={(e) => {
+                          if ((e.target.value.trim() || "") !== (l.label ?? ""))
+                            start(async () => {
+                              await quickSaveLine({
+                                clientId: data.client.id,
+                                lineId: l.id,
+                                label: e.target.value,
+                                ai_phone_number: l.ai_phone_number,
+                              });
+                              refresh();
+                            });
+                        }}
+                      />
+                      <button
+                        onClick={() =>
+                          start(async () => {
+                            await quickDeleteLine({ clientId: data.client.id, lineId: l.id });
+                            refresh();
+                          })
+                        }
+                        className="rounded p-1 text-ink-faint hover:bg-white/10 hover:text-rose-300"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Input
+                        defaultValue={l.ai_phone_number ?? ""}
+                        placeholder="Phone number"
+                        disabled={pending}
+                        className="h-8 flex-1 text-xs"
+                        onBlur={(e) => {
+                          if ((e.target.value.trim() || "") !== (l.ai_phone_number ?? ""))
+                            start(async () => {
+                              await quickSaveLine({
+                                clientId: data.client.id,
+                                lineId: l.id,
+                                label: l.label,
+                                ai_phone_number: e.target.value,
+                              });
+                              refresh();
+                            });
+                        }}
+                      />
+                      <Select
+                        value={l.regulatory_bundle_status}
+                        disabled={pending}
+                        className="h-8 w-32 text-xs"
+                        onChange={(e) =>
+                          start(async () => {
+                            await quickSetRb({
+                              clientId: data.client.id,
+                              lineId: l.id,
+                              value: e.target.value,
+                            });
+                            refresh();
+                          })
+                        }
+                      >
+                        {RB_OPTS.map(([k, v]) => (
+                          <option key={k} value={k}>
+                            RB: {v.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+                <button
                   disabled={pending}
-                  onChange={(e) =>
+                  onClick={() =>
                     start(async () => {
-                      await quickSetRb({ clientId: data.client.id, lineId: l.id, value: e.target.value });
+                      await quickSaveLine({
+                        clientId: data.client.id,
+                        label: null,
+                        ai_phone_number: null,
+                      });
                       refresh();
                     })
                   }
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 py-2 text-xs font-medium text-ink-muted hover:border-brand-400/40 hover:text-brand-300"
                 >
-                  {RB_OPTS.map(([k, v]) => (
-                    <option key={k} value={k}>{v.label}</option>
-                  ))}
-                </Select>
-              </Section>
-            ))}
+                  <Plus className="h-3.5 w-3.5" /> Add AI phone
+                </button>
+              </div>
+            </Section>
 
             <Section label="Build checklist">
               <ul className="space-y-1">

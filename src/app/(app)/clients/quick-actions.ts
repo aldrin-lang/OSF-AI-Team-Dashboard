@@ -110,6 +110,54 @@ export async function quickSetField(input: {
   revalidatePath("/clients");
 }
 
+export async function quickSaveLine(input: {
+  clientId: string;
+  lineId?: string;
+  label: string | null;
+  ai_phone_number: string | null;
+}) {
+  await requireActor();
+  const supabase = await getServerSupabase();
+  const row = {
+    label: input.label?.trim() || null,
+    ai_phone_number: input.ai_phone_number?.trim() || null,
+  };
+  if (input.lineId) {
+    const { error } = await supabase.from("client_lines").update(row).eq("id", input.lineId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("client_lines")
+      .insert({ ...row, client_id: input.clientId });
+    if (error) throw new Error(error.message);
+  }
+  await logActivity({
+    entity: "client",
+    entityId: input.clientId,
+    verb: "line",
+    summary: input.lineId
+      ? `Updated AI phone ${row.label || row.ai_phone_number || ""}`.trim()
+      : `Added AI phone ${row.label || row.ai_phone_number || ""}`.trim(),
+  });
+  revalidatePath("/pipeline");
+  revalidatePath(`/clients/${input.clientId}`);
+}
+
+export async function quickDeleteLine(input: { clientId: string; lineId: string }) {
+  await requireActor();
+  const supabase = await getServerSupabase();
+  const { error } = await supabase.from("client_lines").delete().eq("id", input.lineId);
+  if (error) throw new Error(error.message);
+  await logActivity({
+    entity: "client",
+    entityId: input.clientId,
+    verb: "line",
+    summary: "Removed an AI phone",
+  });
+  revalidatePath("/pipeline");
+  revalidatePath(`/clients/${input.clientId}`);
+}
+
 export async function quickSetRb(input: {
   clientId: string;
   lineId: string;
