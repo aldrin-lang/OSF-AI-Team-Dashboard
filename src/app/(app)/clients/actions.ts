@@ -46,6 +46,8 @@ export async function createClient(formData: FormData) {
     .insert({
       pipeline,
       name,
+      company_name: s(formData, "company_name"),
+      contact_email: s(formData, "contact_email"),
       industry: s(formData, "industry"),
       country: s(formData, "country"),
       source: s(formData, "source"),
@@ -92,6 +94,8 @@ export async function createClient(formData: FormData) {
 // ---------------------------------------------------------------------------
 const EDITABLE: (keyof Client)[] = [
   "name",
+  "company_name",
+  "contact_email",
   "industry",
   "country",
   "source",
@@ -208,6 +212,14 @@ export async function moveClientStage(input: {
       link: `/clients/${input.clientId}`,
       exclude: actor.id,
     });
+  }
+
+  // Automation: draft any email template wired to the stage we just entered.
+  try {
+    const { autoDraftForStage } = await import("./email-actions");
+    await autoDraftForStage(input.clientId, nameOf(input.toStageId));
+  } catch (e) {
+    console.error("[autoDraftForStage]", e);
   }
 
   revalidatePath("/pipeline");

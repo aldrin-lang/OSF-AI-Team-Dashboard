@@ -9,9 +9,11 @@ import type {
   ActivityRow,
   ChecklistItem,
   Client,
+  ClientEmail,
   ClientLine,
   Comment,
   Concern,
+  EmailTemplate,
   PipelineStage,
   PipelineType,
   Profile,
@@ -66,6 +68,8 @@ export interface ClientDetail {
   tasks: Task[];
   concerns: Concern[];
   stage: PipelineStage | null;
+  emails: ClientEmail[];
+  templates: EmailTemplate[];
 }
 
 export async function getClientDetail(id: string): Promise<ClientDetail | null> {
@@ -77,14 +81,17 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
     .maybeSingle();
   if (!client) return null;
 
-  const [lines, placements, checklist, tasks, concerns, stages] = await Promise.all([
-    supabase.from("client_lines").select("*").eq("client_id", id).order("created_at"),
-    supabase.from("va_placements").select("*").eq("client_id", id).order("created_at"),
-    supabase.from("checklist_items").select("*").eq("client_id", id).order("position"),
-    supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }),
-    supabase.from("concerns").select("*").eq("client_id", id).order("raised_at", { ascending: false }),
-    supabase.from("pipeline_stages").select("*").eq("id", (client as Client).stage_id ?? ""),
-  ]);
+  const [lines, placements, checklist, tasks, concerns, stages, emails, templates] =
+    await Promise.all([
+      supabase.from("client_lines").select("*").eq("client_id", id).order("created_at"),
+      supabase.from("va_placements").select("*").eq("client_id", id).order("created_at"),
+      supabase.from("checklist_items").select("*").eq("client_id", id).order("position"),
+      supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }),
+      supabase.from("concerns").select("*").eq("client_id", id).order("raised_at", { ascending: false }),
+      supabase.from("pipeline_stages").select("*").eq("id", (client as Client).stage_id ?? ""),
+      supabase.from("client_emails").select("*").eq("client_id", id).order("created_at", { ascending: false }),
+      supabase.from("email_templates").select("*").eq("active", true).order("name"),
+    ]);
 
   return {
     client: client as Client,
@@ -94,6 +101,8 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
     tasks: (tasks.data as Task[]) ?? [],
     concerns: (concerns.data as Concern[]) ?? [],
     stage: ((stages.data as PipelineStage[]) ?? [])[0] ?? null,
+    emails: (emails.data as ClientEmail[]) ?? [],
+    templates: (templates.data as EmailTemplate[]) ?? [],
   };
 }
 
@@ -147,16 +156,26 @@ export async function getClientsMini(): Promise<
 > {
   const supabase = await getServerSupabase();
   const [{ data }, stages] = await Promise.all([
-    supabase.from("clients").select("id, name, country, stage_id").eq("pipeline", "ai").order("name"),
+    supabase
+      .from("clients")
+      .select("id, name, company_name, country, stage_id")
+      .eq("pipeline", "ai")
+      .order("name"),
     getStages("ai"),
   ]);
   const stageName = new Map(stages.map((s) => [s.id, s.name]));
-  return ((data as { id: string; name: string; country: string | null; stage_id: string | null }[]) ?? []).map(
-    (c) => ({
-      id: c.id,
-      name: c.name,
-      country: c.country,
-      stage: c.stage_id ? stageName.get(c.stage_id) ?? null : null,
-    }),
-  );
+  return (
+    (data as {
+      id: string;
+      name: string;
+      company_name: string | null;
+      country: string | null;
+      stage_id: string | null;
+    }[]) ?? []
+  ).map((c) => ({
+    id: c.id,
+    name: c.company_name || c.name,
+    country: c.country,
+    stage: c.stage_id ? stageName.get(c.stage_id) ?? null : null,
+  }));
 }

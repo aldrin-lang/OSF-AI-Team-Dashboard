@@ -19,6 +19,7 @@ import { ghlLinks } from "@/lib/ghl";
 import { StageMover } from "./stage-mover";
 import { Checklist } from "./checklist";
 import { Feed } from "./feed";
+import { ClientEmails } from "./emails";
 import { EditClientPanel, LinesEditor } from "./editors";
 import { TaskAdder } from "./task-adder";
 import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
@@ -29,7 +30,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
   const detail = await getClientDetail(id);
   if (!detail) notFound();
 
-  const { client, lines, checklist, tasks, concerns, stage } = detail;
+  const { client, lines, checklist, tasks, concerns, stage, emails, templates } = detail;
   const [profiles, stages, gates, feed] = await Promise.all([
     getProfiles(),
     getStages("ai"),
@@ -37,6 +38,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
     getClientFeed(id),
   ]);
   const pm = profileMap(profiles);
+  const peopleNames = Object.fromEntries(profiles.map((p) => [p.id, p.full_name || p.email]));
 
   // Which target stages are reachable — evaluated in memory, no extra queries.
   const gateMap = checkAllStageGates(stages, gates, checklist);
@@ -48,8 +50,16 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title={client.name}
-        subtitle={[client.industry, client.country].filter(Boolean).join(" · ") || undefined}
+        title={client.company_name || client.name}
+        subtitle={
+          [
+            client.company_name && client.name !== client.company_name ? `Contact: ${client.name}` : null,
+            client.industry,
+            client.country,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined
+        }
         actions={
           <Link href="/clients" className="text-sm text-ink-muted hover:text-ink">
             All clients
@@ -154,6 +164,20 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                 })}
                 <LinesEditor clientId={id} lines={lines} />
               </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Handover &amp; emails</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <ClientEmails
+                clientId={id}
+                emails={emails}
+                templates={templates}
+                peopleNames={peopleNames}
+              />
+            </CardBody>
           </Card>
 
           <Card>

@@ -81,3 +81,29 @@ export async function removeOption(formData: FormData) {
   updateTag("lookups");
   revalidatePath("/admin");
 }
+
+export async function saveEmailTemplate(formData: FormData) {
+  await requireActorRole("admin");
+  const supabase = await getServerSupabase();
+  const id = String(formData.get("id") ?? "");
+  const row = {
+    name: String(formData.get("name") ?? "").trim(),
+    subject: String(formData.get("subject") ?? "").trim(),
+    body: String(formData.get("body") ?? ""),
+    trigger: String(formData.get("trigger") ?? "manual"),
+    active: formData.get("active") === "on",
+  };
+  if (!row.name || !row.subject) return;
+  if (id) await supabase.from("email_templates").update(row).eq("id", id);
+  else await supabase.from("email_templates").insert(row);
+  revalidatePath("/admin");
+}
+
+export async function deleteEmailTemplate(formData: FormData) {
+  await requireActorRole("admin");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const supabase = await getServerSupabase();
+  await supabase.from("email_templates").delete().eq("id", id);
+  revalidatePath("/admin");
+}

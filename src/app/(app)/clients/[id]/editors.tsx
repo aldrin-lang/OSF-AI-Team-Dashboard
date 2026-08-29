@@ -50,8 +50,18 @@ export function EditClientPanel({
     >
       <input type="hidden" name="id" value={client.id} />
         <div>
-          <Label>Name</Label>
-          <Input name="name" defaultValue={client.name} />
+          <Label>Company name</Label>
+          <Input name="company_name" defaultValue={client.company_name ?? ""} placeholder="e.g. M&D Building & Construction" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label>Contact name</Label>
+            <Input name="name" defaultValue={client.name} />
+          </div>
+          <div>
+            <Label>Contact email</Label>
+            <Input name="contact_email" type="email" defaultValue={client.contact_email ?? ""} />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>

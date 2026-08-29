@@ -57,6 +57,8 @@ export interface Client {
   id: string;
   pipeline: PipelineType;
   name: string;
+  company_name: string | null;
+  contact_email: string | null;
   industry: string | null;
   country: string | null;
   source: string | null;
@@ -223,4 +225,32 @@ export interface StageGate {
   id: string;
   stage_id: string;
   required_checklist_key: string;
+}
+
+export type EmailStatus = "draft" | "sent";
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  trigger: string; // 'manual' | 'on_stage:<stage name>'
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientEmail {
+  id: string;
+  client_id: string;
+  template_id: string | null;
+  to_email: string | null;
+  subject: string;
+  body: string;
+  status: EmailStatus;
+  created_by: string | null;
+  sent_by: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
 }

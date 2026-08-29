@@ -81,9 +81,11 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                   <tr key={c.id} className="border-b border-line last:border-0 hover:bg-white/[0.04]">
                     <td className="px-4 py-3">
                       <Link href={`/clients/${c.id}`} className="font-medium text-ink hover:text-brand-300 hover:underline">
-                        {c.name}
+                        {c.company_name || c.name}
                       </Link>
-                      {c.industry && <p className="text-xs text-ink-faint">{c.industry}</p>}
+                      <p className="text-xs text-ink-faint">
+                        {[c.company_name ? c.name : null, c.industry].filter(Boolean).join(" · ")}
+                      </p>
                     </td>
                     <td className="px-4 py-3 text-ink-muted">{st?.name ?? "—"}</td>
                     <td className={`px-4 py-3 ${over ? "font-medium text-red-400" : "text-ink-muted"}`}>

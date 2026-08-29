@@ -2,13 +2,21 @@ import { requireRole } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getStages } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardHeader, CardTitle, CardBody, Input } from "@/components/ui/primitives";
+import { Card, CardHeader, CardTitle, CardBody, Input, Select, Textarea, Label } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
-import { inviteMember, updateStage, addOption, removeOption } from "./actions";
+import { TEMPLATE_VARS } from "@/lib/email-render";
+import {
+  inviteMember,
+  updateStage,
+  addOption,
+  removeOption,
+  saveEmailTemplate,
+  deleteEmailTemplate,
+} from "./actions";
 import { RoleSelect, ActiveToggle } from "./member-controls";
-import type { OptionRow, Profile } from "@/lib/types";
+import type { EmailTemplate, OptionRow, Profile } from "@/lib/types";
 
 export const metadata = { title: "Admin · OSF AI Team Dashboard" };
 
@@ -17,12 +25,16 @@ export default async function AdminPage() {
   const isAdmin = me.role === "admin";
   const supabase = await getServerSupabase();
 
-  const [{ data: members }, stages, { data: options }, { data: activity }] = await Promise.all([
-    supabase.from("profiles").select("*").order("created_at"),
-    getStages(),
-    supabase.from("option_lists").select("*").eq("active", true).order("kind").order("position"),
-    supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(40),
-  ]);
+  const [{ data: members }, stages, { data: options }, { data: activity }, { data: templates }] =
+    await Promise.all([
+      supabase.from("profiles").select("*").order("created_at"),
+      getStages(),
+      supabase.from("option_lists").select("*").eq("active", true).order("kind").order("position"),
+      supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(40),
+      supabase.from("email_templates").select("*").order("name"),
+    ]);
+  const emailTemplates = (templates as EmailTemplate[]) ?? [];
+  const aiStages = stages.filter((s) => s.pipeline === "ai");
 
   const optionsByKind = new Map<string, OptionRow[]>();
   for (const o of (options as OptionRow[]) ?? []) {
@@ -167,6 +179,99 @@ export default async function AdminPage() {
               )}
             </div>
           ))}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Email templates &amp; automation</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-5">
+          <p className="text-xs text-ink-faint">
+            Variables:{" "}
+            {TEMPLATE_VARS.map((v) => (
+              <code key={v.key} className="mx-0.5 rounded bg-white/[0.06] px-1 text-[11px] text-brand-300">
+                {`{{${v.key}}}`}
+              </code>
+            ))}
+          </p>
+
+          {emailTemplates.map((t) => (
+            <details key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <summary className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+                <span className="font-medium">{t.name}</span>
+                {t.trigger !== "manual" && (
+                  <Badge tone="amber">auto: {t.trigger.replace("on_stage:", "")}</Badge>
+                )}
+                {!t.active && <Badge tone="neutral">off</Badge>}
+              </summary>
+              <form action={saveEmailTemplate} className="mt-3 space-y-2">
+                <input type="hidden" name="id" value={t.id} />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Name</Label>
+                    <Input name="name" defaultValue={t.name} disabled={!isAdmin} />
+                  </div>
+                  <div>
+                    <Label>Auto-trigger</Label>
+                    <Select name="trigger" defaultValue={t.trigger} disabled={!isAdmin}>
+                      <option value="manual">Manual only</option>
+                      {aiStages.map((s) => (
+                        <option key={s.id} value={`on_stage:${s.name}`}>
+                          When entering: {s.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Subject</Label>
+                  <Input name="subject" defaultValue={t.subject} disabled={!isAdmin} />
+                </div>
+                <div>
+                  <Label>Body</Label>
+                  <Textarea name="body" defaultValue={t.body} className="min-h-[180px] font-mono text-xs" disabled={!isAdmin} />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-ink-muted">
+                  <input type="checkbox" name="active" defaultChecked={t.active} disabled={!isAdmin} className="accent-brand-500" />
+                  Active
+                </label>
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <Button size="sm" type="submit">Save</Button>
+                    <Button size="sm" variant="ghost" type="submit" formAction={deleteEmailTemplate}>
+                      Delete
+                    </Button>
+                  </div>
+                )}
+              </form>
+            </details>
+          ))}
+
+          {isAdmin && (
+            <details className="rounded-xl border border-dashed border-white/15 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-brand-300">
+                + New template
+              </summary>
+              <form action={saveEmailTemplate} className="mt-3 space-y-2">
+                <Input name="name" placeholder="Template name" required />
+                <Select name="trigger" defaultValue="manual">
+                  <option value="manual">Manual only</option>
+                  {aiStages.map((s) => (
+                    <option key={s.id} value={`on_stage:${s.name}`}>
+                      When entering: {s.name}
+                    </option>
+                  ))}
+                </Select>
+                <Input name="subject" placeholder="Subject (use {{company}} etc.)" required />
+                <Textarea name="body" placeholder="Body…" className="min-h-[160px] font-mono text-xs" />
+                <label className="flex items-center gap-2 text-xs text-ink-muted">
+                  <input type="checkbox" name="active" defaultChecked className="accent-brand-500" /> Active
+                </label>
+                <Button size="sm" type="submit">Create template</Button>
+              </form>
+            </details>
+          )}
         </CardBody>
       </Card>
 

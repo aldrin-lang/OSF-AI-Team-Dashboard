@@ -25,7 +25,7 @@ export default async function PipelinePage() {
 
   const cards = clients.map((c) => ({
     id: c.id,
-    name: c.name,
+    name: c.company_name || c.name,
     stageId: c.stage_id,
     manager: c.manager_id ? pm.get(c.manager_id)?.full_name ?? null : null,
     country: c.country,

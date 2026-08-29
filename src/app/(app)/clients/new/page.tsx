@@ -30,8 +30,18 @@ export default async function NewClientPage() {
           <form action={createClient} className="space-y-4">
             <input type="hidden" name="pipeline" value="ai" />
             <div>
-              <Label htmlFor="name">Client name *</Label>
-              <Input id="name" name="name" required autoFocus />
+              <Label htmlFor="company_name">Company name *</Label>
+              <Input id="company_name" name="company_name" required autoFocus placeholder="e.g. M&D Building & Construction" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="name">Contact name *</Label>
+                <Input id="name" name="name" required />
+              </div>
+              <div>
+                <Label htmlFor="contact_email">Contact email</Label>
+                <Input id="contact_email" name="contact_email" type="email" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

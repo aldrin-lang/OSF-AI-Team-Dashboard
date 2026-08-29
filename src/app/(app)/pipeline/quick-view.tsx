@@ -66,7 +66,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
           <>
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-ink">{data.client.name}</h2>
+                <h2 className="text-lg font-semibold text-ink">{data.client.company_name || data.client.name}</h2>
                 <p className="text-xs text-ink-faint">
                   {[data.client.industry, data.client.country].filter(Boolean).join(" · ") || "—"}
                 </p>
