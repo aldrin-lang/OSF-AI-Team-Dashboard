@@ -16,7 +16,7 @@ export default async function NewConcernPage(props: PageProps<"/concerns/new">) 
 
   const supabase = await getServerSupabase();
   const [{ data: clients }, profiles, types] = await Promise.all([
-    supabase.from("clients").select("id, name, pipeline").order("name"),
+    supabase.from("clients").select("id, name").eq("pipeline", "ai").order("name"),
     getProfiles(),
     getOptions("concern_type"),
   ]);
@@ -38,9 +38,9 @@ export default async function NewConcernPage(props: PageProps<"/concerns/new">) 
               <Label htmlFor="client_id">Client *</Label>
               <Select id="client_id" name="client_id" defaultValue={preClient} required>
                 <option value="">Select a client…</option>
-                {((clients as Pick<Client, "id" | "name" | "pipeline">[]) ?? []).map((c) => (
+                {((clients as Pick<Client, "id" | "name">[]) ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} ({c.pipeline.toUpperCase()})
+                    {c.name}
                   </option>
                 ))}
               </Select>

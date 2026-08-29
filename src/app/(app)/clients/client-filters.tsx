@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { Select, Input } from "@/components/ui/primitives";
 import { CLIENT_STATUS } from "@/lib/labels";
-import type { PipelineType } from "@/lib/types";
 
 type Current = {
   manager?: string;
@@ -15,12 +14,10 @@ type Current = {
 };
 
 export function ClientFilters({
-  pipeline,
   profiles,
   stages,
   current,
 }: {
-  pipeline: PipelineType;
   profiles: { id: string; name: string }[];
   stages: { id: string; name: string }[];
   current: Current;
@@ -29,10 +26,10 @@ export function ClientFilters({
 
   function apply(patch: Partial<Current>) {
     const params = new URLSearchParams();
-    params.set("type", pipeline);
     const merged = { ...current, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
-    router.push(`/clients?${params.toString()}`);
+    const qs = params.toString();
+    router.push(qs ? `/clients?${qs}` : "/clients");
   }
 
   return (
@@ -84,7 +81,7 @@ export function ClientFilters({
       {Object.values(current).some(Boolean) && (
         <button
           className="text-xs text-slate-500 hover:text-slate-900"
-          onClick={() => router.push(`/clients?type=${pipeline}`)}
+          onClick={() => router.push("/clients")}
         >
           Clear
         </button>

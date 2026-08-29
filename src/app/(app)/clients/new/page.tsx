@@ -4,13 +4,10 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, Input, Label, Select } from "@/components/ui/primitives";
 import { createClient } from "../actions";
-import type { PipelineType } from "@/lib/types";
 
-export const metadata = { title: "New client · AI Receptionist Ops" };
+export const metadata = { title: "New client · OSF AI Team Dashboard" };
 
-export default async function NewClientPage(props: PageProps<"/clients/new">) {
-  const sp = await props.searchParams;
-  const pipeline = (sp.type === "va" ? "va" : "ai") as PipelineType;
+export default async function NewClientPage() {
   const [profiles, sources, countries] = await Promise.all([
     getProfiles(),
     getOptions("source"),
@@ -21,9 +18,9 @@ export default async function NewClientPage(props: PageProps<"/clients/new">) {
     <div className="mx-auto max-w-xl">
       <PageHeader
         title="New client"
-        subtitle={pipeline === "ai" ? "AI receptionist onboarding" : "Virtual assistant onboarding"}
+        subtitle="AI receptionist onboarding"
         actions={
-          <Link href={`/clients?type=${pipeline}`} className="text-sm text-slate-500 hover:text-slate-900">
+          <Link href="/clients" className="text-sm text-slate-500 hover:text-slate-900">
             Cancel
           </Link>
         }
@@ -31,7 +28,7 @@ export default async function NewClientPage(props: PageProps<"/clients/new">) {
       <Card>
         <CardBody>
           <form action={createClient} className="space-y-4">
-            <input type="hidden" name="pipeline" value={pipeline} />
+            <input type="hidden" name="pipeline" value="ai" />
             <div>
               <Label htmlFor="name">Client name *</Label>
               <Input id="name" name="name" required autoFocus />
@@ -72,7 +69,7 @@ export default async function NewClientPage(props: PageProps<"/clients/new">) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="manager_id">{pipeline === "ai" ? "AI Manager" : "VA Manager"}</Label>
+                <Label htmlFor="manager_id">AI Manager</Label>
                 <Select id="manager_id" name="manager_id" defaultValue="">
                   <option value="">—</option>
                   {profiles.map((p) => (

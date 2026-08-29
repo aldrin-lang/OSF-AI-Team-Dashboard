@@ -15,8 +15,8 @@ import { cn } from "@/lib/utils";
 
 const MAIN = [
   { href: "/", label: "My Desk", icon: LayoutDashboard, exact: true },
-  { href: "/pipeline?type=ai", label: "Pipeline", icon: KanbanSquare, match: "/pipeline" },
-  { href: "/clients?type=ai", label: "Clients", icon: Users, match: "/clients" },
+  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, match: "/pipeline" },
+  { href: "/clients", label: "Clients", icon: Users, match: "/clients" },
   { href: "/concerns", label: "Concerns", icon: AlertTriangle, match: "/concerns" },
   { href: "/reports", label: "Reports", icon: BarChart3, match: "/reports" },
 ];

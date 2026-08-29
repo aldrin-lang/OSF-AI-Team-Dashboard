@@ -7,30 +7,24 @@ import { EmptyState } from "@/components/ui/primitives";
 import { CLIENT_STATUS } from "@/lib/labels";
 import { daysSince } from "@/lib/utils";
 import { ClientFilters } from "./client-filters";
-import type { PipelineType } from "@/lib/types";
 
-export const metadata = { title: "Clients · AI Receptionist Ops" };
+export const metadata = { title: "Clients · OSF AI Team Dashboard" };
 
 export default async function ClientsPage(props: PageProps<"/clients">) {
   const sp = await props.searchParams;
-  const pipeline = (sp.type === "va" ? "va" : "ai") as PipelineType;
   const get = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : undefined);
-  // VA history is huge and mostly closed — default to active unless "all" or an explicit status.
-  const showAll = get("all") === "1";
-  const activeOnly = pipeline === "va" && !showAll;
 
   const [profiles, stages, clients] = await Promise.all([
     getProfiles(),
-    getStages(pipeline),
+    getStages("ai"),
     getClients({
-      pipeline,
+      pipeline: "ai",
       managerId: get("manager"),
       country: get("country"),
       source: get("source"),
       stageId: get("stage"),
       status: get("status"),
       search: get("q"),
-      activeOnly,
     }),
   ]);
   const pm = profileMap(profiles);
@@ -40,31 +34,15 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
     <div className="space-y-5">
       <PageHeader
         title="Clients"
-        subtitle={`${clients.length} ${pipeline === "ai" ? "AI receptionist" : "virtual assistant"} client${clients.length === 1 ? "" : "s"}${activeOnly ? " · active only" : ""}`}
+        subtitle={`${clients.length} AI receptionist client${clients.length === 1 ? "" : "s"}`}
         actions={
-          <div className="flex items-center gap-2">
-            {pipeline === "va" && (
-              <Link
-                href={`/clients?type=va${showAll ? "" : "&all=1"}`}
-                className="text-xs font-medium text-slate-500 hover:text-navy-800"
-              >
-                {showAll ? "Hide closed" : "Show all history"}
-              </Link>
-            )}
-            <Link href={`/clients/new?type=${pipeline}`}>
-              <Button size="sm">New client</Button>
-            </Link>
-          </div>
+          <Link href="/clients/new">
+            <Button size="sm">New client</Button>
+          </Link>
         }
       />
 
-      <div className="flex gap-2 border-b border-slate-200 text-sm">
-        <PipeTab active={pipeline === "ai"} href="/clients?type=ai" label="AI Receptionist" />
-        <PipeTab active={pipeline === "va"} href="/clients?type=va" label="Virtual Assistant" />
-      </div>
-
       <ClientFilters
-        pipeline={pipeline}
         profiles={profiles.map((p) => ({ id: p.id, name: p.full_name || p.email }))}
         stages={stages.map((s) => ({ id: s.id, name: s.name }))}
         current={{
@@ -80,17 +58,17 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
       {clients.length === 0 ? (
         <EmptyState>No clients match these filters.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-400">
-                <th className="px-4 py-2.5 font-medium">Client</th>
-                <th className="px-4 py-2.5 font-medium">Stage</th>
-                <th className="px-4 py-2.5 font-medium">In stage</th>
-                <th className="px-4 py-2.5 font-medium">Manager</th>
-                <th className="px-4 py-2.5 font-medium">Country</th>
-                <th className="px-4 py-2.5 font-medium">Source</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Client</th>
+                <th className="px-4 py-3 font-medium">Stage</th>
+                <th className="px-4 py-3 font-medium">In stage</th>
+                <th className="px-4 py-3 font-medium">Manager</th>
+                <th className="px-4 py-3 font-medium">Country</th>
+                <th className="px-4 py-3 font-medium">Source</th>
+                <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -101,22 +79,22 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                 const meta = CLIENT_STATUS[c.status];
                 return (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="px-4 py-2.5">
-                      <Link href={`/clients/${c.id}`} className="font-medium text-slate-900 hover:underline">
+                    <td className="px-4 py-3">
+                      <Link href={`/clients/${c.id}`} className="font-medium text-navy-800 hover:text-brand-600 hover:underline">
                         {c.name}
                       </Link>
                       {c.industry && <p className="text-xs text-slate-400">{c.industry}</p>}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">{st?.name ?? "—"}</td>
-                    <td className={`px-4 py-2.5 ${over ? "text-red-600 font-medium" : "text-slate-500"}`}>
+                    <td className="px-4 py-3 text-slate-600">{st?.name ?? "—"}</td>
+                    <td className={`px-4 py-3 ${over ? "font-medium text-red-600" : "text-slate-500"}`}>
                       {dis != null ? `${dis}d` : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">
+                    <td className="px-4 py-3 text-slate-600">
                       {c.manager_id ? pm.get(c.manager_id)?.full_name ?? "—" : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">{c.country ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{c.source ?? "—"}</td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3 text-slate-600">{c.country ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{c.source ?? "—"}</td>
+                    <td className="px-4 py-3">
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                     </td>
                   </tr>
@@ -127,20 +105,5 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
         </div>
       )}
     </div>
-  );
-}
-
-function PipeTab({ active, href, label }: { active: boolean; href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className={`-mb-px border-b-2 px-3 py-2 font-medium ${
-        active
-          ? "border-slate-900 text-slate-900"
-          : "border-transparent text-slate-400 hover:text-slate-700"
-      }`}
-    >
-      {label}
-    </Link>
   );
 }

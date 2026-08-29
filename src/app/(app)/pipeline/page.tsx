@@ -1,18 +1,13 @@
-import Link from "next/link";
 import { getClients, getProfiles, getStages, profileMap } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { Board } from "./board";
-import type { PipelineType } from "@/lib/types";
 
-export const metadata = { title: "Pipeline · AI Receptionist Ops" };
+export const metadata = { title: "Pipeline · OSF AI Team Dashboard" };
 
-export default async function PipelinePage(props: PageProps<"/pipeline">) {
-  const sp = await props.searchParams;
-  const pipeline = (sp.type === "va" ? "va" : "ai") as PipelineType;
-
+export default async function PipelinePage() {
   const [stages, clients, profiles] = await Promise.all([
-    getStages(pipeline),
-    getClients({ pipeline }),
+    getStages("ai"),
+    getClients({ pipeline: "ai" }),
     getProfiles(),
   ]);
   const pm = profileMap(profiles);
@@ -29,26 +24,7 @@ export default async function PipelinePage(props: PageProps<"/pipeline">) {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Pipeline"
-        subtitle="Drag a client between stages"
-        actions={
-          <div className="flex gap-1 text-sm">
-            <Link
-              href="/pipeline?type=ai"
-              className={`rounded-md px-3 py-1.5 ${pipeline === "ai" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-            >
-              AI
-            </Link>
-            <Link
-              href="/pipeline?type=va"
-              className={`rounded-md px-3 py-1.5 ${pipeline === "va" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-            >
-              VA
-            </Link>
-          </div>
-        }
-      />
+      <PageHeader title="Pipeline" subtitle="Drag a client between onboarding stages" />
       <Board
         stages={stages.map((s) => ({ id: s.id, name: s.name, slaDays: s.sla_days }))}
         cards={cards}

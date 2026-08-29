@@ -3,19 +3,15 @@ import { getProfiles, getStages, profileMap } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { daysSince } from "@/lib/utils";
-import type { Client, PipelineType } from "@/lib/types";
-import Link from "next/link";
+import type { Client } from "@/lib/types";
 
-export const metadata = { title: "Reports · AI Receptionist Ops" };
+export const metadata = { title: "Reports · OSF AI Team Dashboard" };
 
-export default async function ReportsPage(props: PageProps<"/reports">) {
-  const sp = await props.searchParams;
-  const pipeline = (sp.type === "va" ? "va" : "ai") as PipelineType;
-
+export default async function ReportsPage() {
   const supabase = await getServerSupabase();
   const [{ data: clientRows }, stages, profiles] = await Promise.all([
-    supabase.from("clients").select("*").eq("pipeline", pipeline),
-    getStages(pipeline),
+    supabase.from("clients").select("*").eq("pipeline", "ai"),
+    getStages("ai"),
     getProfiles(),
   ]);
   const clients = (clientRows as Client[]) ?? [];
@@ -60,16 +56,7 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader
-        title="Reports"
-        subtitle={pipeline === "ai" ? "AI receptionist pipeline" : "Virtual assistant pipeline"}
-        actions={
-          <div className="flex gap-1 text-sm">
-            <Link href="/reports?type=ai" className={`rounded-md px-3 py-1.5 ${pipeline === "ai" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>AI</Link>
-            <Link href="/reports?type=va" className={`rounded-md px-3 py-1.5 ${pipeline === "va" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>VA</Link>
-          </div>
-        }
-      />
+      <PageHeader title="Reports" subtitle="AI receptionist onboarding" />
 
       <div className="grid gap-4 sm:grid-cols-4">
         <Kpi label="Active clients" value={active.length} />

@@ -19,7 +19,7 @@ import { ghlLinks } from "@/lib/ghl";
 import { StageMover } from "./stage-mover";
 import { Checklist } from "./checklist";
 import { Feed } from "./feed";
-import { EditClientPanel, LinesEditor, PlacementsEditor } from "./editors";
+import { EditClientPanel, LinesEditor } from "./editors";
 import { TaskAdder } from "./task-adder";
 import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
 
@@ -29,10 +29,10 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
   const detail = await getClientDetail(id);
   if (!detail) notFound();
 
-  const { client, lines, placements, checklist, tasks, concerns, stage } = detail;
+  const { client, lines, checklist, tasks, concerns, stage } = detail;
   const [profiles, stages, gates, feed] = await Promise.all([
     getProfiles(),
-    getStages(client.pipeline),
+    getStages("ai"),
     getStageGates(),
     getClientFeed(id),
   ]);
@@ -51,10 +51,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
         title={client.name}
         subtitle={[client.industry, client.country].filter(Boolean).join(" · ") || undefined}
         actions={
-          <Link
-            href={`/clients?type=${client.pipeline}`}
-            className="text-sm text-slate-500 hover:text-slate-900"
-          >
+          <Link href="/clients" className="text-sm text-slate-500 hover:text-slate-900">
             All clients
           </Link>
         }
@@ -107,8 +104,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
             </CardBody>
           </Card>
 
-          {client.pipeline === "ai" ? (
-            <Card>
+          <Card>
               <CardHeader>
                 <CardTitle>Phone lines &amp; systems</CardTitle>
               </CardHeader>
@@ -158,31 +154,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                 })}
                 <LinesEditor clientId={id} lines={lines} />
               </CardBody>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>VA placements</CardTitle>
-              </CardHeader>
-              <CardBody className="space-y-3">
-                {placements.length === 0 && (
-                  <p className="text-sm text-slate-400">No placements yet.</p>
-                )}
-                {placements.map((p) => (
-                  <div key={p.id} className="rounded-md border border-slate-200 p-3 text-xs">
-                    <p className="text-sm font-semibold text-slate-900">{p.va_name || "VA"}</p>
-                    <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1">
-                      <Field label="Role" value={p.role} />
-                      <Field label="Employment" value={p.employment_type} />
-                      <Field label="Email" value={p.va_email} />
-                      <Field label="Status" value={p.placement_status} />
-                    </dl>
-                  </div>
-                ))}
-                <PlacementsEditor clientId={id} placements={placements} />
-              </CardBody>
-            </Card>
-          )}
+          </Card>
 
           <Card>
             <CardHeader>
