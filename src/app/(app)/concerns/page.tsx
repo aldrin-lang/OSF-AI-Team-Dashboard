@@ -71,33 +71,34 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-faint">
-                <th className="px-4 py-2.5 font-medium">Client</th>
+                <th className="hidden px-4 py-2.5 font-medium sm:table-cell">Client</th>
                 <th className="px-4 py-2.5 font-medium">Concern</th>
                 <th className="px-4 py-2.5 font-medium">Severity</th>
-                <th className="px-4 py-2.5 font-medium">Owner</th>
+                <th className="hidden px-4 py-2.5 font-medium lg:table-cell">Owner</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium">Raised</th>
+                <th className="hidden px-4 py-2.5 font-medium sm:table-cell">Raised</th>
               </tr>
             </thead>
             <tbody>
               {concerns.map((c) => (
                 <tr key={c.id} className="border-b border-line last:border-0 hover:bg-fill">
-                  <td className="px-4 py-2.5 text-ink-muted">{clientName.get(c.client_id) ?? "—"}</td>
+                  <td className="hidden px-4 py-2.5 text-ink-muted sm:table-cell">{clientName.get(c.client_id) ?? "—"}</td>
                   <td className="px-4 py-2.5">
                     <Link href={`/concerns/${c.id}`} className="font-medium text-ink hover:underline">
                       {c.title}
                     </Link>
+                    <p className="text-xs text-ink-faint sm:hidden">{clientName.get(c.client_id) ?? "—"}</p>
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge tone={CONCERN_SEVERITY[c.severity].tone}>{CONCERN_SEVERITY[c.severity].label}</Badge>
                   </td>
-                  <td className="px-4 py-2.5 text-ink-muted">
+                  <td className="hidden px-4 py-2.5 text-ink-muted lg:table-cell">
                     {c.owner_id ? pm.get(c.owner_id)?.full_name ?? "—" : "—"}
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge tone={CONCERN_STATUS[c.status].tone}>{CONCERN_STATUS[c.status].label}</Badge>
                   </td>
-                  <td className="px-4 py-2.5 text-ink-faint">{relativeTime(c.raised_at)}</td>
+                  <td className="hidden px-4 py-2.5 text-ink-faint sm:table-cell">{relativeTime(c.raised_at)}</td>
                 </tr>
               ))}
             </tbody>

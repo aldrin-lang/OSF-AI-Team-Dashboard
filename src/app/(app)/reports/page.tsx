@@ -69,8 +69,8 @@ export default async function ReportsPage() {
         <CardHeader>
           <CardTitle>Pipeline by stage</CardTitle>
         </CardHeader>
-        <CardBody>
-          <table className="w-full text-sm">
+        <CardBody className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-sm">
             <thead>
               <tr className="text-left text-xs text-ink-faint">
                 <th className="pb-2 font-medium">Stage</th>

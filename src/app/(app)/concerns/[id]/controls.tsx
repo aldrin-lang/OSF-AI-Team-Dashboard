@@ -30,7 +30,7 @@ export function ConcernControls({
       className="space-y-3"
     >
       <input type="hidden" name="id" value={concern.id} />
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <Label>Status</Label>
           <Select name="status" defaultValue={concern.status}>

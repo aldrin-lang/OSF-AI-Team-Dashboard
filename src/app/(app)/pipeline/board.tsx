@@ -124,7 +124,7 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`glass flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl transition-all ${
+      className={`glass flex w-[82vw] max-w-[300px] shrink-0 sm:w-72 flex-col overflow-hidden rounded-2xl transition-all ${
         isOver ? "-translate-y-0.5 border-brand-400/60 ring-2 ring-brand-500/30" : ""
       }`}
     >
@@ -205,7 +205,7 @@ function CardChip({
         <Link
           href={`/clients/${card.id}`}
           onClick={(e) => e.stopPropagation()}
-          className="opacity-0 transition-opacity hover:text-brand-700 group-hover:opacity-100"
+          className="shrink-0 p-1 opacity-50 transition-opacity hover:text-brand-700 sm:opacity-0 sm:group-hover:opacity-100"
           title="Open full page"
         >
           <ExternalLink className="h-3.5 w-3.5 text-ink-faint" />

@@ -141,7 +141,7 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
               </div>
             </Section>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Section label="Manager">
                 <Select
                   value={data.client.manager_id ?? ""}

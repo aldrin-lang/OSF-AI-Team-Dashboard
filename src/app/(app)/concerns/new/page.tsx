@@ -49,7 +49,7 @@ export default async function NewConcernPage(props: PageProps<"/concerns/new">) 
               <Label htmlFor="title">Title *</Label>
               <Input id="title" name="title" required />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="type">Type</Label>
                 <Select id="type" name="type" defaultValue="">

@@ -134,7 +134,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                           RB: {RB_STATUS[l.regulatory_bundle_status].label}
                         </Badge>
                       </div>
-                      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
                         <Field label="AI phone #" value={l.ai_phone_number} />
                         <Field label="Twilio subaccount" value={l.twilio_subaccount} />
                         <Field label="Booking system" value={l.booking_system} />

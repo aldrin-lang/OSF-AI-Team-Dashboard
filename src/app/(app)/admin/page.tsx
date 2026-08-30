@@ -207,7 +207,7 @@ export default async function AdminPage() {
               </summary>
               <form action={saveEmailTemplate} className="mt-3 space-y-2">
                 <input type="hidden" name="id" value={t.id} />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
                     <Label>Name</Label>
                     <Input name="name" defaultValue={t.name} disabled={!isAdmin} />

@@ -64,10 +64,10 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
               <tr className="border-b border-line text-left text-xs text-ink-faint">
                 <th className="px-4 py-3 font-medium">Client</th>
                 <th className="px-4 py-3 font-medium">Stage</th>
-                <th className="px-4 py-3 font-medium">In stage</th>
-                <th className="px-4 py-3 font-medium">Manager</th>
-                <th className="px-4 py-3 font-medium">Country</th>
-                <th className="px-4 py-3 font-medium">Source</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell">In stage</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell">Manager</th>
+                <th className="hidden px-4 py-3 font-medium xl:table-cell">Country</th>
+                <th className="hidden px-4 py-3 font-medium xl:table-cell">Source</th>
                 <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
@@ -88,14 +88,14 @@ export default async function ClientsPage(props: PageProps<"/clients">) {
                       </p>
                     </td>
                     <td className="px-4 py-3 text-ink-muted">{st?.name ?? "—"}</td>
-                    <td className={`px-4 py-3 ${over ? "font-medium text-red-600" : "text-ink-muted"}`}>
+                    <td className={`hidden px-4 py-3 sm:table-cell ${over ? "font-medium text-red-600" : "text-ink-muted"}`}>
                       {dis != null ? `${dis}d` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-ink-muted">
+                    <td className="hidden px-4 py-3 text-ink-muted lg:table-cell">
                       {c.manager_id ? pm.get(c.manager_id)?.full_name ?? "—" : "—"}
                     </td>
-                    <td className="px-4 py-3 text-ink-muted">{c.country ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink-muted">{c.source ?? "—"}</td>
+                    <td className="hidden px-4 py-3 text-ink-muted xl:table-cell">{c.country ?? "—"}</td>
+                    <td className="hidden px-4 py-3 text-ink-muted xl:table-cell">{c.source ?? "—"}</td>
                     <td className="px-4 py-3">
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                     </td>

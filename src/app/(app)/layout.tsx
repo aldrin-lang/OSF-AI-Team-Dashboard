@@ -4,7 +4,8 @@ import { requireProfile, hasRole } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getClientsMini } from "@/lib/data/queries";
 import { AppNav } from "@/components/app-nav";
-import { LogoWordmark } from "@/components/logo";
+import { MobileNav } from "@/components/mobile-nav";
+import { Logo, LogoWordmark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -36,13 +37,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/60 px-4 backdrop-blur-xl md:px-8">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
-          <div className="flex items-center gap-2 md:hidden">
-            <LogoWordmark />
+          <div className="flex items-center gap-1 md:hidden">
+            <MobileNav isManager={hasRole(profile, "manager")} />
+            <Logo size={24} />
           </div>
           <div className="hidden md:block">
             <CommandPalette clients={clientsMini} />
           </div>
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-3 md:gap-4">
             <Link
               href="/notifications"
               className="relative rounded-lg p-2 text-ink-muted hover:bg-fill-strong hover:text-ink"

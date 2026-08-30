@@ -53,7 +53,7 @@ export function EditClientPanel({
           <Label>Company name</Label>
           <Input name="company_name" defaultValue={client.company_name ?? ""} placeholder="e.g. M&D Building & Construction" />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <Label>Contact name</Label>
             <Input name="name" defaultValue={client.name} />
@@ -63,7 +63,7 @@ export function EditClientPanel({
             <Input name="contact_email" type="email" defaultValue={client.contact_email ?? ""} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <Label>Industry</Label>
             <Input name="industry" defaultValue={client.industry ?? ""} />
@@ -73,7 +73,7 @@ export function EditClientPanel({
             <Input name="country" defaultValue={client.country ?? ""} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <Label>Source</Label>
             <Input name="source" defaultValue={client.source ?? ""} />
@@ -94,7 +94,7 @@ export function EditClientPanel({
             ))}
           </Select>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <Label>Demo call</Label>
             <Input type="date" name="demo_call_date" defaultValue={client.demo_call_date ?? ""} />
@@ -118,7 +118,7 @@ export function EditClientPanel({
           <p className="mb-2 text-xs font-semibold text-ink-muted">
             Commercials {canEditCommercials ? "" : "(read-only — manager/admin can edit)"}
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <Label>Setup fee (£)</Label>
               <Input name="setup_fee" type="number" step="0.01" defaultValue={client.setup_fee ?? ""} disabled={!canEditCommercials} />
@@ -138,7 +138,7 @@ export function EditClientPanel({
               ))}
             </Select>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <Label>Invoice</Label>
               <Input name="hiring_fee_invoice" defaultValue={client.hiring_fee_invoice ?? ""} disabled={!canEditCommercials} />
@@ -178,7 +178,7 @@ function LineForm({ clientId, line }: { clientId: string; line?: ClientLine }) {
     >
       <input type="hidden" name="client_id" value={clientId} />
       {line && <input type="hidden" name="id" value={line.id} />}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Input name="label" placeholder="Label" defaultValue={line?.label ?? ""} />
         <Input name="ai_phone_number" placeholder="AI phone #" defaultValue={line?.ai_phone_number ?? ""} />
         <Input name="twilio_subaccount" placeholder="Twilio subaccount" defaultValue={line?.twilio_subaccount ?? ""} />
@@ -186,7 +186,7 @@ function LineForm({ clientId, line }: { clientId: string; line?: ClientLine }) {
         <Input name="booking_system" placeholder="Booking system" defaultValue={line?.booking_system ?? ""} />
         <Input name="dashboard_url" placeholder="Dashboard URL" defaultValue={line?.dashboard_url ?? ""} />
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
         <label>
           RB
           <Select name="regulatory_bundle_status" defaultValue={line?.regulatory_bundle_status ?? "not_started"}>
@@ -267,7 +267,7 @@ function PlacementForm({ clientId, placement }: { clientId: string; placement?: 
     >
       <input type="hidden" name="client_id" value={clientId} />
       {placement && <input type="hidden" name="id" value={placement.id} />}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Input name="va_name" placeholder="VA name" defaultValue={placement?.va_name ?? ""} />
         <Input name="va_email" placeholder="VA email" defaultValue={placement?.va_email ?? ""} />
         <Input name="role" placeholder="Role" defaultValue={placement?.role ?? ""} />

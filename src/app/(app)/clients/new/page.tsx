@@ -33,7 +33,7 @@ export default async function NewClientPage() {
               <Label htmlFor="company_name">Company name *</Label>
               <Input id="company_name" name="company_name" required autoFocus placeholder="e.g. M&D Building & Construction" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="name">Contact name *</Label>
                 <Input id="name" name="name" required />
@@ -43,7 +43,7 @@ export default async function NewClientPage() {
                 <Input id="contact_email" name="contact_email" type="email" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="industry">Industry</Label>
                 <Input id="industry" name="industry" />
@@ -60,7 +60,7 @@ export default async function NewClientPage() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="source">Source</Label>
                 <Select id="source" name="source" defaultValue="">
@@ -77,7 +77,7 @@ export default async function NewClientPage() {
                 <Input id="closed_by" name="closed_by" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="manager_id">AI Manager</Label>
                 <Select id="manager_id" name="manager_id" defaultValue="">
