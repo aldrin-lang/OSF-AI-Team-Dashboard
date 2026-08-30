@@ -171,16 +171,6 @@ export function LoginScene({ form }: { form: ReactNode }) {
 
             <div className="mt-8">{form}</div>
 
-            <p className="mt-6 text-xs text-ink-faint">
-              Looking for the client dashboard?{" "}
-              <a
-                href="https://portal.outsourceforce.ai/login"
-                className="font-medium text-brand-600 hover:text-brand-700"
-              >
-                Go to the client portal →
-              </a>
-            </p>
-
             <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-faint">
               AI receptionist onboarding · OutsourceForce.ai
             </p>

@@ -1,9 +1,10 @@
 import * as React from "react";
 import Link from "next/link";
-import { Users, ListChecks, Clock, AlertTriangle, Rocket } from "lucide-react";
+import { Users, ListChecks, Clock, AlertTriangle, Rocket, ExternalLink } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getStages, getProfiles, profileMap } from "@/lib/data/queries";
+import { PORTAL_URL } from "@/lib/constants";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -93,6 +94,17 @@ export default async function MyDeskPage() {
       <PageHeader
         title={`Welcome back, ${profile.full_name?.split(" ")[0] || "there"}`}
         subtitle="Team pipeline health and everything that needs your attention"
+        actions={
+          <a
+            href={PORTAL_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-navy-800 shadow-sm hover:bg-slate-50"
+          >
+            <ExternalLink className="h-3.5 w-3.5 text-brand-600" />
+            Client portal
+          </a>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
