@@ -20,7 +20,7 @@ export default async function NewClientPage() {
         title="New client"
         subtitle="AI receptionist onboarding"
         actions={
-          <Link href="/clients" className="text-sm text-ink-muted hover:text-ink">
+          <Link href="/" className="text-sm text-ink-muted hover:text-ink">
             Cancel
           </Link>
         }

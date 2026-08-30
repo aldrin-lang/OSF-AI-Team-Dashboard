@@ -10,7 +10,7 @@ import { Input, Select, Textarea } from "@/components/ui/primitives";
 import { RB_STATUS, CHECKLIST_STATUS, CLIENT_STATUS } from "@/lib/labels";
 import { portalLinkFor } from "@/lib/constants";
 import { relativeTime } from "@/lib/utils";
-import { moveClientStage, setChecklistStatus } from "../clients/actions";
+import { moveClientStage, setChecklistStatus } from "./actions";
 import {
   getClientQuick,
   quickSetField,
@@ -19,7 +19,7 @@ import {
   quickDeleteLine,
   quickAddNote,
   type ClientQuick,
-} from "../clients/quick-actions";
+} from "./quick-actions";
 
 const RB_OPTS = Object.entries(RB_STATUS);
 

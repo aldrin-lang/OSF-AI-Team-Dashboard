@@ -3,20 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  KanbanSquare,
   Users,
+  KanbanSquare,
   AlertTriangle,
   BarChart3,
+  LayoutDashboard,
   Settings,
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MAIN = [
-  { href: "/", label: "My Desk", icon: LayoutDashboard, exact: true },
+  { href: "/", label: "Clients", icon: Users, exact: true },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, match: "/pipeline" },
-  { href: "/clients", label: "Clients", icon: Users, match: "/clients" },
   { href: "/concerns", label: "Concerns", icon: AlertTriangle, match: "/concerns" },
   { href: "/reports", label: "Reports", icon: BarChart3, match: "/reports" },
 ];
@@ -56,6 +55,10 @@ export function AppNav({ isManager }: { isManager: boolean }) {
         Account
       </p>
       <div className="flex flex-col gap-1">
+        <Link href="/my-desk" className={itemClass(pathname.startsWith("/my-desk"))}>
+          <LayoutDashboard className="h-[18px] w-[18px] shrink-0" />
+          My desk
+        </Link>
         {isManager && (
           <Link href="/admin" className={itemClass(pathname.startsWith("/admin"))}>
             <ShieldCheck className="h-[18px] w-[18px] shrink-0" />

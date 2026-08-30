@@ -72,8 +72,8 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
             >
               Client portal <ExternalLink className="h-3.5 w-3.5" />
             </a>
-            <Link href="/clients" className="text-sm text-ink-muted hover:text-ink">
-              All clients
+            <Link href="/" className="text-sm text-ink-muted hover:text-ink">
+              Back to clients
             </Link>
           </div>
         }

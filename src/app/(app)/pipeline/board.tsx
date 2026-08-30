@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { daysSince } from "@/lib/utils";
 import { moveClientStage } from "../clients/actions";
-import { QuickView } from "./quick-view";
+import { QuickView } from "../clients/quick-view";
 
 type Stage = { id: string; name: string; slaDays: number | null };
 type Card = {
