@@ -74,6 +74,7 @@ export interface Client {
   hiring_fee_status: HiringFeeStatus;
   hiring_fee_invoice: string | null;
   hiring_fee_paid: string | null;
+  portal_url: string | null;
   remarks: string | null;
   source_row_hash: string | null;
   created_at: string;

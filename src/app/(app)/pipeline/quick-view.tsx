@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/primitives";
 import { RB_STATUS, CHECKLIST_STATUS, CLIENT_STATUS } from "@/lib/labels";
+import { portalLinkFor } from "@/lib/constants";
 import { relativeTime } from "@/lib/utils";
 import { moveClientStage, setChecklistStatus } from "../clients/actions";
 import {
@@ -79,17 +80,25 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
               </button>
             </div>
 
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               {data.risk.level !== "ok" && (
                 <Badge tone={data.risk.level === "risk" ? "red" : "amber"}>
                   {data.risk.level === "risk" ? "At risk" : "Watch"}
                 </Badge>
               )}
+              <a
+                href={portalLinkFor(data.client)}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink"
+              >
+                Client portal <ExternalLink className="h-3 w-3" />
+              </a>
               <Link
                 href={`/clients/${data.client.id}`}
-                className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-800"
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-800"
               >
-                Open full page <ExternalLink className="h-3 w-3" />
+                Full page <ExternalLink className="h-3 w-3" />
               </Link>
             </div>
 

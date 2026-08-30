@@ -150,6 +150,18 @@ export function EditClientPanel({
           </div>
         </div>
         <div>
+          <Label>Client portal link</Label>
+          <Input
+            name="portal_url"
+            type="url"
+            placeholder="https://portal.outsourceforce.ai/…"
+            defaultValue={client.portal_url ?? ""}
+          />
+          <p className="mt-1 text-[11px] text-ink-faint">
+            Leave blank to use the portal login page.
+          </p>
+        </div>
+        <div>
           <Label>Remarks</Label>
           <Textarea name="remarks" defaultValue={client.remarks ?? ""} />
         </div>

@@ -104,6 +104,7 @@ const EDITABLE: (keyof Client)[] = [
   "demo_call_date",
   "start_date",
   "status",
+  "portal_url",
   "remarks",
 ];
 const COMMERCIAL: (keyof Client)[] = [

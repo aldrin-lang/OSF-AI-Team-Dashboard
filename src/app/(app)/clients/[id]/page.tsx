@@ -9,7 +9,9 @@ import {
   getStageGates,
   profileMap,
 } from "@/lib/data/queries";
+import { ExternalLink } from "lucide-react";
 import { checkAllStageGates } from "@/lib/server/gates";
+import { portalLinkFor } from "@/lib/constants";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/badge";
@@ -61,9 +63,19 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
             .join(" · ") || undefined
         }
         actions={
-          <Link href="/clients" className="text-sm text-ink-muted hover:text-ink">
-            All clients
-          </Link>
+          <div className="flex items-center gap-3">
+            <a
+              href={portalLinkFor(client)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-navy-800 shadow-sm hover:bg-slate-50"
+            >
+              Client portal <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+            <Link href="/clients" className="text-sm text-ink-muted hover:text-ink">
+              All clients
+            </Link>
+          </div>
         }
       />
 
