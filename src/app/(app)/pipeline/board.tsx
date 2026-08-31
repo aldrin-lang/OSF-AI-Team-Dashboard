@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
@@ -43,6 +43,7 @@ const ACCENTS = [
 export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card[] }) {
   const router = useRouter();
   const [cards, setCards] = useState(initial);
+  useEffect(() => setCards(initial), [initial]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

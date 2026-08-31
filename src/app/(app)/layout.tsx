@@ -5,6 +5,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { getClientsMini } from "@/lib/data/queries";
 import { AppNav } from "@/components/app-nav";
 import { MobileNav } from "@/components/mobile-nav";
+import { RealtimeSync } from "@/components/realtime-sync";
 import { Logo, LogoWordmark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { initials } from "@/lib/utils";
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <div className="flex min-h-screen">
+      <RealtimeSync />
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-gradient-to-b from-slate-50 to-white pb-4 backdrop-blur-xl md:flex">
         <div className="relative flex h-16 items-center border-b border-line px-5">
           <LogoWordmark />

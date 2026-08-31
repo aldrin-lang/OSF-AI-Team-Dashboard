@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -41,6 +41,8 @@ export function ClientsGrid({
 }) {
   const router = useRouter();
   const [rows, setRows] = useState(initial);
+  // pull in fresh server data (own saves + teammates' live edits)
+  useEffect(() => setRows(initial), [initial]);
   const [q, setQ] = useState("");
   const [fStage, setFStage] = useState("");
   const [fManager, setFManager] = useState("");
