@@ -36,24 +36,34 @@ export function RealtimeSync() {
       timer = setTimeout(() => router.refresh(), 600);
     };
 
-    getBrowserSupabase()
-      .then((sb) => {
-        let ch = sb.channel("app-live");
-        for (const table of TABLES) {
-          ch = ch.on(
-            "postgres_changes",
-            { event: "*", schema: "public", table },
-            bump,
-          );
-        }
-        ch.subscribe((status) => setLive(status === "SUBSCRIBED"));
-        cleanup = () => {
-          sb.removeChannel(ch);
-        };
-      })
-      .catch(() => {
-        /* config unavailable — app still works, just not live */
+    (async () => {
+      const sb = await getBrowserSupabase();
+
+      // Realtime + RLS: the change stream is filtered by each row's SELECT
+      // policy, which needs the user's JWT on the socket. Set it explicitly and
+      // keep it fresh on token refresh.
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      if (session?.access_token) sb.realtime.setAuth(session.access_token);
+
+      const { data: authSub } = sb.auth.onAuthStateChange((_e, s) => {
+        if (s?.access_token) sb.realtime.setAuth(s.access_token);
       });
+
+      let ch = sb.channel("app-live", { config: { private: false } });
+      for (const table of TABLES) {
+        ch = ch.on("postgres_changes", { event: "*", schema: "public", table }, bump);
+      }
+      ch.subscribe((status) => setLive(status === "SUBSCRIBED"));
+
+      cleanup = () => {
+        authSub.subscription.unsubscribe();
+        sb.removeChannel(ch);
+      };
+    })().catch(() => {
+      /* config unavailable — app still works, just not live */
+    });
 
     const onVisible = () => {
       if (!document.hidden) router.refresh();
