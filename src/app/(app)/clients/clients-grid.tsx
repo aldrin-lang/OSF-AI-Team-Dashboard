@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Search,
   Plus,
@@ -202,14 +203,22 @@ export function ClientsGrid({
         </div>
       </div>
 
-      {toast && (
-        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          <span className="flex-1">{toast}</span>
-          <button onClick={() => setToast(null)}>
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -8, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center gap-2 overflow-hidden rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+          >
+            <span className="flex-1">{toast}</span>
+            <button onClick={() => setToast(null)}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <p className="text-xs text-ink-faint">
         {filtered.length} client{filtered.length === 1 ? "" : "s"} · click any cell to edit

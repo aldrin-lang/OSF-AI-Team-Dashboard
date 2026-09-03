@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { ExternalLink } from "lucide-react";
 import {
   DndContext,
@@ -78,11 +79,19 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
 
   return (
     <div>
-      {error && (
-        <p className="mb-3 rounded-xl border border-rose-400/25 bg-rose-50 px-3 py-2 text-sm text-rose-600">
-          {error}
-        </p>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -6, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -6, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mb-3 overflow-hidden rounded-xl border border-rose-400/25 bg-rose-50 px-3 py-2 text-sm text-rose-600"
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
       <DndContext
         sensors={sensors}
         onDragStart={(e: DragStartEvent) => {

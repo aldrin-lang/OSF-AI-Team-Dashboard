@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { X, ExternalLink, Zap, MessageSquarePlus, Phone, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,12 +55,25 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
     router.refresh();
   }
 
-  if (!clientId) return null;
-
   return (
+    <AnimatePresence>
+      {clientId && (
     <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose} />
-      <aside className="glass absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl border-l border-line p-5">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.aside
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 420, damping: 42 }}
+        className="glass absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl border-l border-line p-5"
+      >
         {loading && <p className="text-sm text-ink-muted">Loading…</p>}
         {err && <p className="text-sm text-rose-600">{err}</p>}
 
@@ -353,8 +367,10 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
             )}
           </>
         )}
-      </aside>
+      </motion.aside>
     </div>
+      )}
+    </AnimatePresence>
   );
 }
 

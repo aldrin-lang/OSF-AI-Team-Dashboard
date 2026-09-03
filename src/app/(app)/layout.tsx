@@ -6,6 +6,7 @@ import { getClientsMini } from "@/lib/data/queries";
 import { AppNav } from "@/components/app-nav";
 import { MobileNav } from "@/components/mobile-nav";
 import { RealtimeSync } from "@/components/realtime-sync";
+import { MotionProvider } from "@/components/motion-provider";
 import { Logo, LogoWordmark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { initials } from "@/lib/utils";
@@ -78,7 +79,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
+          <MotionProvider>{children}</MotionProvider>
+        </main>
       </div>
     </div>
   );
