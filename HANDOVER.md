@@ -1,0 +1,75 @@
+# Handover — OutsourceForce Team Dashboard
+
+Read this first if you are maintaining the app and the original builder is not around.
+Stack: Next.js 16 (App Router) on Vercel + Supabase (Postgres, Auth, Realtime) + Resend (email).
+Repo layout, deploy steps and first-time provisioning: `SETUP.md`. This file covers **how it runs and what to do when it breaks**.
+
+## What it is
+One place for the team to work: **Leads** (AI Receptionist + VA, from GHL, round-robin to setters) -> **Clients** (onboarding checklist, pipeline) -> **Concerns**, **Reports**. Everyone signed in sees and edits the same data live.
+
+## Accounts you need
+| Thing | Where | Who has it |
+|---|---|---|
+| Vercel project `osf-ai-team-dashboard` (team tools-software) | vercel.com | _fill in_ |
+| Supabase project (Singapore) | supabase.com | _fill in_ |
+| GitHub repo | _fill in_ | _fill in_ |
+| GHL sub-account OutsourceForce.ai, location `3OCKmBzU7auXzRIFfHOv` | app.gohighlevel.com | _fill in_ |
+| Resend (email) | resend.com | _fill in_ |
+
+Secrets live ONLY in Vercel env vars (and a local `.env.local` for development). Never in the repo, chat or Make blueprints.
+
+## Environment variables (Vercel -> Settings -> Environment Variables)
+See `.env.example` for the full list. After changing any, **redeploy**.
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — database.
+- `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL` — email links.
+- `CRON_SECRET` — **required**. The daily job refuses to run without it. Vercel sends it automatically as `Authorization: Bearer`.
+- `GHL_WEBHOOK_SECRET` — **required for leads**. Webhook refuses (503) without it.
+- `GHL_API_TOKEN`, `GHL_LOCATION_ID`, `GHL_PIPELINE_ID` — read-only GHL access for "Sync now". Token needs `opportunities.readonly` and `contacts.readonly` only.
+- `GOOGLE_CHAT_WEBHOOK_URL` — optional extra alert channel.
+
+## Leads: how it works
+```
+GHL (Opportunity created in "ALatest Leads")
+   -> Workflow "Leads -> Dashboard" -> Webhook POST
+   -> /api/webhooks/ghl-lead        (checks secret, parses, stores)
+   -> allocate_lead() in Postgres   (round-robin: least-recently-assigned ACTIVE setter)
+   -> Leads page + notification to that setter
+Safety nets: "Sync now" button (read-only pull from GHL), daily heartbeat alert, /api/health.
+```
+- Each lead is keyed on the GHL opportunity id (or `contact:<id>`), so re-deliveries only refresh details — status, setter and notes are never overwritten.
+- **Allocation switch** (`lead_settings.live_from`): while empty, leads are stored as *history* and nobody is assigned. An admin presses **Start allocating from now** on the Leads page; only leads created after that are auto-assigned.
+- Setters are the `setters` table (Dean Murie, Scott, Jesse Maloy). Turn someone off (holiday) with the toggle on the Leads page; their leads stay theirs, new ones skip them. Link a setter to a dashboard login via `setters.profile_id` to get notifications.
+- Service (AI / VA) is guessed from GHL tags (`ai…recept…` = AI; `va`, `appointment setter`, `premiumqs` = VA). Unknown ones show as "Unknown" — set manually.
+- Phone numbers are shown as received. If a number looks wrongly coded (+353 followed by a long non-Irish number, e.g. a Philippine number) it is flagged with the suggested fix; it is never silently rewritten.
+
+### The GHL workflow (create as a NEW draft; do not touch the live workflows or Make scenarios)
+- Trigger: Opportunity Created, pipeline "ALatest Leads".
+- Action: Webhook, POST, URL `https://<app-domain>/api/webhooks/ghl-lead`, header `x-webhook-secret: <GHL_WEBHOOK_SECRET>`.
+- Custom data (key -> merge field): `contact_id` {{contact.id}}, `opportunity_id` {{opportunity.id}}, `name` {{contact.name}}, `email` {{contact.email}}, `phone` {{contact.phone}}, `source` {{contact.source}}, `tags` {{contact.tags}}, `va_role` (custom field), `job_description` (custom field), `assigned_to` {{opportunity.assigned_to}}, `created_at` {{opportunity.date_created}}.
+- Test with one real lead; the response JSON shows `{ok, lead_id, created, historical, setter}`. The merge-field names above must be checked in the GHL picker — they are the part most likely to be slightly different.
+
+## Daily job
+`/api/cron/daily` (Vercel cron, 07:00 UTC): stale-client nudges + **lead feed heartbeat** (alerts managers/admins if the webhook worked before but nothing arrived in 24h). Vercel Hobby only allows daily crons.
+
+## Runbook
+| Symptom | Do this |
+|---|---|
+| New GHL leads not showing | Leads page -> **Sync now** (pulls last days from GHL). Then check the GHL workflow ran (Workflow -> Execution logs) and that `GHL_WEBHOOK_SECRET` matches the header. |
+| Webhook returns 503 | `GHL_WEBHOOK_SECRET` not set in Vercel; set it and redeploy. |
+| Webhook returns 401 | Secret in GHL differs from Vercel. |
+| Webhook returns 422 | Payload had no contact/opportunity id — fix the merge fields in the GHL webhook action. |
+| Leads not being assigned | Is allocation started (banner on Leads page)? Is at least one setter on? Press **Assign waiting leads**. |
+| Wrong person got a lead | Change the setter on the lead (dropdown). Nothing else needed. |
+| Site broken after a deploy | Vercel -> Deployments -> previous good one -> **Promote / Redeploy**. Then look at the failing commit. |
+| No emails | Check `RESEND_API_KEY`, sender domain verified in Resend. |
+| "Is it alive?" | Open `/api/health` (should show `{ok:true}`). With `?key=<CRON_SECRET>` it also shows last webhook time and unassigned count. Point an uptime monitor at it. |
+
+## Making changes safely
+1. `npm install`, copy `.env.example` to `.env.local` (ask the owner for dev keys), `npm run dev`.
+2. Before pushing: `npx tsc --noEmit`, `npx eslint <changed files>`, `npm run build`, `node scripts/test-leads-core.mjs`.
+3. Database changes = a NEW file in `supabase/migrations/` (never edit applied ones); apply in Supabase SQL editor or CLI.
+4. Push to `main` -> Vercel deploys. Claude Code can maintain this repo: open it in the folder and read `CLAUDE.md`.
+
+## Known limits
+- The dashboard's setter allocation and the Google Sheet column E rotation are separate until the sheet is fed from the dashboard (planned next integration).
+- GHL's own opportunity "assigned to" is shown for information only.

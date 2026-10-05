@@ -15,6 +15,9 @@ const TABLES = [
   "activity_log",
   "notifications",
   "pipeline_stages",
+  "leads",
+  "lead_events",
+  "setters",
 ];
 
 /**

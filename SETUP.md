@@ -83,3 +83,9 @@ Review `import-report.csv` for rows that need manual cleanup. Re-runnable.
    (send invite). Use your own email.
 2. In Supabase SQL editor: `update profiles set role = 'admin' where email = '<you>';`
 3. Log in, go to **Admin**, invite the rest of the team.
+
+## 6. Leads hub (added Oct 2026)
+1. Apply `supabase/migrations/20261005000001_leads.sql` (SQL editor or CLI).
+2. In Vercel set `CRON_SECRET`, `GHL_WEBHOOK_SECRET`, `GHL_API_TOKEN`, `GHL_LOCATION_ID` (see `.env.example`) and redeploy.
+3. Create the GHL workflow and (optionally) run "Sync now" — details in `HANDOVER.md`.
+4. An admin presses **Start allocating from now** on the Leads page when the team is ready.

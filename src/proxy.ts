@@ -2,7 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // Next.js 16: this file is `proxy.ts` (formerly `middleware.ts`); runtime is nodejs.
-const PUBLIC_PATHS = ["/login", "/auth", "/api/public-config", "/inactive"];
+// /api/cron, /api/webhooks and /api/health are called by Vercel Cron, GHL and uptime
+// monitors, which have no login cookie. Each of those routes checks its own secret.
+const PUBLIC_PATHS = [
+  "/login",
+  "/auth",
+  "/api/public-config",
+  "/inactive",
+  "/api/cron",
+  "/api/webhooks",
+  "/api/health",
+];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

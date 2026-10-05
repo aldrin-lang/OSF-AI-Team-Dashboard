@@ -255,3 +255,72 @@ export interface ClientEmail {
   created_at: string;
   updated_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
+import type { LeadService } from "@/lib/leads-core";
+export type { LeadService };
+
+export type LeadStatus =
+  | "new"
+  | "contacted"
+  | "call_booked"
+  | "no_answer"
+  | "not_interested"
+  | "won"
+  | "lost";
+
+export interface Setter {
+  id: string;
+  name: string;
+  ghl_user_id: string | null;
+  email: string | null;
+  profile_id: string | null;
+  active: boolean;
+  last_assigned_at: string | null;
+  last_assign_seq: number | null;
+  created_at: string;
+}
+
+export interface Lead {
+  id: string;
+  ghl_key: string;
+  ghl_contact_id: string | null;
+  ghl_opportunity_id: string | null;
+  ghl_assigned_to: string | null;
+  name: string;
+  email: string | null;
+  phone_raw: string | null;
+  phone: string | null;
+  phone_suggested: string | null;
+  phone_flag: "likely_miscoded_353" | "no_country_code" | null;
+  source: string | null;
+  service: LeadService;
+  va_role: string | null;
+  job_description: string | null;
+  tags: string[];
+  custom: Record<string, unknown>;
+  status: LeadStatus;
+  setter_id: string | null;
+  assigned_at: string | null;
+  assigned_by: string | null;
+  notes: string | null;
+  historical: boolean;
+  client_id: string | null;
+  ghl_created_at: string | null;
+  received_at: string;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadEvent {
+  id: string;
+  lead_id: string;
+  kind: string;
+  summary: string;
+  detail: Record<string, unknown> | null;
+  actor_id: string | null;
+  created_at: string;
+}

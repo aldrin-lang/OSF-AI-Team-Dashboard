@@ -1,4 +1,6 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { checkLeadFeed } from "@/lib/server/lead-heartbeat";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { notifyUsers } from "@/lib/server/notify";
 import { sendEmail, emailShell } from "@/lib/server/email";
@@ -11,11 +13,20 @@ export const maxDuration = 60;
 const STALE_DAYS = 7;
 
 export async function GET(request: Request) {
+  // Fail closed: without CRON_SECRET this endpoint refuses to run for anyone.
   const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 503 });
+  }
   const provided =
     request.headers.get("x-cron-secret") ??
-    request.headers.get("authorization")?.replace("Bearer ", "");
-  if (secret && provided !== secret) {
+    request.headers.get("authorization")?.replace("Bearer ", "") ??
+    "";
+  const same = timingSafeEqual(
+    createHash("sha256").update(provided).digest(),
+    createHash("sha256").update(secret).digest(),
+  );
+  if (!same) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -97,10 +108,19 @@ export async function GET(request: Request) {
     digests += 1;
   }
 
+  // ---- Lead-feed heartbeat (alerts if the GHL webhook went quiet) ----------
+  let leadFeed: { alerted: boolean; reason?: string } = { alerted: false };
+  try {
+    leadFeed = await checkLeadFeed(admin, (profiles as Profile[]) ?? []);
+  } catch (e) {
+    console.error("[cron] lead heartbeat failed", e);
+  }
+
   return NextResponse.json({
     ok: true,
     ran_at: new Date().toISOString(),
     stale_notifications: staleNotifications,
     digests_sent: digests,
+    lead_feed: leadFeed,
   });
 }

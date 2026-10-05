@@ -10,10 +10,12 @@ import {
   LayoutDashboard,
   Settings,
   ShieldCheck,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MAIN = [
+  { href: "/leads", label: "Leads", icon: Inbox, match: "/leads" },
   { href: "/", label: "Clients", icon: Users, exact: true },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, match: "/pipeline" },
   { href: "/concerns", label: "Concerns", icon: AlertTriangle, match: "/concerns" },

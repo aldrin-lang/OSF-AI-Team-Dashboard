@@ -18,6 +18,10 @@ const PREF_KEYS: Record<NotifyEvent, { inApp: keyof NotificationPreferences; ema
   stale_client: { inApp: "stale_client_in_app", email: "stale_client_email" },
 };
 
+function escapeHtml(t: string) {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export interface NotifyInput {
   userIds: string[];
   event: NotifyEvent;
@@ -83,7 +87,7 @@ export async function notifyUsers(input: NotifyInput) {
           subject: input.title,
           html: emailShell(
             input.title,
-            input.body ? `<p>${input.body}</p>` : "",
+            input.body ? `<p>${escapeHtml(input.body)}</p>` : "",
             link.startsWith("http") ? link : `${appUrl}${link}`,
             "Open in Ops",
           ),

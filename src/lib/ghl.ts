@@ -15,3 +15,12 @@ export function ghlLinks(locationId: string | null | undefined) {
     calendars: at("calendars"),
   };
 }
+
+/** Deep link to one contact in a GHL sub-account. */
+export function ghlContactLink(
+  locationId: string | null | undefined,
+  contactId: string | null | undefined,
+) {
+  if (!locationId || !contactId) return null;
+  return `${BASE}/${locationId}/contacts/detail/${contactId}`;
+}

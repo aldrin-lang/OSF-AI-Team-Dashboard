@@ -5,6 +5,8 @@ import type {
   ConcernSeverity,
   ConcernStatus,
   HiringFeeStatus,
+  LeadService,
+  LeadStatus,
   PlacementStatus,
   RbStatus,
 } from "@/lib/types";
@@ -83,4 +85,20 @@ export const PLACEMENT_STATUS: Record<PlacementStatus, { label: string; tone: To
 export const PIPELINE_LABEL: Record<string, string> = {
   ai: "AI Receptionist",
   va: "Virtual Assistant",
+};
+
+export const LEAD_STATUS: Record<LeadStatus, { label: string; tone: Tone }> = {
+  new: { label: "New", tone: "blue" },
+  contacted: { label: "Contacted", tone: "purple" },
+  call_booked: { label: "Call booked", tone: "green" },
+  no_answer: { label: "No answer", tone: "amber" },
+  not_interested: { label: "Not interested", tone: "neutral" },
+  won: { label: "Won", tone: "green" },
+  lost: { label: "Lost", tone: "red" },
+};
+
+export const LEAD_SERVICE: Record<LeadService, { label: string; tone: Tone }> = {
+  ai: { label: "AI receptionist", tone: "blue" },
+  va: { label: "VA", tone: "purple" },
+  unknown: { label: "Unknown", tone: "neutral" },
 };
