@@ -45,7 +45,8 @@ t("customData payload", () => {
   });
   assert.equal(p.contactId, "c1"); assert.equal(p.opportunityId, "o1"); assert.equal(p.name, "Jo Bloggs");
   assert.deepEqual(p.tags, ["uk-aireceptionist", "new lead"]); assert.equal(p.jobDescription, "Do admin");
-  assert.equal(ghlKeyFor(p), "o1");
+  assert.equal(ghlKeyFor(p), "contact:c1"); // one lead per person, not per opportunity
+  assert.equal(ghlKeyFor({ contactId: null, opportunityId: "o1" }), "o1");
 });
 t("top-level fallback + tags array + first/last name", () => {
   const p = parseGhlPayload({ contact_id: "c9", first_name: "Ann", last_name: "Lee", tags: ["a", "b"], phone: "+447400000000" });

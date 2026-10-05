@@ -13,11 +13,15 @@ import {
 import type { IncomingLead } from "@/lib/leads-core";
 
 /** GHL credentials for the read-only sync. Null when not configured. */
+// "ALatest Leads" in the OutsourceForce.ai location: every new lead lands here first; GHL then
+// copies it into other pipelines (Outsource Leads Pipeline, Latest Leads – <setter>), so sync only this one.
+const DEFAULT_LEADS_PIPELINE_ID = "2aIn5QLMcNZFyblSdy4p";
+
 export function ghlConfigFromEnv(): GhlConfig | null {
   const token = process.env.GHL_API_TOKEN;
   const locationId = process.env.GHL_LOCATION_ID;
   if (!token || !locationId) return null;
-  return { token, locationId, pipelineId: process.env.GHL_PIPELINE_ID || null };
+  return { token, locationId, pipelineId: process.env.GHL_PIPELINE_ID || DEFAULT_LEADS_PIPELINE_ID };
 }
 
 /** A lead pushed by the GHL workflow webhook. Notifies the setter if they have a dashboard login. */

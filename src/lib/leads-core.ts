@@ -126,8 +126,9 @@ export function parseGhlPayload(body: unknown): IncomingLead | null {
 
 /** Dedupe key: the opportunity if there is one, otherwise the contact. */
 export function ghlKeyFor(l: Pick<IncomingLead, "contactId" | "opportunityId">): string | null {
-  if (l.opportunityId) return l.opportunityId;
+  // One lead per person: GHL creates several opportunities (one per pipeline) for the same contact.
   if (l.contactId) return `contact:${l.contactId}`;
+  if (l.opportunityId) return l.opportunityId;
   return null;
 }
 

@@ -126,6 +126,8 @@ export async function ingestLead(
       service: service !== "unknown" ? service : existing.service,
       last_synced_at: now,
     };
+    // keep the opportunity the lead first arrived with (GHL copies it into other pipelines)
+    delete patch.ghl_opportunity_id;
     const { error } = await db.from("leads").update(patch).eq("id", existing.id);
     if (error) throw new Error(`lead update failed: ${error.message}`);
 

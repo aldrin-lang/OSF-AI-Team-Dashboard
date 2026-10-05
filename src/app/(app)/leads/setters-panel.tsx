@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { formatDate } from "@/lib/utils";
 import { assignUnassignedNow, startAllocating, syncNow, toggleSetter } from "./actions";
 import type { Setter } from "@/lib/types";
@@ -38,9 +39,9 @@ export function SettersPanel({
             </p>
             {isAdmin && (
               <form action={startAllocating} className="mt-3">
-                <Button size="sm" type="submit">
+                <SubmitButton size="sm" pendingText="Starting…">
                   Start allocating from now
-                </Button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -75,15 +76,15 @@ export function SettersPanel({
 
         <div className="flex flex-wrap gap-2">
           <form action={syncNow}>
-            <Button size="sm" variant="secondary" type="submit" disabled={!syncConfigured}>
+            <SubmitButton size="sm" variant="secondary" disabled={!syncConfigured} pendingText="Syncing from GHL… (up to a minute)">
               Sync now from GHL
-            </Button>
+            </SubmitButton>
           </form>
           {canManage && liveFrom !== null && (
             <form action={assignUnassignedNow}>
-              <Button size="sm" variant="secondary" type="submit" disabled={unassigned === 0}>
+              <SubmitButton size="sm" variant="secondary" disabled={unassigned === 0} pendingText="Assigning…">
                 Assign {unassigned} unassigned
-              </Button>
+              </SubmitButton>
             </form>
           )}
         </div>
