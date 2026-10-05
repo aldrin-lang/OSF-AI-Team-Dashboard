@@ -10,7 +10,10 @@ import { LEAD_SERVICE, LEAD_STATUS } from "@/lib/labels";
 import { ghlContactLink } from "@/lib/ghl";
 import { formatDate, relativeTime } from "@/lib/utils";
 import { LeadControls } from "./controls";
-import { convertLead } from "../actions";
+import { convertLead, refreshExtras, updateLeadAd } from "../actions";
+import { refreshLeadExtras } from "@/lib/server/leads";
+import { Input, Label } from "@/components/ui/primitives";
+import { SubmitButton } from "@/components/ui/submit-button";
 import type { Lead, LeadEvent } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,7 +34,10 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
   const { data } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
-  const lead = data as Lead;
+  let lead = data as Lead;
+  // Intake form + AI call notes live in GHL; refresh the cached copy if it is older than 15 minutes.
+  const extras = await refreshLeadExtras(lead);
+  if (extras) lead = { ...lead, ...extras };
 
   const [{ data: setterRows }, { data: eventRows }, profiles] = await Promise.all([
     supabase.from("setters").select("id, name").order("name"),
@@ -84,6 +90,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             </Row>
             <Row label="Email">{lead.email ?? "—"}</Row>
             <Row label="Source">{lead.source ?? "—"}</Row>
+            <Row label="Country">{lead.country ?? "—"}</Row>
             {lead.va_role && <Row label="VA wanted">{lead.va_role}</Row>}
             {lead.job_description && (
               <Row label="Job description">
@@ -120,6 +127,59 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
       <Card>
         <CardHeader>
+          <CardTitle>AI intake form &amp; call notes</CardTitle>
+          <form action={refreshExtras}>
+            <input type="hidden" name="id" value={lead.id} />
+            <SubmitButton size="sm" variant="ghost" pendingText="Refreshing…" disabled={!lead.ghl_contact_id}>
+              Refresh from GHL
+            </SubmitButton>
+          </form>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">Client AI intake form</p>
+            <p className="whitespace-pre-wrap text-sm text-ink">{lead.intake_form || "—"}</p>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">AI call notes (Peter)</p>
+            <p className="whitespace-pre-wrap text-sm text-ink">{lead.call_notes || "No AI call yet."}</p>
+          </div>
+          <p className="text-xs text-ink-faint">
+            {lead.extras_synced_at ? `Read from GHL ${relativeTime(lead.extras_synced_at)}` : "Not read from GHL yet"}
+          </p>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ad details (sheet columns)</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <form action={updateLeadAd} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <input type="hidden" name="id" value={lead.id} />
+            <div>
+              <Label>Name of Ads</Label>
+              <Input name="ad_name" defaultValue={lead.ad_name ?? ""} maxLength={200} />
+            </div>
+            <div>
+              <Label>Code</Label>
+              <Input name="ad_code" defaultValue={lead.ad_code ?? ""} maxLength={60} placeholder="BOFU-PRA-LM-…" />
+            </div>
+            <div>
+              <Label>Country</Label>
+              <Input name="country" defaultValue={lead.country ?? ""} maxLength={60} />
+            </div>
+            <div>
+              <SubmitButton size="sm" variant="secondary" pendingText="Saving…">
+                Save
+              </SubmitButton>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Manage</CardTitle>
         </CardHeader>
         <CardBody>
@@ -140,7 +200,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             <Link href={`/clients/${lead.client_id}`} className="text-sm text-brand-600 hover:underline">
               Already converted — open the client
             </Link>
-          ) : lead.service === "va" ? (
+          ) : lead.service === "va" || lead.service === "premium" ? (
             <p className="text-sm text-ink-muted">
               VA onboarding isn&apos;t in the dashboard yet. Set the status to Won and hand over through the VA process.
             </p>

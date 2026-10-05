@@ -11,6 +11,9 @@ import {
   Settings,
   ShieldCheck,
   Inbox,
+  UserSearch,
+  MessageCircleHeart,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +22,9 @@ const MAIN = [
   { href: "/", label: "Clients", icon: Users, exact: true },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, match: "/pipeline" },
   { href: "/concerns", label: "Concerns", icon: AlertTriangle, match: "/concerns" },
+  { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, match: "/check-ins" },
+  { href: "/payments", label: "Payments", icon: Receipt, match: "/payments" },
+  { href: "/candidates", label: "Candidates", icon: UserSearch, match: "/candidates" },
   { href: "/reports", label: "Reports", icon: BarChart3, match: "/reports" },
 ];
 

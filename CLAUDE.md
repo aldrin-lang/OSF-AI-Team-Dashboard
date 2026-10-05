@@ -16,7 +16,11 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - `src/lib/leads-ingest.ts` — idempotent ingest, GHL sync. `src/lib/server/leads.ts` — env wiring.
 - `src/app/api/webhooks/ghl-lead/route.ts` — GHL webhook (fails closed). `src/app/api/health/route.ts`. `src/app/api/cron/daily/route.ts`.
 - `src/app/(app)/leads/` — Leads UI + server actions. `src/proxy.ts` — auth guard (public paths listed there).
-- `supabase/migrations/` — schema, RLS, `allocate_lead`.
+- `src/lib/ops-core.ts` — pure helpers for the ops automations: dates (Europe/Dublin), reminder stages, check-in cadence, templates, candidate parsing (tested by `scripts/test-ops-core.mjs`).
+- `src/lib/server/ai.ts` — the only Anthropic call site (`aiText`, `aiJson`); callers fall back to templates when no key.
+- `src/lib/server/{candidates,checkins,payments,daily-report}.ts` — server logic; pages in `src/app/(app)/{candidates,check-ins,payments,reports/daily}`.
+- `src/app/api/webhooks/candidate/route.ts` — PIT form webhook (fails closed).
+- `supabase/migrations/` — schema, RLS, `allocate_lead`. `supabase/demo_ops_*.sql` — demo data add/remove (not migrations).
 
 ## Check before saying done
-`npx tsc --noEmit`, `npx eslint <files>`, `npm run build`, `node scripts/test-leads-core.mjs`.
+`npx tsc --noEmit`, `npx eslint <files>`, `npm run build`, `node scripts/test-leads-core.mjs`, `node scripts/test-ops-core.mjs`.

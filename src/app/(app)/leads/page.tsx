@@ -23,7 +23,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
 
   const view = ["open", "all", "history"].includes(one("view")) ? one("view") : "open";
-  const service = ["ai", "va", "unknown"].includes(one("service")) ? one("service") : "all";
+  const service = ["ai", "va", "premium", "unknown"].includes(one("service")) ? one("service") : "all";
   const setterParam = one("setter");
   const setterFilter = setterParam === "unassigned" || UUID.test(setterParam) ? setterParam : "all";
   const term = one("q").replace(/[%,()*]/g, " ").trim().slice(0, 60);
@@ -139,6 +139,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
           <option value="all">All services</option>
           <option value="ai">AI receptionist</option>
           <option value="va">VA</option>
+          <option value="premium">Premium VA</option>
           <option value="unknown">Unknown</option>
         </Select>
         <Select name="setter" defaultValue={setterFilter} className="w-44">
@@ -185,7 +186,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
                       {l.name || l.email || l.phone || "Unnamed lead"}
                     </Link>
                     <p className="text-xs text-ink-faint">
-                      {[l.email, l.source].filter(Boolean).join(" · ") || "—"}
+                      {[l.email, l.source, l.country, l.ad_code].filter(Boolean).join(" · ") || "—"}
                     </p>
                     {l.client_id && (
                       <Link href={`/clients/${l.client_id}`} className="text-xs text-brand-600 hover:underline">

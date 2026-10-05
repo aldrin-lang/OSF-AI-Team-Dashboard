@@ -17,6 +17,10 @@ const TABLES = [
   "pipeline_stages",
   "leads",
   "lead_events",
+  "candidates",
+  "checkins",
+  "invoices",
+  "payment_reminders",
   "setters",
 ];
 

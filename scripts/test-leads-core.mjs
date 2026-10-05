@@ -29,8 +29,13 @@ t("empty phone", () => assert.deepEqual(analysePhone("  "), { phone: null, sugge
 // ---- service ---------------------------------------------------------------
 t("ai tags", () => { assert.equal(classifyService(["uk-aireceptionist", "new lead"]), "ai"); assert.equal(classifyService(["nz-aireceptionist"]), "ai"); });
 t("va tags", () => {
-  for (const tag of ["marketingva-ie", "uk-mva", "uk-accountantva", "ukpremiumqs-va", "architectva-ie", "uk-appointmentsetter"])
+  for (const tag of ["marketingva-ie", "uk-mva", "uk-accountantva", "architectva-ie", "uk-appointmentsetter"])
     assert.equal(classifyService([tag, "new lead"]), "va", tag);
+});
+t("premium tags => premium (sheet tab 7)", () => {
+  for (const tag of ["ukpremiumqs-va", "iepremiumarchitect-va", "nz-premium-qs"])
+    assert.equal(classifyService([tag, "new lead"]), "premium", tag);
+  assert.equal(classifyService(["uk-aireceptionist", "premium"]), "ai");
 });
 t("unknown when nothing matches", () => { assert.equal(classifyService(["new lead", "pt-ads-acc"]), "unknown"); assert.equal(classifyService(["valid"]), "unknown"); });
 t("ai wins over va; website va field => va", () => {

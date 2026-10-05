@@ -7,6 +7,8 @@ export interface SendEmailInput {
   subject: string;
   html: string;
   text?: string;
+  /** Where replies go. Defaults to EMAIL_REPLY_TO when set. */
+  replyTo?: string;
 }
 
 /** Minimal Resend client (no SDK dependency). No-ops if RESEND_API_KEY is unset. */
@@ -30,6 +32,9 @@ export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean; s
       subject: input.subject,
       html: input.html,
       text: input.text,
+      ...((input.replyTo ?? process.env.EMAIL_REPLY_TO)
+        ? { reply_to: input.replyTo ?? process.env.EMAIL_REPLY_TO }
+        : {}),
     }),
   });
 
@@ -55,5 +60,13 @@ export function emailShell(title: string, bodyHtml: string, ctaUrl?: string, cta
     <p style="font-size:11px;color:#888">
       AI Receptionist Ops · <a href="${appUrl}/settings" style="color:#888">Notification settings</a>
     </p>
+  </div>`;
+}
+
+/** Outgoing email to a client or VA: plain and personal, no dashboard links. */
+export function clientEmailShell(bodyHtml: string) {
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2937;font-size:14px;line-height:1.6">
+    ${bodyHtml}
   </div>`;
 }

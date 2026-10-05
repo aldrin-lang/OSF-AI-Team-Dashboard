@@ -26,6 +26,8 @@ See `.env.example` for the full list. After changing any, **redeploy**.
 - `GHL_WEBHOOK_SECRET` — **required for leads**. Webhook refuses (503) without it.
 - `GHL_API_TOKEN`, `GHL_LOCATION_ID`, `GHL_PIPELINE_ID` — read-only GHL access for "Sync now". Token needs `opportunities.readonly` and `contacts.readonly` only.
 - `GOOGLE_CHAT_WEBHOOK_URL` — optional extra alert channel.
+- `ANTHROPIC_API_KEY` — optional. Turns on the AI parts (candidate screening, check-in drafts and reply reading, daily report summary). Without it everything still works with plain templates. `AI_MODEL` overrides the model (default `claude-opus-5-5`, with Anthropic's server-side refusal fallback on).
+- `EMAIL_REPLY_TO` — optional. Inbox that receives replies to check-ins and payment reminders (e.g. accounts@…). Set it, otherwise replies go to the `EMAIL_FROM` address.
 
 ## Leads: how it works
 ```
@@ -48,8 +50,21 @@ Safety nets: "Sync now" button (read-only pull from GHL), daily heartbeat alert,
 - Custom data (key -> merge field): `contact_id` {{contact.id}}, `opportunity_id` {{opportunity.id}}, `name` {{contact.name}}, `email` {{contact.email}}, `phone` {{contact.phone}}, `source` {{contact.source}}, `tags` {{contact.tags}}, `va_role` (custom field), `job_description` (custom field), `assigned_to` {{opportunity.assigned_to}}, `created_at` {{opportunity.date_created}}.
 - Test with one real lead; the response JSON shows `{ok, lead_id, created, historical, setter}`. The merge-field names above must be checked in the GHL picker — they are the part most likely to be slightly different.
 
+## Ops automations (Candidates, Check-ins, Payments, Daily report)
+Migration `20261006000001_ops_automations.sql` (additive). Demo data: `supabase/demo_ops_seed.sql`, removed by `supabase/demo_ops_remove.sql`.
+
+**Candidates** (`/candidates`). GHL PIT form → workflow Webhook action → `POST /api/webhooks/candidate` (same `x-webhook-secret` as leads; send the form fields as custom data, or the full contact). The candidate is stored (keyed on GHL contact id, else email), screened by AI against the fixed role list (`VA_ROLES` in `src/lib/ops-core.ts`), and the recommendation goes to every manager/admin in-app and by email. Re-screen / send again / status from the candidate page. Manual add is on the list page.
+
+**Check-ins** (`/check-ins`). Every morning, each live client (onboarding ones start once live) and each active VA placement whose cadence is up (default every 14 days, set per client/VA on the Schedule tab) gets a drafted check-in (AI-written if the key is set, max 10 per day, otherwise template). Nothing is sent automatically: someone edits and presses **Send email**, or **Open WhatsApp** (wa.me link with the message pre-filled, no WhatsApp API) then **I sent it on WhatsApp**. Paste the reply in; AI sets mood + summary + next step. "At risk" notifies managers and the client's manager. Client contact name/phone come from the lead the client was converted from.
+
+**Payments** (`/payments`). Managers add invoices per client. Every morning a reminder is drafted for open invoices at: 3 days before due, due day, 3 / 7 / 14 days overdue (one per stage). Managers get one notification "N reminders ready", review, edit and send. Mark paid / void stops further reminders. Members can view; only managers/admins change invoices.
+
+**Daily report** (`/reports/daily`). Built every morning for yesterday (Irish time): leads by service/source/setter, open/untouched/unassigned, clients, concerns, tasks, candidates, check-ins, payments. AI writes a short summary with "Needs attention"; emailed to managers/admins once per day. Managers can rebuild any day.
+
+**Lead page extras.** Country (from phone prefix), Name of Ads / Code (typed in), and the GHL intake form + Peter's AI call notes (read-only GET from GHL, cached 15 min, "Refresh from GHL" button). Premium VA is its own service type (tag contains "premium").
+
 ## Daily job
-`/api/cron/daily` (Vercel cron, 07:00 UTC): stale-client nudges + **lead feed heartbeat** (alerts managers/admins if the webhook worked before but nothing arrived in 24h). Vercel Hobby only allows daily crons.
+`/api/cron/daily` (Vercel cron, 07:00 UTC): stale-client nudges, **lead feed heartbeat** (alerts managers/admins if the webhook worked before but nothing arrived in 24h), check-ins due, payment reminder drafts, and yesterday's daily report email. Each step is isolated; the JSON response shows what each did. Vercel Hobby only allows daily crons.
 
 ## Runbook
 | Symptom | Do this |
@@ -62,11 +77,14 @@ Safety nets: "Sync now" button (read-only pull from GHL), daily heartbeat alert,
 | Wrong person got a lead | Change the setter on the lead (dropdown). Nothing else needed. |
 | Site broken after a deploy | Vercel -> Deployments -> previous good one -> **Promote / Redeploy**. Then look at the failing commit. |
 | No emails | Check `RESEND_API_KEY`, sender domain verified in Resend. |
+| Candidate not appearing | GHL workflow execution log → webhook response. 401 = secret, 422 = no contact id/email/name in the payload. |
+| AI parts say "not switched on" | Set `ANTHROPIC_API_KEY` in Vercel and redeploy. |
+| Check-in / reminder "Send" fails | Resend not configured, or no email on the client/invoice. Use WhatsApp for check-ins. |
 | "Is it alive?" | Open `/api/health` (should show `{ok:true}`). With `?key=<CRON_SECRET>` it also shows last webhook time and unassigned count. Point an uptime monitor at it. |
 
 ## Making changes safely
 1. `npm install`, copy `.env.example` to `.env.local` (ask the owner for dev keys), `npm run dev`.
-2. Before pushing: `npx tsc --noEmit`, `npx eslint <changed files>`, `npm run build`, `node scripts/test-leads-core.mjs`.
+2. Before pushing: `npx tsc --noEmit`, `npx eslint <changed files>`, `npm run build`, `node scripts/test-leads-core.mjs`, `node scripts/test-ops-core.mjs`.
 3. Database changes = a NEW file in `supabase/migrations/` (never edit applied ones); apply in Supabase SQL editor or CLI.
 4. Push to `main` -> Vercel deploys. Claude Code can maintain this repo: open it in the folder and read `CLAUDE.md`.
 

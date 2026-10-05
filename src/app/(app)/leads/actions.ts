@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireActor, requireActorRole } from "@/lib/server/rbac";
 import { logActivity } from "@/lib/server/activity";
-import { runAssignUnassigned, runSync } from "@/lib/server/leads";
+import { refreshLeadExtras, runAssignUnassigned, runSync } from "@/lib/server/leads";
 import { LEAD_STATUS } from "@/lib/labels";
 import type { Lead, LeadStatus, PipelineType } from "@/lib/types";
 
@@ -88,6 +88,41 @@ export async function updateLead(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
+// Sheet columns kept on the lead: Name of Ads / Code (typed in) and country
+// ---------------------------------------------------------------------------
+export async function updateLeadAd(formData: FormData) {
+  const actor = await requireActor();
+  const supabase = await getServerSupabase();
+  const id = s(formData, "id");
+  if (!id || !UUID.test(id)) throw new Error("Missing lead id");
+  const patch = {
+    ad_name: s(formData, "ad_name")?.slice(0, 200) ?? null,
+    ad_code: s(formData, "ad_code")?.slice(0, 60) ?? null,
+    country: s(formData, "country")?.slice(0, 60) ?? null,
+  };
+  const { error } = await supabase.from("leads").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+  await supabase.from("lead_events").insert({
+    lead_id: id,
+    kind: "note",
+    summary: `Ad details: ${[patch.ad_name, patch.ad_code, patch.country].filter(Boolean).join(" · ") || "cleared"}`,
+    actor_id: actor.id,
+  });
+  revalidatePath(`/leads/${id}`);
+}
+
+/** Re-read the intake form and AI call notes from GHL now (read-only). */
+export async function refreshExtras(formData: FormData) {
+  await requireActor();
+  const supabase = await getServerSupabase();
+  const id = s(formData, "id");
+  if (!id || !UUID.test(id)) throw new Error("Missing lead id");
+  const { data } = await supabase.from("leads").select("id, ghl_contact_id, extras_synced_at").eq("id", id).maybeSingle();
+  if (data) await refreshLeadExtras(data as { id: string; ghl_contact_id: string | null; extras_synced_at: string | null }, true);
+  revalidatePath(`/leads/${id}`);
+}
+
+// ---------------------------------------------------------------------------
 // Allocation controls
 // ---------------------------------------------------------------------------
 export async function toggleSetter(formData: FormData) {
@@ -147,7 +182,7 @@ export async function convertLead(formData: FormData) {
   if (lead.client_id) redirect(`/clients/${lead.client_id}`);
 
   // The dashboard only runs the AI receptionist onboarding pipeline (VA stages were removed).
-  if (lead.service === "va") throw new Error("VA onboarding isn't in the dashboard yet");
+  if (lead.service === "va" || lead.service === "premium") throw new Error("VA onboarding isn't in the dashboard yet");
   const pipeline: PipelineType = "ai";
   const { data: firstStage } = await supabase
     .from("pipeline_stages")

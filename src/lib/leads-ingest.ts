@@ -9,6 +9,7 @@ import {
   type IncomingLead,
   type LeadService,
 } from "./leads-core";
+import { countryFromPhone } from "./ops-core";
 
 type Db = SupabaseClient;
 
@@ -101,6 +102,7 @@ export async function ingestLead(
     phone: phone.phone,
     phone_suggested: phone.suggested,
     phone_flag: phone.flag,
+    country: countryFromPhone(phone.phone),
     source: lead.source,
     va_role: lead.vaRole,
     job_description: lead.jobDescription,
@@ -251,7 +253,7 @@ const JOB_FIELD_IDS = ["90yXRnukD9yrByH7R4vr", "h3lWEz8HTCKcmSBMQS9K"]; // Job d
 
 const GHL_BASE = "https://services.leadconnectorhq.com";
 
-async function ghlGet(cfg: GhlConfig, path: string, params: Record<string, string> = {}): Promise<Record<string, unknown>> {
+export async function ghlGet(cfg: GhlConfig, path: string, params: Record<string, string> = {}): Promise<Record<string, unknown>> {
   const url = `${GHL_BASE}${path}?${new URLSearchParams(params).toString()}`;
   let lastStatus = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -277,7 +279,7 @@ interface GhlOpportunity {
   contact?: { id?: string; name?: string; email?: string; phone?: string; tags?: string[] };
 }
 
-function fieldValue(customFields: unknown, ids: string[]): string | null {
+export function fieldValue(customFields: unknown, ids: string[]): string | null {
   if (!Array.isArray(customFields)) return null;
   for (const id of ids) {
     const f = customFields.find((x) => x && typeof x === "object" && (x as { id?: string }).id === id) as

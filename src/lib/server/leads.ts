@@ -3,6 +3,8 @@ import { getAdminSupabase } from "@/lib/supabase/server";
 import { notifyUsers } from "@/lib/server/notify";
 import {
   assignUnassigned,
+  fieldValue,
+  ghlGet,
   getLiveFrom,
   ingestLead,
   syncFromGhl,
@@ -51,4 +53,46 @@ export async function runSync(days = 3): Promise<SyncResult | { error: string }>
 export async function runAssignUnassigned(): Promise<number> {
   const db = getAdminSupabase();
   return assignUnassigned(db, await getLiveFrom(db));
+}
+
+// Contact custom fields shown on the lead page (OutsourceForce.ai location).
+const INTAKE_FIELD = "za6vmrWGElsdZSgxgiWP"; // Client AI Intake Form
+const CALL_SUMMARY_FIELD = "0t8X6ygHRhKhvCwxtmBp"; // AI Call Summary (Peter)
+const CALLBACK_TIME_FIELD = "12LldrtLbjFO8zGtz2f3";
+const CALLBACK_DATE_FIELD = "jhT6pK6muHfkzt5Gv0FK";
+const EXTRAS_MAX_AGE_MS = 15 * 60 * 1000;
+
+/**
+ * Read the intake form and AI call notes from GHL (GET only) and cache them
+ * on the lead. Skips when fresh unless forced. Never throws.
+ */
+export async function refreshLeadExtras(
+  lead: { id: string; ghl_contact_id: string | null; extras_synced_at: string | null },
+  force = false,
+): Promise<{ intake_form: string | null; call_notes: string | null } | null> {
+  const cfg = ghlConfigFromEnv();
+  if (!cfg || !lead.ghl_contact_id) return null;
+  if (!force && lead.extras_synced_at && Date.now() - new Date(lead.extras_synced_at).getTime() < EXTRAS_MAX_AGE_MS) {
+    return null;
+  }
+  try {
+    const r = await ghlGet(cfg, `/contacts/${lead.ghl_contact_id}`);
+    const cf = (r.contact as { customFields?: unknown } | undefined)?.customFields;
+    const summary = fieldValue(cf, [CALL_SUMMARY_FIELD]);
+    const cbDate = fieldValue(cf, [CALLBACK_DATE_FIELD]);
+    const cbTime = fieldValue(cf, [CALLBACK_TIME_FIELD]);
+    const callback = cbDate || cbTime ? `Callback requested: ${[cbDate, cbTime].filter(Boolean).join(" ")}` : null;
+    const extras = {
+      intake_form: fieldValue(cf, [INTAKE_FIELD]),
+      call_notes: [summary, callback].filter(Boolean).join("\n\n") || null,
+    };
+    await getAdminSupabase()
+      .from("leads")
+      .update({ ...extras, extras_synced_at: new Date().toISOString() })
+      .eq("id", lead.id);
+    return extras;
+  } catch (e) {
+    console.error("[leads] extras fetch failed", e);
+    return null;
+  }
 }

@@ -75,6 +75,8 @@ export interface Client {
   hiring_fee_invoice: string | null;
   hiring_fee_paid: string | null;
   portal_url: string | null;
+  checkin_every_days: number;
+  checkin_paused: boolean;
   remarks: string | null;
   source_row_hash: string | null;
   created_at: string;
@@ -109,6 +111,9 @@ export interface VaPlacement {
   role: string | null;
   employment_type: string | null;
   placement_status: PlacementStatus;
+  checkin_every_days: number;
+  checkin_paused: boolean;
+  va_phone: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -308,6 +313,12 @@ export interface Lead {
   notes: string | null;
   historical: boolean;
   client_id: string | null;
+  country: string | null;
+  ad_name: string | null;
+  ad_code: string | null;
+  intake_form: string | null;
+  call_notes: string | null;
+  extras_synced_at: string | null;
   ghl_created_at: string | null;
   received_at: string;
   last_synced_at: string | null;
@@ -322,5 +333,108 @@ export interface LeadEvent {
   summary: string;
   detail: Record<string, unknown> | null;
   actor_id: string | null;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Ops automations: candidates, check-ins, invoices, daily report
+// ---------------------------------------------------------------------------
+export type CandidateStatus = "new" | "screened" | "shortlisted" | "interview" | "hired" | "rejected";
+
+export interface Candidate {
+  id: string;
+  external_key: string | null;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  country: string | null;
+  source: string | null;
+  applied_role: string | null;
+  experience: string | null;
+  hourly_rate: string | null;
+  availability: string | null;
+  cv_url: string | null;
+  portfolio_url: string | null;
+  answers: Record<string, string>;
+  ai_score: number | null;
+  ai_recommended_role: string | null;
+  ai_alt_roles: string[];
+  ai_summary: string | null;
+  ai_strengths: string[];
+  ai_concerns: string[];
+  ai_screened_at: string | null;
+  ai_error: string | null;
+  status: CandidateStatus;
+  recommendation_sent_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CheckinKind = "client" | "va";
+export type CheckinStatus = "due" | "sent" | "replied" | "done" | "skipped";
+export type CheckinMood = "good" | "neutral" | "at_risk";
+
+export interface Checkin {
+  id: string;
+  kind: CheckinKind;
+  client_id: string;
+  placement_id: string | null;
+  due_on: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  channel: "email" | "whatsapp" | "call";
+  status: CheckinStatus;
+  subject: string | null;
+  message: string | null;
+  sent_at: string | null;
+  sent_by: string | null;
+  reply: string | null;
+  mood: CheckinMood | null;
+  ai_summary: string | null;
+  follow_up: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InvoiceStatus = "open" | "paid" | "void";
+
+export interface Invoice {
+  id: string;
+  client_id: string;
+  number: string;
+  description: string | null;
+  amount: number;
+  currency: string;
+  issued_on: string;
+  due_on: string;
+  status: InvoiceStatus;
+  paid_on: string | null;
+  bill_to_email: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentReminder {
+  id: string;
+  invoice_id: string;
+  stage: "before_due" | "due_today" | "overdue_3" | "overdue_7" | "overdue_14" | "manual";
+  subject: string;
+  body: string;
+  status: "draft" | "sent" | "skipped";
+  sent_at: string | null;
+  sent_by: string | null;
+  created_at: string;
+}
+
+export interface DailyReport {
+  id: string;
+  report_date: string;
+  metrics: Record<string, unknown>;
+  summary: string | null;
+  emailed_at: string | null;
   created_at: string;
 }

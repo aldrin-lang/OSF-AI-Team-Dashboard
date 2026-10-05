@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getProfiles, getStages, profileMap } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
@@ -56,7 +57,15 @@ export default async function ReportsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader title="Reports" subtitle="AI receptionist onboarding" />
+      <PageHeader
+        title="Reports"
+        subtitle="AI receptionist onboarding"
+        actions={
+          <Link href="/reports/daily" className="text-sm font-medium text-brand-600 hover:underline">
+            Daily report →
+          </Link>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-4">
         <Kpi label="Active clients" value={active.length} />

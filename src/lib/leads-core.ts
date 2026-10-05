@@ -2,7 +2,7 @@
 // Node (scripts/test-leads-core.mjs) and shared by the webhook, the GHL sync and
 // the backfill script.
 
-export type LeadService = "ai" | "va" | "unknown";
+export type LeadService = "ai" | "va" | "premium" | "unknown";
 export type PhoneFlag = "likely_miscoded_353" | "no_country_code";
 
 export interface IncomingLead {
@@ -140,6 +140,7 @@ const VA_TAG = /va(?![a-z])|appointment[-_ ]?setter|premiumqs/i;
 /** AI receptionist vs VA, from GHL tags (and the website form's VA fields). */
 export function classifyService(tags: string[], vaRole?: string | null): LeadService {
   if (tags.some((t) => AI_TAG.test(t))) return "ai";
+  if (tags.some((t) => /premium/i.test(t))) return "premium";
   if (vaRole && vaRole.trim()) return "va";
   if (tags.some((t) => VA_TAG.test(t))) return "va";
   return "unknown";

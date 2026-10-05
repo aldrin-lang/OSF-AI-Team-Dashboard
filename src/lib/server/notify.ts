@@ -8,9 +8,14 @@ export type NotifyEvent =
   | "mention"
   | "stage_change_my_client"
   | "concern_my_client"
-  | "stale_client";
+  | "stale_client"
+  // ops automations — no per-user preference yet: always in-app + email
+  | "candidate_recommendation"
+  | "checkin_attention"
+  | "payment_reminders"
+  | "daily_report";
 
-const PREF_KEYS: Record<NotifyEvent, { inApp: keyof NotificationPreferences; email: keyof NotificationPreferences }> = {
+const PREF_KEYS: Partial<Record<NotifyEvent, { inApp: keyof NotificationPreferences; email: keyof NotificationPreferences }>> = {
   assigned_to_me: { inApp: "assigned_to_me_in_app", email: "assigned_to_me_email" },
   mention: { inApp: "mention_in_app", email: "mention_email" },
   stage_change_my_client: { inApp: "stage_change_my_client_in_app", email: "stage_change_my_client_email" },
@@ -68,8 +73,8 @@ export async function notifyUsers(input: NotifyInput) {
   for (const p of profiles ?? []) {
     if (!p.active) continue;
     const pref = prefs.get(p.id as string);
-    const wantInApp = pref ? pref[keys.inApp] !== false : true;
-    const wantEmail = pref ? pref[keys.email] === true : false;
+    const wantInApp = keys && pref ? pref[keys.inApp] !== false : true;
+    const wantEmail = keys ? (pref ? pref[keys.email] === true : false) : true;
 
     if (wantInApp) {
       inAppRows.push({
@@ -87,7 +92,7 @@ export async function notifyUsers(input: NotifyInput) {
           subject: input.title,
           html: emailShell(
             input.title,
-            input.body ? `<p>${escapeHtml(input.body)}</p>` : "",
+            input.body ? `<p>${escapeHtml(input.body).replace(/\n/g, "<br/>")}</p>` : "",
             link.startsWith("http") ? link : `${appUrl}${link}`,
             "Open in Ops",
           ),
@@ -98,4 +103,14 @@ export async function notifyUsers(input: NotifyInput) {
 
   if (inAppRows.length) await admin.from("notifications").insert(inAppRows);
   await Promise.allSettled(emailTasks);
+}
+
+/** Active managers and admins: who gets team-wide ops alerts (candidates, payments, daily report). */
+export async function managerIds(): Promise<string[]> {
+  const { data } = await getAdminSupabase()
+    .from("profiles")
+    .select("id")
+    .eq("active", true)
+    .in("role", ["manager", "admin"]);
+  return (data ?? []).map((p) => p.id as string);
 }

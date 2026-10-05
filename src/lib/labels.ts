@@ -5,6 +5,9 @@ import type {
   ConcernSeverity,
   ConcernStatus,
   HiringFeeStatus,
+  CandidateStatus,
+  CheckinMood,
+  CheckinStatus,
   LeadService,
   LeadStatus,
   PlacementStatus,
@@ -100,5 +103,29 @@ export const LEAD_STATUS: Record<LeadStatus, { label: string; tone: Tone }> = {
 export const LEAD_SERVICE: Record<LeadService, { label: string; tone: Tone }> = {
   ai: { label: "AI receptionist", tone: "blue" },
   va: { label: "VA", tone: "purple" },
+  premium: { label: "Premium VA", tone: "amber" },
   unknown: { label: "Unknown", tone: "neutral" },
+};
+
+export const CANDIDATE_STATUS: Record<CandidateStatus, { label: string; tone: Tone }> = {
+  new: { label: "New", tone: "blue" },
+  screened: { label: "AI screened", tone: "purple" },
+  shortlisted: { label: "Shortlisted", tone: "green" },
+  interview: { label: "Interview", tone: "amber" },
+  hired: { label: "Hired", tone: "green" },
+  rejected: { label: "Rejected", tone: "neutral" },
+};
+
+export const CHECKIN_STATUS: Record<CheckinStatus, { label: string; tone: Tone }> = {
+  due: { label: "To send", tone: "amber" },
+  sent: { label: "Awaiting reply", tone: "blue" },
+  replied: { label: "Replied", tone: "purple" },
+  done: { label: "Done", tone: "green" },
+  skipped: { label: "Skipped", tone: "neutral" },
+};
+
+export const CHECKIN_MOOD: Record<CheckinMood, { label: string; tone: Tone }> = {
+  good: { label: "Happy", tone: "green" },
+  neutral: { label: "Neutral", tone: "neutral" },
+  at_risk: { label: "At risk", tone: "red" },
 };

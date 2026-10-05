@@ -5,10 +5,14 @@ import { getAdminSupabase } from "@/lib/supabase/server";
 import { notifyUsers } from "@/lib/server/notify";
 import { sendEmail, emailShell } from "@/lib/server/email";
 import { daysSince } from "@/lib/utils";
+import { dublinDate, addDays } from "@/lib/ops-core";
+import { generateDueCheckins } from "@/lib/server/checkins";
+import { generateReminderDrafts } from "@/lib/server/payments";
+import { runDailyReport } from "@/lib/server/daily-report";
 import type { Client, NotificationPreferences, PipelineStage, Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300; // AI drafting + the daily report summary
 
 const STALE_DAYS = 7;
 
@@ -116,11 +120,35 @@ export async function GET(request: Request) {
     console.error("[cron] lead heartbeat failed", e);
   }
 
+  // ---- Ops automations (each isolated so one failure doesn't stop the rest) --
+  const today = dublinDate();
+  const ops: Record<string, unknown> = {};
+  try {
+    ops.checkins = await generateDueCheckins(today);
+  } catch (e) {
+    console.error("[cron] check-ins failed", e);
+    ops.checkins = { error: String(e) };
+  }
+  try {
+    const r = await generateReminderDrafts(today);
+    ops.payment_reminders = { created: r.created };
+  } catch (e) {
+    console.error("[cron] payment reminders failed", e);
+    ops.payment_reminders = { error: String(e) };
+  }
+  try {
+    ops.daily_report = await runDailyReport(addDays(today, -1), { email: true });
+  } catch (e) {
+    console.error("[cron] daily report failed", e);
+    ops.daily_report = { error: String(e) };
+  }
+
   return NextResponse.json({
     ok: true,
     ran_at: new Date().toISOString(),
     stale_notifications: staleNotifications,
     digests_sent: digests,
     lead_feed: leadFeed,
+    ...ops,
   });
 }
