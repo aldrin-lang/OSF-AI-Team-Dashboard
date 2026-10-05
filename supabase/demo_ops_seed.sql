@@ -13,18 +13,18 @@ declare
   v_place  uuid;
   v_inv    uuid;
 begin
-  if exists (select 1 from clients where name = 'DEMO – Sample Plumbing Ltd') then
+  if exists (select 1 from clients where name like 'DEMO%Sample Plumbing Ltd') then
     raise notice 'Demo data already there';
     return;
   end if;
 
   insert into clients (pipeline, name, contact_email, country, source, start_date, status, checkin_every_days, remarks)
-  values ('va', 'DEMO – Sample Plumbing Ltd', 'owner.demo@example.com', 'UK', 'Demo', current_date - 40, 'live', 14,
+  values ('va', 'DEMO - Sample Plumbing Ltd', 'owner.demo@example.com', 'UK', 'Demo', current_date - 40, 'live', 14,
           'Fake client for testing the dashboard. Delete with demo_ops_remove.sql')
   returning id into v_client;
 
   insert into va_placements (client_id, va_name, va_email, va_phone, role, employment_type, placement_status, checkin_every_days)
-  values (v_client, 'DEMO – Maria Santos', 'maria.demo@example.com', '+639171234567', 'General Admin VA', 'Full time', 'active', 14)
+  values (v_client, 'DEMO - Maria Santos', 'maria.demo@example.com', '+639171234567', 'General Admin VA', 'Full time', 'active', 14)
   returning id into v_place;
 
   -- Invoices: one paid, one due in 2 days, one 8 days overdue, one due later
@@ -36,18 +36,18 @@ begin
   returning id into v_inv;
   insert into payment_reminders (invoice_id, stage, subject, body)
   values (v_inv, 'before_due', 'Friendly reminder: invoice DEMO-1002 is due soon',
-          E'Hi there,\n\nJust a friendly heads-up that invoice DEMO-1002 for £1,200.00 is due in 2 days.\n\nIf it''s already on its way, thank you, and please ignore this note.\n\nKind regards,\nAccounts team\nOutsourceForce');
+          E'Hi there,\n\nJust a friendly heads-up that invoice DEMO-1002 for GBP 1,200.00 is due in 2 days.\n\nIf it''s already on its way, thank you, and please ignore this note.\n\nKind regards,\nAccounts team\nOutsourceForce');
 
   insert into invoices (client_id, number, description, amount, currency, issued_on, due_on)
   values (v_client, 'DEMO-1003', 'Hiring fee', 350, 'GBP', current_date - 22, current_date - 8)
   returning id into v_inv;
   insert into payment_reminders (invoice_id, stage, subject, body, status, sent_at)
   values (v_inv, 'overdue_3', 'Invoice DEMO-1003 is now overdue',
-          E'Hi there,\n\nOur records show invoice DEMO-1003 for £350.00 is still outstanding.\n\nKind regards,\nAccounts team\nOutsourceForce',
+          E'Hi there,\n\nOur records show invoice DEMO-1003 for GBP 350.00 is still outstanding.\n\nKind regards,\nAccounts team\nOutsourceForce',
           'sent', now() - interval '5 days');
   insert into payment_reminders (invoice_id, stage, subject, body)
   values (v_inv, 'overdue_7', 'Second reminder: invoice DEMO-1003 is 7 days overdue',
-          E'Hi there,\n\nInvoice DEMO-1003 for £350.00 is now a week overdue.\n\nPlease arrange payment at your earliest convenience, or reply to let us know the expected payment date.\n\nKind regards,\nAccounts team\nOutsourceForce');
+          E'Hi there,\n\nInvoice DEMO-1003 for GBP 350.00 is now a week overdue.\n\nPlease arrange payment at your earliest convenience, or reply to let us know the expected payment date.\n\nKind regards,\nAccounts team\nOutsourceForce');
 
   insert into invoices (client_id, number, description, amount, currency, issued_on, due_on)
   values (v_client, 'DEMO-1004', 'VA overtime', 180, 'EUR', current_date, current_date + 20);
@@ -60,7 +60,7 @@ begin
 
   insert into checkins (kind, client_id, placement_id, due_on, contact_name, contact_email, contact_phone, channel,
                         status, subject, message, sent_at)
-  values ('va', v_client, v_place, current_date - 3, 'DEMO – Maria Santos', 'maria.demo@example.com', '+639171234567',
+  values ('va', v_client, v_place, current_date - 3, 'DEMO - Maria Santos', 'maria.demo@example.com', '+639171234567',
           'whatsapp', 'sent', 'Quick check-in',
           E'Hi Maria,\n\nJust checking in to see how everything is going with Sample Plumbing.\n\nOutsourceForce team',
           now() - interval '3 days');
@@ -77,7 +77,7 @@ begin
   insert into candidates (external_key, full_name, email, country, source, applied_role, experience, hourly_rate, availability,
                           answers, ai_score, ai_recommended_role, ai_alt_roles, ai_summary, ai_strengths, ai_concerns,
                           ai_screened_at, status)
-  values ('demo:juan', 'DEMO – Juan Dela Cruz', 'juan.demo@example.com', 'Philippines', 'OnlineJobs.ph', 'Virtual Assistant',
+  values ('demo:juan', 'DEMO - Juan Dela Cruz', 'juan.demo@example.com', 'Philippines', 'OnlineJobs.ph', 'Virtual Assistant',
           '4 years: admin for a UK roofing company, Xero invoicing', '$5', 'Full time',
           '{"Tell us about your experience": "4 years admin for a UK roofing company: quotes, invoices in Xero, scheduling jobs."}'::jsonb,
           78, 'Bookkeeper / Accountant VA', array['General Admin VA'],
