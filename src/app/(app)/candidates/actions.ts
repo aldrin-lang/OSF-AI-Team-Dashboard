@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireActor } from "@/lib/server/rbac";
+import { requireActorArea } from "@/lib/server/rbac";
 import { ingestCandidate, screenCandidate, sendRecommendation } from "@/lib/server/candidates";
 import { CANDIDATE_STATUS } from "@/lib/labels";
 import { countryFromPhone } from "@/lib/ops-core";
@@ -28,7 +28,7 @@ const back = (id: string, msg: string) => redirect(`/candidates/${id}?msg=${enco
 
 /** Manual add (e.g. someone who applied by email). Screens straight away. */
 export async function addCandidate(formData: FormData) {
-  await requireActor();
+  await requireActorArea("candidates");
   const fullName = s(formData, "full_name");
   if (!fullName) throw new Error("Name is required");
   const email = s(formData, "email")?.toLowerCase() ?? null;
@@ -55,7 +55,7 @@ export async function addCandidate(formData: FormData) {
 }
 
 export async function rescreen(formData: FormData) {
-  await requireActor();
+  await requireActorArea("candidates");
   const id = idOf(formData);
   const r = await screenCandidate(id);
   revalidatePath("/candidates");
@@ -64,7 +64,7 @@ export async function rescreen(formData: FormData) {
 }
 
 export async function sendToTeam(formData: FormData) {
-  const actor = await requireActor();
+  const actor = await requireActorArea("candidates");
   const id = idOf(formData);
   const ok = await sendRecommendation(id, actor.id);
   revalidatePath(`/candidates/${id}`);
@@ -72,7 +72,7 @@ export async function sendToTeam(formData: FormData) {
 }
 
 export async function updateCandidate(formData: FormData) {
-  await requireActor();
+  await requireActorArea("candidates");
   const id = idOf(formData);
   const status = s(formData, "status") as CandidateStatus | null;
   if (!status || !(status in CANDIDATE_STATUS)) throw new Error("Invalid status");

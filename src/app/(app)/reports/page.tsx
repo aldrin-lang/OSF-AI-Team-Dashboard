@@ -1,3 +1,4 @@
+import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getProfiles, getStages, profileMap } from "@/lib/data/queries";
@@ -9,6 +10,7 @@ import type { Client } from "@/lib/types";
 export const metadata = { title: "Reports · OSF AI Team Dashboard" };
 
 export default async function ReportsPage() {
+  await requireArea("reports");
   const supabase = await getServerSupabase();
   const [{ data: clientRows }, stages, profiles] = await Promise.all([
     supabase.from("clients").select("*").eq("pipeline", "ai"),

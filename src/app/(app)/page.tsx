@@ -1,4 +1,4 @@
-import { requireProfile, hasRole } from "@/lib/auth";
+import { requireArea, hasRole } from "@/lib/auth";
 import { getClientsGrid, getOptions } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { ClientsGrid } from "./clients/clients-grid";
@@ -6,7 +6,7 @@ import { ClientsGrid } from "./clients/clients-grid";
 export const metadata = { title: "Clients · OSF AI Team Dashboard" };
 
 export default async function ClientsHome() {
-  const me = await requireProfile();
+  const me = await requireArea("clients");
   const [{ rows, stages, profiles }, sources, countries] = await Promise.all([
     getClientsGrid(),
     getOptions("source"),

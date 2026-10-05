@@ -63,6 +63,14 @@ Migration `20261006000001_ops_automations.sql` (additive). Demo data: `supabase/
 
 **Lead page extras.** Country (from phone prefix), Name of Ads / Code (typed in), and the GHL intake form + Peter's AI call notes (read-only GET from GHL, cached 15 min, "Refresh from GHL" button). Premium VA is its own service type (tag contains "premium").
 
+## Departments (who sees what)
+Migration `20261007000001_departments.sql`. Each person belongs to one or more departments (Sales, Marketing, Client Success, Operations, Recruitment, Accounts). Each department is given areas: Leads, Clients (Clients + Pipeline + Concerns), Check-ins, Candidates, Payments, Reports (Reports + Daily report). **Admins see everything.**
+- Enforced in the database (`has_area()` in every RLS policy), in each page (`requireArea`) and in server actions that use the service role (`requireActorArea`). The menu only shows allowed tabs.
+- **Admin page:** invite someone with a role + departments (they set their own password from the email); change anyone's departments; tick which areas each department sees.
+- Roles inside a department: **member** works items; **manager** = department head (e.g. only managers in Accounts can add invoices / send reminders / mark paid).
+- Alerts follow departments: payment reminders → Accounts, candidate recommendations → Recruitment, at-risk check-ins → Check-ins people + the client's manager, daily report → anyone with Reports (admins by default).
+- Someone with no department sees a "not added to a department yet" page.
+
 ## Daily job
 `/api/cron/daily` (Vercel cron, 07:00 UTC): stale-client nudges, **lead feed heartbeat** (alerts managers/admins if the webhook worked before but nothing arrived in 24h), check-ins due, payment reminder drafts, and yesterday's daily report email. Each step is isolated; the JSON response shows what each did. Vercel Hobby only allows daily crons.
 

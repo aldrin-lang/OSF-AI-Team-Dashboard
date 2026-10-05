@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireProfile, hasRole } from "@/lib/auth";
+import { requireArea, hasRole } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardBody, Input, Label, Textarea } from "@/components/ui/primitives";
@@ -27,7 +27,7 @@ const PLAN: { stage: ReminderStage; offset: number }[] = [
 export default async function InvoicePage(props: PageProps<"/payments/[id]">) {
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
-  const profile = await requireProfile();
+  const profile = await requireArea("payments");
   const canManage = hasRole(profile, "manager");
   const msg = flashFrom(await props.searchParams);
   const supabase = await getServerSupabase();

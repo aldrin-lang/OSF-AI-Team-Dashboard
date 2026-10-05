@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { requireProfile, hasRole } from "@/lib/auth";
+import { requireArea, hasRole } from "@/lib/auth";
 import {
   getClientDetail,
   getClientFeed,
@@ -28,7 +28,7 @@ import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
 
 export default async function ClientDetailPage(props: PageProps<"/clients/[id]">) {
   const { id } = await props.params;
-  const me = await requireProfile();
+  const me = await requireArea("clients");
   const detail = await getClientDetail(id);
   if (!detail) notFound();
 

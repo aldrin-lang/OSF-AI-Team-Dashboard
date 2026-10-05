@@ -1,3 +1,4 @@
+import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getProfiles, getOptions } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
@@ -8,6 +9,7 @@ import { createClient } from "../actions";
 export const metadata = { title: "New client · OSF AI Team Dashboard" };
 
 export default async function NewClientPage() {
+  await requireArea("clients");
   const [profiles, sources, countries] = await Promise.all([
     getProfiles(),
     getOptions("source"),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { requireProfile, hasRole } from "@/lib/auth";
+import { getMyAreas, requireProfile, hasRole } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getClientsMini } from "@/lib/data/queries";
 import { AppNav } from "@/components/app-nav";
@@ -16,12 +16,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const profile = await requireProfile();
   const supabase = await getServerSupabase();
 
+  const areas = await getMyAreas();
   const [{ count }, clientsMini] = await Promise.all([
     supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .is("read_at", null),
-    getClientsMini(),
+    areas.includes("clients") ? getClientsMini() : Promise.resolve([]),
   ]);
 
   return (
@@ -33,7 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
         <div className="pt-4">
-          <AppNav isManager={hasRole(profile, "manager")} />
+          <AppNav isManager={hasRole(profile, "manager")} areas={areas} />
         </div>
       </aside>
 
@@ -41,11 +42,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/60 px-4 backdrop-blur-xl md:px-8">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-1 md:hidden">
-            <MobileNav isManager={hasRole(profile, "manager")} />
+            <MobileNav isManager={hasRole(profile, "manager")} areas={areas} />
             <Logo size={24} />
           </div>
           <div className="hidden md:block">
-            <CommandPalette clients={clientsMini} />
+            {areas.includes("clients") && <CommandPalette clients={clientsMini} />}
           </div>
           <div className="ml-auto flex items-center gap-3 md:gap-4">
             <Link

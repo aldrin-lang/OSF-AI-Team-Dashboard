@@ -1,3 +1,4 @@
+import { getMyAreas, requireArea } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -28,6 +29,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
+  await requireArea("leads");
+  const canClients = (await getMyAreas()).includes("clients");
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
   const supabase = await getServerSupabase();
@@ -196,10 +199,16 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <CardTitle>Client</CardTitle>
         </CardHeader>
         <CardBody>
-          {lead.client_id ? (
+          {lead.client_id && canClients ? (
             <Link href={`/clients/${lead.client_id}`} className="text-sm text-brand-600 hover:underline">
               Already converted — open the client
             </Link>
+          ) : lead.client_id ? (
+            <p className="text-sm text-ink-muted">Converted to a client.</p>
+          ) : !canClients ? (
+            <p className="text-sm text-ink-muted">
+              When this lead is won, set the status to Won. The Client Success team turns it into a client.
+            </p>
           ) : lead.service === "va" || lead.service === "premium" ? (
             <p className="text-sm text-ink-muted">
               VA onboarding isn&apos;t in the dashboard yet. Set the status to Won and hand over through the VA process.

@@ -2,6 +2,7 @@ import "server-only";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { aiConfigured, aiErrorMessage, aiText } from "@/lib/server/ai";
 import { emailShell, sendEmail } from "@/lib/server/email";
+import { areaUserIds } from "@/lib/server/notify";
 import { addDays, dublinDayBounds, escapeHtml, formatMoney, textToHtml } from "@/lib/ops-core";
 import { OPEN_STATUSES } from "@/lib/leads-ingest";
 
@@ -216,11 +217,11 @@ export async function runDailyReport(
 
   let emailed = 0;
   if (opts.email && !saved.emailed_at) {
-    const { data: people } = await db
-      .from("profiles")
-      .select("email")
-      .eq("active", true)
-      .in("role", ["manager", "admin"]);
+    // Admins, plus anyone whose department has been given Reports on /admin.
+    const ids = await areaUserIds("reports");
+    const { data: people } = ids.length
+      ? await db.from("profiles").select("email").in("id", ids)
+      : { data: [] as { email: string }[] };
     const to = (people ?? []).map((p) => p.email as string).filter(Boolean);
     if (to.length) {
       const appUrl = process.env.APP_URL ?? "";

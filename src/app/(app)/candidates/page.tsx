@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ const VIEWS = {
 } as const;
 
 export default async function CandidatesPage(props: PageProps<"/candidates">) {
-  await requireProfile();
+  await requireArea("candidates");
   const sp = await props.searchParams;
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const view = (one("view") in VIEWS ? one("view") : "active") as keyof typeof VIEWS;

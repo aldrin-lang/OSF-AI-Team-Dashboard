@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { aiConfigured, aiErrorMessage, aiJson } from "@/lib/server/ai";
-import { managerIds, notifyUsers } from "@/lib/server/notify";
+import { areaUserIds, notifyUsers } from "@/lib/server/notify";
 import { guessRole, VA_ROLES, type IncomingCandidate } from "@/lib/ops-core";
 import type { Candidate } from "@/lib/types";
 
@@ -165,7 +165,7 @@ export async function sendRecommendation(id: string, exclude?: string | null): P
     .join("\n");
 
   await notifyUsers({
-    userIds: await managerIds(),
+    userIds: await areaUserIds("candidates"),
     event: "candidate_recommendation",
     title: `Candidate: ${c.full_name} → ${c.ai_recommended_role}`,
     body,

@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireActorRole } from "@/lib/server/rbac";
+import { requireActorArea } from "@/lib/server/rbac";
 import { runDailyReport } from "@/lib/server/daily-report";
 import { dublinDate, isIsoDate } from "@/lib/ops-core";
 
 export async function generateReport(formData: FormData) {
-  await requireActorRole("manager");
+  await requireActorArea("reports", "manager");
   const d = String(formData.get("date") ?? "");
   const date = isIsoDate(d) && d <= dublinDate() ? d : dublinDate();
   const email = formData.get("email") === "1";

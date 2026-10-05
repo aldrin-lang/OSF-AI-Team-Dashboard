@@ -3,23 +3,79 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { getServerSupabase, getAdminSupabase } from "@/lib/supabase/server";
 import { requireActorRole } from "@/lib/server/rbac";
+import { isArea } from "@/lib/areas";
+import { redirect } from "next/navigation";
+
+/** Department keys ticked on a form (validated against the departments table). */
+async function pickedDepartments(formData: FormData): Promise<string[]> {
+  const picked = formData.getAll("departments").map(String);
+  if (!picked.length) return [];
+  const { data } = await getAdminSupabase().from("departments").select("key").in("key", picked);
+  return (data ?? []).map((d) => d.key as string);
+}
 
 export async function inviteMember(formData: FormData): Promise<void> {
   await requireActorRole("admin");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("full_name") ?? "").trim();
+  const roleRaw = String(formData.get("role") ?? "member");
+  const role = ["admin", "manager", "member"].includes(roleRaw) ? roleRaw : "member";
   if (!email) throw new Error("Email required");
+  const departments = await pickedDepartments(formData);
+  if (role !== "admin" && !departments.length) {
+    redirect(`/admin?msg=${encodeURIComponent("Pick at least one department (admins see everything).")}`);
+  }
 
   const admin = getAdminSupabase();
   const redirectTo = `${process.env.APP_URL ?? ""}/auth/confirm?next=/settings`;
-  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { full_name: fullName },
     redirectTo,
   });
-  if (error) throw new Error(error.message);
+  if (error) redirect(`/admin?msg=${encodeURIComponent(`Invite failed: ${error.message}`)}`);
+
+  // The profile row is created by the auth trigger; set role + departments now so
+  // the first login already shows the right tabs.
+  const userId = data.user?.id;
+  if (userId) {
+    await admin.from("profiles").update({ role, ...(fullName ? { full_name: fullName } : {}) }).eq("id", userId);
+    await admin.from("profile_departments").delete().eq("profile_id", userId);
+    if (departments.length) {
+      await admin.from("profile_departments").insert(departments.map((d) => ({ profile_id: userId, department: d })));
+    }
+  }
 
   updateTag("profiles");
   revalidatePath("/admin");
+  redirect(`/admin?msg=${encodeURIComponent(`Invite sent to ${email}`)}`);
+}
+
+export async function setMemberDepartments(formData: FormData) {
+  await requireActorRole("admin");
+  const id = String(formData.get("id") ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return;
+  const departments = await pickedDepartments(formData);
+  const supabase = await getServerSupabase();
+  await supabase.from("profile_departments").delete().eq("profile_id", id);
+  if (departments.length) {
+    await supabase.from("profile_departments").insert(departments.map((d) => ({ profile_id: id, department: d })));
+  }
+  revalidatePath("/admin");
+  redirect(`/admin?msg=${encodeURIComponent("Departments saved")}`);
+}
+
+/** Which tabs a department can use. */
+export async function setDepartmentAreas(formData: FormData) {
+  await requireActorRole("admin");
+  const dept = String(formData.get("department") ?? "");
+  const areas = formData.getAll("areas").map(String).filter(isArea);
+  const supabase = await getServerSupabase();
+  const { data: exists } = await supabase.from("departments").select("key").eq("key", dept).maybeSingle();
+  if (!exists) return;
+  await supabase.from("department_areas").delete().eq("department", dept);
+  if (areas.length) await supabase.from("department_areas").insert(areas.map((a) => ({ department: dept, area: a })));
+  revalidatePath("/admin");
+  redirect(`/admin?msg=${encodeURIComponent("Department access saved")}`);
 }
 
 export async function setMemberRole(formData: FormData) {

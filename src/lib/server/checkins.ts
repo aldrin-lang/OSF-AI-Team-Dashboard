@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { aiConfigured, aiErrorMessage, aiJson } from "@/lib/server/ai";
 import { clientEmailShell, sendEmail } from "@/lib/server/email";
-import { managerIds, notifyUsers } from "@/lib/server/notify";
+import { areaUserIds, notifyUsers } from "@/lib/server/notify";
 import { checkinTemplate, daysBetween, nextCheckinDue, textToHtml } from "@/lib/ops-core";
 import type { Checkin, CheckinKind, Client, VaPlacement } from "@/lib/types";
 
@@ -268,7 +268,7 @@ export async function logReply(
   if (mood === "at_risk") {
     const who = ck.kind === "va" ? `VA ${ck.contact_name ?? ""}`.trim() : ck.clients?.name ?? "A client";
     await notifyUsers({
-      userIds: [...(await managerIds()), ...(ck.clients?.manager_id ? [ck.clients.manager_id] : [])],
+      userIds: [...(await areaUserIds("checkins")), ...(ck.clients?.manager_id ? [ck.clients.manager_id] : [])],
       event: "checkin_attention",
       title: `At risk: ${who} (${ck.clients?.name ?? ""})`,
       body: [summary ?? reply.slice(0, 300), followUp ? `Next step: ${followUp}` : null].filter(Boolean).join("\n"),

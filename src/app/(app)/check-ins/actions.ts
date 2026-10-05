@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getServerSupabase } from "@/lib/supabase/server";
-import { requireActor, requireActorRole } from "@/lib/server/rbac";
+import { getAdminSupabase, getServerSupabase } from "@/lib/supabase/server";
+import { requireActorArea } from "@/lib/server/rbac";
 import { createCheckinNow, generateDueCheckins, logReply, sendCheckinEmail } from "@/lib/server/checkins";
 import { dublinDate } from "@/lib/ops-core";
 
@@ -29,7 +29,7 @@ function back(view: string | null, msg: string): never {
 }
 
 export async function sendCheckin(formData: FormData) {
-  const actor = await requireActor();
+  const actor = await requireActorArea("checkins");
   const id = idOf(formData);
   const subject = s(formData, "subject", 200);
   const message = s(formData, "message");
@@ -43,7 +43,7 @@ export async function sendCheckin(formData: FormData) {
 
 /** Sent outside the dashboard (WhatsApp link or a phone call): just record it. */
 export async function markSent(formData: FormData) {
-  const actor = await requireActor();
+  const actor = await requireActorArea("checkins");
   const id = idOf(formData);
   const channel = s(formData, "channel") === "call" ? "call" : "whatsapp";
   const supabase = await getServerSupabase();
@@ -65,7 +65,7 @@ export async function markSent(formData: FormData) {
 }
 
 export async function saveReply(formData: FormData) {
-  const actor = await requireActor();
+  const actor = await requireActorArea("checkins");
   const id = idOf(formData);
   const reply = s(formData, "reply");
   if (!reply) back(s(formData, "view"), "Paste the reply first");
@@ -77,7 +77,7 @@ export async function saveReply(formData: FormData) {
 }
 
 export async function closeCheckin(formData: FormData) {
-  await requireActor();
+  await requireActorArea("checkins");
   const id = idOf(formData);
   const status = s(formData, "status") === "skipped" ? "skipped" : "done";
   const supabase = await getServerSupabase();
@@ -88,22 +88,22 @@ export async function closeCheckin(formData: FormData) {
 }
 
 export async function updateCadence(formData: FormData) {
-  await requireActor();
+  await requireActorArea("checkins");
   const id = idOf(formData);
   const table = s(formData, "kind") === "va" ? "va_placements" : "clients";
   const every = Math.round(Number(s(formData, "every") ?? "14"));
   if (!Number.isFinite(every) || every < 3 || every > 90) back("schedule", "Cadence must be 3 to 90 days");
   const patch: Record<string, unknown> = { checkin_every_days: every, checkin_paused: s(formData, "paused") === "on" };
   if (table === "va_placements" && formData.has("va_phone")) patch.va_phone = s(formData, "va_phone", 40);
-  const supabase = await getServerSupabase();
-  const { error } = await supabase.from(table).update(patch).eq("id", id);
+  // Check-ins staff may not have write access to client records, so this one update uses the service role.
+  const { error } = await getAdminSupabase().from(table).update(patch).eq("id", id);
   if (error) back("schedule", error.message);
   revalidatePath("/check-ins");
   back("schedule", "Saved");
 }
 
 export async function checkInNow(formData: FormData) {
-  await requireActor();
+  await requireActorArea("checkins");
   const clientId = idOf(formData, "client_id");
   const placementId = s(formData, "placement_id");
   if (placementId && !UUID.test(placementId)) throw new Error("Bad placement id");
@@ -113,7 +113,7 @@ export async function checkInNow(formData: FormData) {
 }
 
 export async function runDueNow() {
-  await requireActorRole("manager");
+  await requireActorArea("checkins", "manager");
   const r = await generateDueCheckins(dublinDate());
   revalidatePath("/check-ins");
   back("send", `${r.created} check-in${r.created === 1 ? "" : "s"} due today${r.ai ? ` (${r.ai} written by AI)` : ""}`);

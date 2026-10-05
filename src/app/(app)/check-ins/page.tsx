@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireProfile, hasRole } from "@/lib/auth";
+import { requireArea, hasRole } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, Input, Label, Select, Textarea, EmptyState } from "@/components/ui/primitives";
@@ -28,7 +28,7 @@ type View = keyof typeof VIEWS;
 type Row = Checkin & { clients: { name: string; pipeline: string } | null };
 
 export default async function CheckinsPage(props: PageProps<"/check-ins">) {
-  const profile = await requireProfile();
+  const profile = await requireArea("checkins");
   const sp = await props.searchParams;
   const v = typeof sp.view === "string" ? sp.view : "";
   const view: View = v in VIEWS ? (v as View) : "send";

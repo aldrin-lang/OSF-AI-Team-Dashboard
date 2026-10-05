@@ -16,16 +16,17 @@ import {
   Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Area } from "@/lib/areas";
 
-const MAIN = [
-  { href: "/leads", label: "Leads", icon: Inbox, match: "/leads" },
-  { href: "/", label: "Clients", icon: Users, exact: true },
-  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, match: "/pipeline" },
-  { href: "/concerns", label: "Concerns", icon: AlertTriangle, match: "/concerns" },
-  { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, match: "/check-ins" },
-  { href: "/payments", label: "Payments", icon: Receipt, match: "/payments" },
-  { href: "/candidates", label: "Candidates", icon: UserSearch, match: "/candidates" },
-  { href: "/reports", label: "Reports", icon: BarChart3, match: "/reports" },
+const MAIN: { href: string; label: string; icon: typeof Inbox; area: Area; match?: string; exact?: boolean }[] = [
+  { href: "/leads", label: "Leads", icon: Inbox, area: "leads", match: "/leads" },
+  { href: "/", label: "Clients", icon: Users, area: "clients", exact: true },
+  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, area: "clients", match: "/pipeline" },
+  { href: "/concerns", label: "Concerns", icon: AlertTriangle, area: "clients", match: "/concerns" },
+  { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, area: "checkins", match: "/check-ins" },
+  { href: "/payments", label: "Payments", icon: Receipt, area: "payments", match: "/payments" },
+  { href: "/candidates", label: "Candidates", icon: UserSearch, area: "candidates", match: "/candidates" },
+  { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", match: "/reports" },
 ];
 
 function itemClass(active: boolean) {
@@ -37,7 +38,7 @@ function itemClass(active: boolean) {
   );
 }
 
-export function AppNav({ isManager }: { isManager: boolean }) {
+export function AppNav({ isManager, areas }: { isManager: boolean; areas: Area[] }) {
   const pathname = usePathname();
 
   return (
@@ -46,7 +47,7 @@ export function AppNav({ isManager }: { isManager: boolean }) {
         Operations
       </p>
       <div className="flex flex-col gap-1">
-        {MAIN.map((item) => {
+        {MAIN.filter((item) => areas.includes(item.area)).map((item) => {
           const active = item.exact
             ? pathname === "/"
             : pathname.startsWith(item.match ?? item.href);

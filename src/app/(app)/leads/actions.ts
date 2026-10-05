@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireActor, requireActorRole } from "@/lib/server/rbac";
+import { requireActor, requireActorArea } from "@/lib/server/rbac";
 import { logActivity } from "@/lib/server/activity";
 import { refreshLeadExtras, runAssignUnassigned, runSync } from "@/lib/server/leads";
 import { LEAD_STATUS } from "@/lib/labels";
@@ -113,7 +113,7 @@ export async function updateLeadAd(formData: FormData) {
 
 /** Re-read the intake form and AI call notes from GHL now (read-only). */
 export async function refreshExtras(formData: FormData) {
-  await requireActor();
+  await requireActorArea("leads");
   const supabase = await getServerSupabase();
   const id = s(formData, "id");
   if (!id || !UUID.test(id)) throw new Error("Missing lead id");
@@ -126,7 +126,7 @@ export async function refreshExtras(formData: FormData) {
 // Allocation controls
 // ---------------------------------------------------------------------------
 export async function toggleSetter(formData: FormData) {
-  await requireActorRole("manager");
+  await requireActorArea("leads", "manager");
   const supabase = await getServerSupabase();
   const id = s(formData, "id");
   if (!id || !UUID.test(id)) throw new Error("Missing setter id");
@@ -138,7 +138,7 @@ export async function toggleSetter(formData: FormData) {
 
 /** Admin: turn allocation on. Leads created from now on are assigned; older ones stay "history". */
 export async function startAllocating() {
-  await requireActorRole("admin");
+  await requireActorArea("leads", "admin");
   const supabase = await getServerSupabase();
   const { error } = await supabase
     .from("lead_settings")
@@ -150,7 +150,7 @@ export async function startAllocating() {
 }
 
 export async function syncNow() {
-  await requireActor();
+  await requireActorArea("leads");
   const r = await runSync(3);
   const msg =
     "error" in r
@@ -161,7 +161,7 @@ export async function syncNow() {
 }
 
 export async function assignUnassignedNow() {
-  await requireActorRole("manager");
+  await requireActorArea("leads", "manager");
   const n = await runAssignUnassigned();
   revalidatePath("/leads");
   redirect(`/leads?msg=${encodeURIComponent(`Assigned ${n} unassigned lead${n === 1 ? "" : "s"}`)}`);

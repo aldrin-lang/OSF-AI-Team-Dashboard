@@ -1,3 +1,4 @@
+import { requireArea } from "@/lib/auth";
 import { getClients, getProfiles, getStages, profileMap } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
@@ -8,6 +9,7 @@ import type { PipelineStage } from "@/lib/types";
 export const metadata = { title: "Pipeline · OSF AI Team Dashboard" };
 
 export default async function PipelinePage() {
+  await requireArea("clients");
   const supabase = await getServerSupabase();
   const [stages, clients, profiles, { data: concernRows }] = await Promise.all([
     getStages("ai"),

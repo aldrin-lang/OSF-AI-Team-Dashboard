@@ -1,3 +1,4 @@
+import { requireArea } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -38,6 +39,7 @@ function Points({ items, tone }: { items: string[]; tone: "green" | "amber" }) {
 }
 
 export default async function CandidateDetailPage(props: PageProps<"/candidates/[id]">) {
+  await requireArea("candidates");
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
   const msg = flashFrom(await props.searchParams);

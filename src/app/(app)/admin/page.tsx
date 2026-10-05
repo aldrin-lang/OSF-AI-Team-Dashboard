@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
 import { TEMPLATE_VARS } from "@/lib/email-render";
+import { Flash, flashFrom } from "@/components/ops/flash";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { AREAS, AREA_INFO } from "@/lib/areas";
 import {
   inviteMember,
+  setMemberDepartments,
+  setDepartmentAreas,
   updateStage,
   addOption,
   removeOption,
@@ -20,19 +25,36 @@ import type { EmailTemplate, OptionRow, Profile } from "@/lib/types";
 
 export const metadata = { title: "Admin · OSF AI Team Dashboard" };
 
-export default async function AdminPage() {
+export default async function AdminPage(props: PageProps<"/admin">) {
   const me = await requireRole("manager");
+  const msg = flashFrom(await props.searchParams);
   const isAdmin = me.role === "admin";
   const supabase = await getServerSupabase();
 
-  const [{ data: members }, stages, { data: options }, { data: activity }, { data: templates }] =
-    await Promise.all([
+  const [
+    { data: members },
+    stages,
+    { data: options },
+    { data: activity },
+    { data: templates },
+    { data: deptRows },
+    { data: deptAreaRows },
+    { data: memberDeptRows },
+  ] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at"),
       getStages(),
       supabase.from("option_lists").select("*").eq("active", true).order("kind").order("position"),
       supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(40),
       supabase.from("email_templates").select("*").order("name"),
+      supabase.from("departments").select("key, name").order("position"),
+      supabase.from("department_areas").select("department, area"),
+      supabase.from("profile_departments").select("profile_id, department"),
     ]);
+  const departments = (deptRows as { key: string; name: string }[]) ?? [];
+  const deptName = new Map(departments.map((d) => [d.key, d.name]));
+  const areasOf = (dept: string) => (deptAreaRows ?? []).filter((r) => r.department === dept).map((r) => r.area as string);
+  const deptsOf = (id: string) =>
+    (memberDeptRows ?? []).filter((r) => r.profile_id === id).map((r) => r.department as string);
   const emailTemplates = (templates as EmailTemplate[]) ?? [];
   const aiStages = stages.filter((s) => s.pipeline === "ai");
 
@@ -45,7 +67,8 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader title="Admin" subtitle="Team, pipeline configuration, audit log" />
+      <PageHeader title="Admin" subtitle="Team, departments, pipeline configuration, audit log" />
+      <Flash msg={msg} />
 
       <Card>
         <CardHeader>
@@ -53,18 +76,43 @@ export default async function AdminPage() {
         </CardHeader>
         <CardBody className="space-y-4">
           {isAdmin && (
-            <form action={inviteMember} className="flex flex-wrap items-end gap-2">
-              <div>
-                <label className="text-xs text-ink-muted">Full name</label>
-                <Input name="full_name" className="w-40" />
+            <form action={inviteMember} className="space-y-3 rounded-xl border border-line p-3">
+              <p className="text-sm font-medium text-ink">Give someone access</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="text-xs text-ink-muted">Full name</label>
+                  <Input name="full_name" className="w-44" />
+                </div>
+                <div>
+                  <label className="text-xs text-ink-muted">Email</label>
+                  <Input name="email" type="email" className="w-60" required />
+                </div>
+                <div>
+                  <label className="text-xs text-ink-muted">Role</label>
+                  <Select name="role" defaultValue="member" className="w-44">
+                    <option value="member">Member</option>
+                    <option value="manager">Manager (dept head)</option>
+                    <option value="admin">Admin (sees everything)</option>
+                  </Select>
+                </div>
               </div>
               <div>
-                <label className="text-xs text-ink-muted">Email</label>
-                <Input name="email" type="email" className="w-56" required />
+                <p className="mb-1 text-xs text-ink-muted">Departments (what they can see)</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {departments.map((d) => (
+                    <label key={d.key} className="flex items-center gap-1.5 text-sm text-ink">
+                      <input type="checkbox" name="departments" value={d.key} className="accent-brand-500" />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <Button size="sm" type="submit">
+              <SubmitButton size="sm" pendingText="Sending invite…">
                 Send invite
-              </Button>
+              </SubmitButton>
+              <p className="text-xs text-ink-faint">
+                They get an email, set their own password, and only see their departments&apos; tabs.
+              </p>
             </form>
           )}
           <table className="w-full text-sm">
@@ -73,6 +121,7 @@ export default async function AdminPage() {
                 <th className="pb-2 font-medium">Name</th>
                 <th className="pb-2 font-medium">Email</th>
                 <th className="pb-2 font-medium">Role</th>
+                <th className="pb-2 font-medium">Departments</th>
                 <th className="pb-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -89,6 +138,39 @@ export default async function AdminPage() {
                     )}
                   </td>
                   <td className="py-2">
+                    {m.role === "admin" ? (
+                      <span className="text-xs text-ink-faint">Everything</span>
+                    ) : isAdmin ? (
+                      <details>
+                        <summary className="cursor-pointer text-xs text-brand-600">
+                          {deptsOf(m.id).map((d) => deptName.get(d) ?? d).join(", ") || "None: no access"}
+                        </summary>
+                        <form action={setMemberDepartments} className="mt-2 space-y-1">
+                          <input type="hidden" name="id" value={m.id} />
+                          {departments.map((d) => (
+                            <label key={d.key} className="flex items-center gap-1.5 text-xs text-ink">
+                              <input
+                                type="checkbox"
+                                name="departments"
+                                value={d.key}
+                                defaultChecked={deptsOf(m.id).includes(d.key)}
+                                className="accent-brand-500"
+                              />
+                              {d.name}
+                            </label>
+                          ))}
+                          <SubmitButton size="sm" variant="secondary" pendingText="Saving…">
+                            Save
+                          </SubmitButton>
+                        </form>
+                      </details>
+                    ) : (
+                      <span className="text-xs text-ink-muted">
+                        {deptsOf(m.id).map((d) => deptName.get(d) ?? d).join(", ") || "—"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2">
                     <div className="flex items-center gap-2">
                       <Badge tone={m.active ? "green" : "neutral"}>
                         {m.active ? "Active" : "Inactive"}
@@ -101,8 +183,47 @@ export default async function AdminPage() {
             </tbody>
           </table>
           <p className="text-xs text-ink-faint">
-            Invites use Supabase Auth. New members land as “member” — set their role above.
+            Admins see everything. Managers are department heads (e.g. can mark invoices paid in Accounts). Members
+            work in their departments.
           </p>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Departments: who sees what</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <p className="text-xs text-ink-faint">
+            Tick the tabs each department can open. Takes effect on their next page load. Admins always see everything.
+          </p>
+          <div className="space-y-2">
+            {departments.map((d) => (
+              <form key={d.key} action={setDepartmentAreas} className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line px-3 py-2">
+                <input type="hidden" name="department" value={d.key} />
+                <span className="w-32 text-sm font-medium text-ink">{d.name}</span>
+                {AREAS.map((a) => (
+                  <label key={a} className="flex items-center gap-1.5 text-sm text-ink-muted" title={AREA_INFO[a].tabs}>
+                    <input
+                      type="checkbox"
+                      name="areas"
+                      value={a}
+                      defaultChecked={areasOf(d.key).includes(a)}
+                      disabled={!isAdmin}
+                      className="accent-brand-500"
+                    />
+                    {AREA_INFO[a].label}
+                  </label>
+                ))}
+                {isAdmin && (
+                  <SubmitButton size="sm" variant="ghost" pendingText="Saving…" className="ml-auto">
+                    Save
+                  </SubmitButton>
+                )}
+              </form>
+            ))}
+          </div>
+          <p className="text-xs text-ink-faint">Clients includes Pipeline and Concerns. Reports includes the Daily report.</p>
         </CardBody>
       </Card>
 

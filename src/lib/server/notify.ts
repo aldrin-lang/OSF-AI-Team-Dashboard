@@ -2,6 +2,7 @@ import "server-only";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { sendEmail, emailShell } from "@/lib/server/email";
 import type { NotificationPreferences } from "@/lib/types";
+import type { Area } from "@/lib/areas";
 
 export type NotifyEvent =
   | "assigned_to_me"
@@ -105,12 +106,15 @@ export async function notifyUsers(input: NotifyInput) {
   await Promise.allSettled(emailTasks);
 }
 
-/** Active managers and admins: who gets team-wide ops alerts (candidates, payments, daily report). */
-export async function managerIds(): Promise<string[]> {
-  const { data } = await getAdminSupabase()
-    .from("profiles")
-    .select("id")
-    .eq("active", true)
-    .in("role", ["manager", "admin"]);
-  return (data ?? []).map((p) => p.id as string);
+/** Active people who can use an area: admins plus everyone in a department that has it. */
+export async function areaUserIds(area: Area): Promise<string[]> {
+  const db = getAdminSupabase();
+  const [{ data: profiles }, { data: depts }, { data: links }] = await Promise.all([
+    db.from("profiles").select("id, role").eq("active", true),
+    db.from("department_areas").select("department").eq("area", area),
+    db.from("profile_departments").select("profile_id, department"),
+  ]);
+  const withArea = new Set((depts ?? []).map((d) => d.department as string));
+  const members = new Set((links ?? []).filter((l) => withArea.has(l.department as string)).map((l) => l.profile_id as string));
+  return (profiles ?? []).filter((p) => p.role === "admin" || members.has(p.id as string)).map((p) => p.id as string);
 }

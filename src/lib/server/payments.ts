@@ -1,7 +1,7 @@
 import "server-only";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { clientEmailShell, sendEmail } from "@/lib/server/email";
-import { managerIds, notifyUsers } from "@/lib/server/notify";
+import { areaUserIds, notifyUsers } from "@/lib/server/notify";
 import { addDays, formatMoney, reminderStage, reminderTemplate, textToHtml, type ReminderStage } from "@/lib/ops-core";
 import type { Invoice, PaymentReminder } from "@/lib/types";
 
@@ -64,7 +64,7 @@ export async function generateReminderDrafts(today: string): Promise<{ created: 
 
   if (titles.length) {
     await notifyUsers({
-      userIds: await managerIds(),
+      userIds: await areaUserIds("payments"),
       event: "payment_reminders",
       title: `${titles.length} payment reminder${titles.length === 1 ? "" : "s"} ready to send`,
       body: titles.slice(0, 15).join("\n"),

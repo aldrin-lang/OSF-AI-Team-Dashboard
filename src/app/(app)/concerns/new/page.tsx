@@ -1,3 +1,4 @@
+import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getProfiles, getOptions } from "@/lib/data/queries";
@@ -11,6 +12,7 @@ import type { Client } from "@/lib/types";
 export const metadata = { title: "Raise concern · AI Receptionist Ops" };
 
 export default async function NewConcernPage(props: PageProps<"/concerns/new">) {
+  await requireArea("clients");
   const sp = await props.searchParams;
   const preClient = typeof sp.client === "string" ? sp.client : "";
 

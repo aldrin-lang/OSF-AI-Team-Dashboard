@@ -1,3 +1,4 @@
+import { requireArea } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -12,6 +13,7 @@ import { ConcernControls } from "./controls";
 import type { Concern } from "@/lib/types";
 
 export default async function ConcernDetailPage(props: PageProps<"/concerns/[id]">) {
+  await requireArea("clients");
   const { id } = await props.params;
   const supabase = await getServerSupabase();
 

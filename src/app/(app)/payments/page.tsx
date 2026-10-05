@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireProfile, hasRole } from "@/lib/auth";
+import { requireArea, hasRole } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select, EmptyState } from "@/components/ui/primitives";
@@ -28,7 +28,7 @@ function sumBy(list: Inv[]): string {
 }
 
 export default async function PaymentsPage(props: PageProps<"/payments">) {
-  const profile = await requireProfile();
+  const profile = await requireArea("payments");
   const canManage = hasRole(profile, "manager");
   const sp = await props.searchParams;
   const v = typeof sp.view === "string" ? sp.view : "";

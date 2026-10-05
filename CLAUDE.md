@@ -20,6 +20,7 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - `src/lib/server/ai.ts` — the only Anthropic call site (`aiText`, `aiJson`); callers fall back to templates when no key.
 - `src/lib/server/{candidates,checkins,payments,daily-report}.ts` — server logic; pages in `src/app/(app)/{candidates,check-ins,payments,reports/daily}`.
 - `src/app/api/webhooks/candidate/route.ts` — PIT form webhook (fails closed).
+- `src/lib/areas.ts` + `getMyAreas`/`requireArea` (`src/lib/auth.ts`) + `requireActorArea` (`src/lib/server/rbac.ts`) — department access. Every new page/table must pick an area (RLS uses `public.has_area()`).
 - `supabase/migrations/` — schema, RLS, `allocate_lead`. `supabase/demo_ops_*.sql` — demo data add/remove (not migrations).
 
 ## Check before saying done

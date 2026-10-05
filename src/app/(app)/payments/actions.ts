@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireActorRole } from "@/lib/server/rbac";
+import { requireActorArea } from "@/lib/server/rbac";
 import { logActivity } from "@/lib/server/activity";
 import { createManualReminder, generateReminderDrafts, sendReminder } from "@/lib/server/payments";
 import { CURRENCIES, dublinDate, formatMoney, isIsoDate } from "@/lib/ops-core";
@@ -29,7 +29,7 @@ function go(path: string, msg: string): never {
 }
 
 export async function createInvoice(formData: FormData) {
-  const actor = await requireActorRole("manager");
+  const actor = await requireActorArea("payments", "manager");
   const clientId = idOf(formData, "client_id");
   const number = s(formData, "number", 60);
   const amount = Number(s(formData, "amount"));
@@ -71,7 +71,7 @@ export async function createInvoice(formData: FormData) {
 }
 
 export async function setInvoiceStatus(formData: FormData) {
-  await requireActorRole("manager");
+  await requireActorArea("payments", "manager");
   const id = idOf(formData);
   const status = s(formData, "status");
   if (status !== "paid" && status !== "void" && status !== "open") throw new Error("Invalid status");
@@ -100,7 +100,7 @@ export async function setInvoiceStatus(formData: FormData) {
 }
 
 export async function updateInvoice(formData: FormData) {
-  await requireActorRole("manager");
+  await requireActorArea("payments", "manager");
   const id = idOf(formData);
   const due = s(formData, "due_on");
   const billTo = s(formData, "bill_to_email", 200);
@@ -117,7 +117,7 @@ export async function updateInvoice(formData: FormData) {
 }
 
 export async function sendReminderAction(formData: FormData) {
-  const actor = await requireActorRole("manager");
+  const actor = await requireActorArea("payments", "manager");
   const id = idOf(formData);
   const back = s(formData, "back") === "list" ? "/payments?view=reminders" : `/payments/${idOf(formData, "invoice_id")}`;
   const subject = s(formData, "subject", 200);
@@ -129,7 +129,7 @@ export async function sendReminderAction(formData: FormData) {
 }
 
 export async function skipReminder(formData: FormData) {
-  await requireActorRole("manager");
+  await requireActorArea("payments", "manager");
   const id = idOf(formData);
   const supabase = await getServerSupabase();
   await supabase.from("payment_reminders").update({ status: "skipped" }).eq("id", id).eq("status", "draft");
@@ -138,7 +138,7 @@ export async function skipReminder(formData: FormData) {
 }
 
 export async function draftReminderNow(formData: FormData) {
-  await requireActorRole("manager");
+  await requireActorArea("payments", "manager");
   const id = idOf(formData);
   const r = await createManualReminder(id);
   revalidatePath(`/payments/${id}`);
@@ -146,7 +146,7 @@ export async function draftReminderNow(formData: FormData) {
 }
 
 export async function runRemindersNow() {
-  await requireActorRole("manager");
+  await requireActorArea("payments", "manager");
   const r = await generateReminderDrafts(dublinDate());
   revalidatePath("/payments");
   go("/payments?view=reminders", `${r.created} reminder${r.created === 1 ? "" : "s"} drafted`);

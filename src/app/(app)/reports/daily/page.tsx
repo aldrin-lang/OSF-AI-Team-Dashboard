@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireProfile, hasRole } from "@/lib/auth";
+import { requireArea, hasRole } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody, Input, EmptyState } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ const money = (r: Record<string, number> | undefined) =>
     .join(" + ") || "—";
 
 export default async function DailyReportPage(props: PageProps<"/reports/daily">) {
-  const profile = await requireProfile();
+  const profile = await requireArea("reports");
   const sp = await props.searchParams;
   const today = dublinDate();
   const d = typeof sp.date === "string" ? sp.date : "";
