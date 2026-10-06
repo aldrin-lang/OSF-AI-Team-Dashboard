@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
+import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireActor } from "@/lib/server/rbac";
 
@@ -42,4 +43,20 @@ export async function updateMyName(formData: FormData) {
   updateTag("profiles");
   revalidatePath("/settings");
   revalidatePath("/", "layout");
+}
+
+/** Change your own password (signed-in user only). */
+export async function changeMyPassword(formData: FormData) {
+  await requireActor();
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  const back = (msg: string) => redirect(`/settings?msg=${encodeURIComponent(msg)}`);
+  if (password !== confirm) back("The two passwords don't match.");
+  if (password.length < 10 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    back("Use at least 10 characters with letters and numbers.");
+  }
+  const supabase = await getServerSupabase();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) back(`Couldn't change it: ${error.message}`);
+  back("Password changed.");
 }

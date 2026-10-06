@@ -3,7 +3,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody, Input, Label, Select } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { saveNotificationPrefs, updateMyName } from "./actions";
+import { saveNotificationPrefs, updateMyName, changeMyPassword } from "./actions";
 import type { NotificationPreferences } from "@/lib/types";
 
 export const metadata = { title: "Settings · AI Receptionist Ops" };
@@ -16,7 +16,9 @@ const EVENTS: { key: string; label: string; hint: string }[] = [
   { key: "stale_client", label: "A client I manage goes stale / past SLA", hint: "daily scan" },
 ];
 
-export default async function SettingsPage() {
+export default async function SettingsPage(props: PageProps<"/settings">) {
+  const sp = await props.searchParams;
+  const msg = typeof sp.msg === "string" ? sp.msg.slice(0, 200) : "";
   const profile = await requireProfile();
   const supabase = await getServerSupabase();
   const { data } = await supabase
@@ -104,6 +106,29 @@ export default async function SettingsPage() {
               Save preferences
             </Button>
           </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Password</CardTitle>
+        </CardHeader>
+        <CardBody>
+          {msg && <p className="mb-3 rounded-lg bg-fill px-3 py-2 text-sm text-ink-muted">{msg}</p>}
+          <form action={changeMyPassword} className="flex flex-wrap items-end gap-2">
+            <div>
+              <Label>New password</Label>
+              <Input name="password" type="password" autoComplete="new-password" minLength={10} required className="w-56" />
+            </div>
+            <div>
+              <Label>Repeat it</Label>
+              <Input name="confirm" type="password" autoComplete="new-password" minLength={10} required className="w-56" />
+            </div>
+            <Button size="sm" type="submit">
+              Change password
+            </Button>
+          </form>
+          <p className="mt-2 text-xs text-ink-faint">At least 10 characters, with letters and numbers.</p>
         </CardBody>
       </Card>
     </div>

@@ -27,16 +27,36 @@ export async function inviteMember(formData: FormData): Promise<void> {
   }
 
   const admin = getAdminSupabase();
-  const redirectTo = `${process.env.APP_URL ?? ""}/auth/confirm?next=/settings`;
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName },
-    redirectTo,
-  });
-  if (error) redirect(`/admin?msg=${encodeURIComponent(`Invite failed: ${error.message}`)}`);
+  const mode = formData.get("mode") === "password" ? "password" : "invite";
+  let userId: string | undefined;
+
+  if (mode === "password") {
+    // Admin sets the first password; the account is confirmed straight away.
+    // The password is never logged, echoed back or stored anywhere but Supabase Auth.
+    const password = String(formData.get("password") ?? "");
+    if (password.length < 10 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      redirect(`/admin?msg=${encodeURIComponent("Password must be at least 10 characters with letters and numbers.")}`);
+    }
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
+    if (error) redirect(`/admin?msg=${encodeURIComponent(`Couldn't create the account: ${error.message}`)}`);
+    userId = data.user?.id;
+  } else {
+    const redirectTo = `${process.env.APP_URL ?? ""}/auth/confirm?next=/settings`;
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+      data: { full_name: fullName },
+      redirectTo,
+    });
+    if (error) redirect(`/admin?msg=${encodeURIComponent(`Invite failed: ${error.message}`)}`);
+    userId = data.user?.id;
+  }
 
   // The profile row is created by the auth trigger; set role + departments now so
   // the first login already shows the right tabs.
-  const userId = data.user?.id;
   if (userId) {
     await admin.from("profiles").update({ role, ...(fullName ? { full_name: fullName } : {}) }).eq("id", userId);
     await admin.from("profile_departments").delete().eq("profile_id", userId);
@@ -47,7 +67,13 @@ export async function inviteMember(formData: FormData): Promise<void> {
 
   updateTag("profiles");
   revalidatePath("/admin");
-  redirect(`/admin?msg=${encodeURIComponent(`Invite sent to ${email}`)}`);
+  redirect(
+    `/admin?msg=${encodeURIComponent(
+      mode === "password"
+        ? `Account created for ${email}. They can log in now with the password you set (share it privately).`
+        : `Invite sent to ${email}`,
+    )}`,
+  );
 }
 
 export async function setMemberDepartments(formData: FormData) {

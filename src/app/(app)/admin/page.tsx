@@ -21,6 +21,7 @@ import {
   deleteEmailTemplate,
 } from "./actions";
 import { RoleSelect, ActiveToggle } from "./member-controls";
+import { AccessMode } from "./access-mode";
 import type { EmailTemplate, OptionRow, Profile } from "@/lib/types";
 
 export const metadata = { title: "Admin · OSF AI Team Dashboard" };
@@ -107,12 +108,11 @@ export default async function AdminPage(props: PageProps<"/admin">) {
                   ))}
                 </div>
               </div>
-              <SubmitButton size="sm" pendingText="Sending invite…">
-                Send invite
+              <AccessMode />
+              <SubmitButton size="sm" pendingText="Saving…">
+                Give access
               </SubmitButton>
-              <p className="text-xs text-ink-faint">
-                They get an email, set their own password, and only see their departments&apos; tabs.
-              </p>
+              <p className="text-xs text-ink-faint">They only see their departments&apos; tabs.</p>
             </form>
           )}
           <table className="w-full text-sm">
