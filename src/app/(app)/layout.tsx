@@ -9,6 +9,7 @@ import { RealtimeSync } from "@/components/realtime-sync";
 import { MotionProvider } from "@/components/motion-provider";
 import { Logo, LogoWordmark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
+import { Sorcy } from "@/components/sorcy";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -83,6 +84,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
           <MotionProvider>{children}</MotionProvider>
         </main>
+        {profile.role === "admin" && <Sorcy />}
       </div>
     </div>
   );

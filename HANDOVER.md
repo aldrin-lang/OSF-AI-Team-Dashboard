@@ -71,6 +71,9 @@ Migration `20261007000001_departments.sql`. Each person belongs to one or more d
 - Alerts follow departments: payment reminders → Accounts, candidate recommendations → Recruitment, at-risk check-ins → Check-ins people + the client's manager, daily report → anyone with Reports (admins by default).
 - Someone with no department sees a "not added to a department yet" page.
 
+## Sorcy (voice assistant)
+Floating "Sorcy" button bottom-right for **admins only**; click or press **Option/Alt+S** to talk (Chrome speech recognition), or type. `POST /api/sorcy` sends the question to OpenAI (`OPENAI_API_KEY`, model `OPENAI_MODEL`, default gpt-5-mini) with tools that **read** data through the signed-in user's Supabase client (RLS + departments apply), **open pages** and **draw bar charts**. v1 cannot edit anything. Replies are spoken via `POST /api/sorcy/speak` (ElevenLabs: `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID`, model `ELEVENLABS_MODEL` default eleven_flash_v2_5); without those it uses the browser voice. Code: `src/lib/server/sorcy.ts` (tools + prompt), `src/components/sorcy.tsx` (widget). To add an ability: add a tool in `TOOLS` + a case in `runTool`.
+
 ## Daily job
 `/api/cron/daily` (Vercel cron, 07:00 UTC): stale-client nudges, **lead feed heartbeat** (alerts managers/admins if the webhook worked before but nothing arrived in 24h), check-ins due, payment reminder drafts, and yesterday's daily report email. Each step is isolated; the JSON response shows what each did. Vercel Hobby only allows daily crons.
 
