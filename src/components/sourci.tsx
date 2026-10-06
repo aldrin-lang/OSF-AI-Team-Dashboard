@@ -9,6 +9,7 @@ import type {
   SourciCard,
   SourciChart,
   SourciConfirm,
+  SourciDashboard,
   SourciPipeline,
   SourciReply,
   SourciTurn,
@@ -60,12 +61,14 @@ export interface SourciDemo {
   pipeline?: SourciPipeline;
   confirm?: SourciConfirm;
   chart?: SourciChart;
+  dashboard?: SourciDashboard;
 }
 
 export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const [panelOpen, setPanelOpen] = useState(Boolean(demo && (demo.card || demo.pipeline || demo.confirm || demo.chart)));
+  const [panelOpen, setPanelOpen] = useState(Boolean(demo && (demo.card || demo.pipeline || demo.confirm || demo.chart || demo.dashboard)));
+  const [dash, setDash] = useState<SourciDashboard | null>(demo?.dashboard ?? null);
   const [bubble, setBubble] = useState(Boolean(demo));
   const [typing, setTyping] = useState(false);
   const [status, setStatus] = useState<Status>("ready");
@@ -82,6 +85,13 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const history = useRef<SourciTurn[]>([]);
   const recRef = useRef<Rec | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Conversation mode: after Sourci answers a spoken question, it listens again.
+  const convoRef = useRef(false);
+  const listenRef = useRef<(() => void) | null>(null);
+  const afterSpeak = useCallback(() => {
+    setStatus("ready");
+    if (convoRef.current) setTimeout(() => listenRef.current?.(), 350);
+  }, []);
 
   const stopSpeaking = useCallback(() => {
     audioRef.current?.pause();
@@ -91,7 +101,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 
   const speak = useCallback(
     async (text: string) => {
-      if (muted || !text) return setStatus("ready");
+      if (muted || !text) return afterSpeak();
       setStatus("speaking");
       try {
         const res = await fetch("/api/sourci/speak", {
@@ -105,7 +115,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
           audioRef.current = a;
           a.onended = () => {
             URL.revokeObjectURL(url);
-            setStatus("ready");
+            afterSpeak();
           };
           await a.play();
           return;
@@ -114,15 +124,15 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         /* fall back to the browser voice */
       }
       const synth = window.speechSynthesis;
-      if (!synth) return setStatus("ready");
+      if (!synth) return afterSpeak();
       const u = new SpeechSynthesisUtterance(text);
       const voice = synth.getVoices().find((v) => /en-(IE|GB)/i.test(v.lang));
       if (voice) u.voice = voice;
       u.rate = 1.05;
-      u.onend = () => setStatus("ready");
+      u.onend = () => afterSpeak();
       synth.speak(u);
     },
-    [muted],
+    [afterSpeak, muted],
   );
 
   const remember = (role: SourciTurn["role"], content: string) => {
@@ -175,6 +185,11 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       // A spoken yes/no answers the pending confirmation directly.
       if (pending && YES.test(q)) return void confirm();
       if (pending && NO.test(q)) return cancel();
+      if (/^\s*(thanks|thank you|cheers|that'?s all|that is all|stop|bye|goodbye|nothing)\b/i.test(q) && q.split(/\s+/).length <= 5) {
+        convoRef.current = false;
+        setReply("Anytime.");
+        return void speak("Anytime.");
+      }
 
       setReply("");
       setDone(null);
@@ -199,15 +214,18 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         const nextCard = data.actions.find((a) => a.type === "card");
         const nextPipe = data.actions.find((a) => a.type === "pipeline");
         const nextConfirm = data.actions.find((a) => a.type === "confirm");
+        const nextDash = data.actions.find((a) => a.type === "dashboard");
         for (const a of data.actions) if (a.type === "navigate") nav = a.href;
         setChart(nextChart?.type === "chart" ? nextChart.chart : null);
         setCard(nextCard?.type === "card" ? nextCard.card : null);
         setPipeline(nextPipe?.type === "pipeline" ? nextPipe.pipeline : null);
         setPending(nextConfirm?.type === "confirm" ? nextConfirm.confirm : null);
-        shown = Boolean(nextChart || nextCard || nextPipe || nextConfirm);
+        setDash(nextDash?.type === "dashboard" ? nextDash.dashboard : null);
+        shown = Boolean(nextChart || nextCard || nextPipe || nextConfirm || nextDash);
         setReply(data.reply);
         setBubble(true);
         if (shown) setPanelOpen(true);
+        else setPanelOpen(false);
         if (nav) router.push(nav);
         void speak(data.reply);
       } catch {
@@ -250,8 +268,13 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     };
     rec.onend = () => {
       recRef.current = null;
-      if (finalText.trim()) void ask(finalText);
-      else setStatus((s) => (s === "listening" ? "ready" : s));
+      if (finalText.trim()) {
+        convoRef.current = true;
+        void ask(finalText);
+      } else {
+        convoRef.current = false; // silence ends the conversation
+        setStatus((s) => (s === "listening" ? "ready" : s));
+      }
     };
     recRef.current = rec;
     setHeard("");
@@ -259,7 +282,12 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     rec.start();
   }, [ask, status, stopSpeaking]);
 
+  useEffect(() => {
+    listenRef.current = listen;
+  }, [listen]);
+
   const close = useCallback(() => {
+    convoRef.current = false;
     recRef.current?.stop();
     stopSpeaking();
     setStatus((st) => (st === "working" ? st : "ready"));
@@ -270,8 +298,12 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 
   /** Orb click / ⌥S: start listening, or stop whatever Sourci is doing. */
   const toggle = useCallback(() => {
-    if (status === "listening") return recRef.current?.stop();
+    if (status === "listening") {
+      convoRef.current = false;
+      return recRef.current?.stop();
+    }
     if (status === "speaking") {
+      convoRef.current = false;
       stopSpeaking();
       return setStatus("ready");
     }
@@ -292,7 +324,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     return () => window.removeEventListener("keydown", onKey);
   }, [bubble, close, panelOpen, toggle]);
 
-  const hasPanel = Boolean(chart || card || pipeline || pending || done);
+  const hasPanel = Boolean(dash || chart || card || pipeline || pending || done);
   const caption = {
     ready: "Click the orb or press ⌥S to talk",
     listening: "Listening… click the orb to stop",
@@ -302,34 +334,45 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 
   return (
     <>
-      {/* side panel: only when there is something to look at */}
+      {/* pop-up dashboard in the middle of the CRM; you can keep talking while it's open */}
       {panelOpen && hasPanel && (
-        <aside
-          className="sourci-anim fixed inset-y-0 right-0 z-[60] flex w-full flex-col border-l border-cyan-300/15 bg-[#05090f]/95 text-slate-200 shadow-[-20px_0_60px_-20px_rgba(0,0,0,0.6)] backdrop-blur sm:w-[440px]"
-          style={{ position: "fixed", animation: "sourci-slide .25s ease-out" }}
-          aria-label="Sourci results"
-        >
-          <div className="flex items-center gap-2 border-b border-cyan-300/10 px-4 py-3">
-            <Orb size={18} />
-            <p className="font-mono text-[11px] tracking-[0.25em] text-cyan-200">SOURCI</p>
-            <p className="ml-2 min-w-0 flex-1 truncate font-mono text-[11px] text-slate-500">{heard ? `“${heard}”` : ""}</p>
-            <button onClick={() => setPanelOpen(false)} className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Close panel">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-            {pipeline && <PipelinePanel p={pipeline} />}
-            {card && <CardPanel c={card} />}
-            {chart && <ChartPanel c={chart} />}
-            {pending && <ConfirmPanel c={pending} onYes={() => void confirm()} onNo={cancel} busy={status === "working"} />}
-            {done && <DonePanel d={done} onOpen={(href) => router.push(href)} />}
-          </div>
-        </aside>
+        <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ position: "fixed" }}>
+          <section
+            className="sourci-anim pointer-events-auto flex max-h-[80vh] w-[min(94vw,880px)] flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#05090f]/95 text-slate-200 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),0_0_60px_-30px_rgba(34,211,238,0.6)] backdrop-blur"
+            style={{ animation: "sourci-in .25s ease-out" }}
+            aria-label="Sourci results"
+          >
+            <div className="flex items-center gap-2 border-b border-cyan-300/10 px-4 py-3">
+              <Orb size={18} pulse={status === "listening"} glow={status !== "ready"} />
+              <p className="font-mono text-[11px] tracking-[0.25em] text-cyan-200">SOURCI</p>
+              <p className="ml-2 min-w-0 flex-1 truncate font-mono text-[11px] text-slate-500">{heard ? `“${heard}”` : ""}</p>
+              <button onClick={() => setPanelOpen(false)} className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+              {dash && (
+                <DashboardPanel
+                  d={dash}
+                  onOpen={(href) => {
+                    router.push(href);
+                    setPanelOpen(false);
+                  }}
+                />
+              )}
+              {pipeline && <PipelinePanel p={pipeline} />}
+              {card && <CardPanel c={card} />}
+              {chart && <ChartPanel c={chart} />}
+              {pending && <ConfirmPanel c={pending} onYes={() => void confirm()} onNo={cancel} busy={status === "working"} />}
+              {done && <DonePanel d={done} onOpen={(href) => router.push(href)} />}
+            </div>
+          </section>
+        </div>
       )}
 
       {/* bubble + orb in the corner */}
       <div
-        className={cn("fixed bottom-5 z-[61] flex flex-col items-end gap-2", panelOpen && hasPanel ? "right-5 sm:right-[460px]" : "right-5")}
+        className="fixed bottom-5 right-5 z-[61] flex flex-col items-end gap-2"
         style={{ position: "fixed" }}
       >
         {bubble && (
@@ -366,6 +409,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
                   e.preventDefault();
                   const t = typed;
                   setTyped("");
+                  convoRef.current = false;
                   void ask(t);
                 }}
               >
@@ -520,7 +564,7 @@ function CardPanel({ c }: { c: SourciCard }) {
 function PipelinePanel({ p }: { p: SourciPipeline }) {
   const max = Math.max(1, ...p.stages.map((s) => s.value));
   return (
-    <>
+    <div className="grid gap-4 md:grid-cols-2">
       <Panel>
         <Eyebrow>PIPELINE · NOW</Eyebrow>
         <p className="mt-2 flex items-baseline gap-3">
@@ -558,7 +602,75 @@ function PipelinePanel({ p }: { p: SourciPipeline }) {
           </ul>
         )}
       </Panel>
-    </>
+    </div>
+  );
+}
+
+function DashboardPanel({ d, onOpen }: { d: SourciDashboard; onOpen: (href: string) => void }) {
+  const max = Math.max(1, ...(d.bars ?? []).map((b) => b.value));
+  return (
+    <Panel>
+      <Eyebrow>{d.eyebrow}</Eyebrow>
+      <h3 className="mt-1 text-2xl font-bold text-white">{d.title}</h3>
+      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+        {d.stats.map((st) => (
+          <div key={st.label} className="rounded-lg bg-white/[0.04] px-3 py-2.5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">{st.label}</p>
+            <p className={cn("mt-1 text-lg font-bold tabular-nums", st.tone === "alert" ? "text-orange-300" : st.tone === "good" ? "text-emerald-300" : "text-white")}>
+              {st.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      {!!d.bars?.length && (
+        <div className="mt-4 space-y-1.5">
+          {d.bars.slice(0, 6).map((b) => (
+            <div key={b.label} title={`${b.label}: ${b.value}`}>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">{b.label}</span>
+                <span className="font-semibold tabular-nums text-slate-100">{b.value}</span>
+              </div>
+              <div className="mt-1 h-2 rounded bg-white/[0.06]">
+                <div className="h-2 rounded bg-cyan-300" style={{ width: `${Math.max(2, (b.value / max) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {d.list && d.list.items.length > 0 && (
+        <div className="mt-4">
+          <Eyebrow tone={d.list.items.some((x) => x.tone === "alert") ? "red" : "cyan"}>
+            {d.list.title.toUpperCase()} · {d.list.items.length}
+          </Eyebrow>
+          <ul className="mt-2 space-y-1.5">
+            {d.list.items.map((it, i) => (
+              <li key={i}>
+                <button
+                  disabled={!it.href}
+                  onClick={() => it.href && onOpen(it.href)}
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition",
+                    it.tone === "alert" ? "border-rose-400/20 bg-rose-500/[0.07] hover:bg-rose-500/[0.14]" : "border-white/5 bg-white/[0.03] hover:bg-white/[0.07]",
+                  )}
+                >
+                  <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", it.tone === "alert" ? "bg-orange-400" : "bg-cyan-300/70")} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-slate-100">{it.title}</span>
+                    {it.detail && <span className="block truncate text-xs text-slate-400">{it.detail}</span>}
+                  </span>
+                  {it.href && <span className="self-center text-xs text-cyan-300">Open →</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {d.link && (
+        <button onClick={() => onOpen(d.link!.href)} className="mt-4 rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-[#04080d] hover:bg-cyan-200">
+          {d.link.label} →
+        </button>
+      )}
+    </Panel>
   );
 }
 

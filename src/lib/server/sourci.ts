@@ -6,7 +6,7 @@ import { OPEN_STATUSES } from "@/lib/leads-ingest";
 import { CANDIDATE_STATUS, LEAD_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
-import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
+import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashboard, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
 
 /**
  * Sourci — the dashboard voice assistant. Reads data, opens pages, draws charts
@@ -267,8 +267,10 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   },
 ];
 
-type ToolOut = { data: unknown; actions?: SourciAction[] };
+/** `say` = a ready one-sentence spoken reply, so simple questions skip a second AI round. */
+type ToolOut = { data: unknown; actions?: SourciAction[]; say?: string };
 const clean = (v: unknown, n = 200) => String(v ?? "").replace(/[%,()*]/g, " ").trim().slice(0, n);
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 async function runTool(name: string, args: Record<string, unknown>, areas: Area[]): Promise<ToolOut> {
   const db = await getServerSupabase();
@@ -281,30 +283,56 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const p = PAGES[String(args.page)];
       if (!p) return { data: { error: "Unknown page" } };
       if (p.area) need(p.area);
-      return { data: { opened: p.label }, actions: [{ type: "navigate", href: p.href, label: p.label }] };
+      return { data: { opened: p.label }, actions: [{ type: "navigate", href: p.href, label: p.label }], say: `Here's ${p.label}.` };
     }
 
     case "leads_summary": {
       need("leads");
       const per = periodBounds(asPeriod(args.period));
-      const [{ data: rows }, { data: open }, { data: setters }] = await Promise.all([
+      const [{ data: rows }, { data: open }, { data: setters }, { data: latest }] = await Promise.all([
         db.from("leads").select("service, source, setter_id").eq("historical", false).gte("received_at", per.start).lt("received_at", per.end).limit(5000),
         db.from("leads").select("status, setter_id").in("status", [...OPEN_STATUSES]).limit(10000),
         db.from("setters").select("id, name"),
+        db.from("leads").select("id, name, service, source, received_at").eq("historical", false).gte("received_at", per.start).lt("received_at", per.end).order("received_at", { ascending: false }).limit(6),
       ]);
       const names = new Map((setters ?? []).map((s) => [s.id as string, s.name as string]));
       const r = rows ?? [];
+      const byService = countBy(r, (x) => SERVICE_LABEL[x.service as string] ?? x.service);
+      const unassigned = (open ?? []).filter((x) => !x.setter_id).length;
+      const untouched = (open ?? []).filter((x) => x.status === "new").length;
+      const dashboard: SourciDashboard = {
+        eyebrow: `LEADS · ${per.label.toUpperCase()}`,
+        title: "Leads",
+        stats: [
+          { label: `New ${per.label}`, value: String(r.length) },
+          { label: "Open now", value: String(open?.length ?? 0) },
+          { label: "Not touched", value: String(untouched), tone: untouched ? "alert" : "default" },
+          { label: "Unassigned", value: String(unassigned), tone: unassigned ? "alert" : "good" },
+        ],
+        bars: byService,
+        list: {
+          title: "Latest",
+          items: (latest ?? []).map((l) => ({
+            title: l.name || "Unnamed lead",
+            detail: [SERVICE_LABEL[l.service as string] ?? l.service, l.source, String(l.received_at).slice(0, 10)].filter(Boolean).join(" · "),
+            href: `/leads/${l.id}`,
+          })),
+        },
+        link: { href: "/leads", label: "Open Leads" },
+      };
       return {
         data: {
           period: per.label,
           new_leads: r.length,
-          by_service: countBy(r, (x) => SERVICE_LABEL[x.service as string] ?? x.service),
+          by_service: byService,
           by_source: countBy(r, (x) => x.source as string).slice(0, 6),
           by_setter: countBy(r, (x) => (x.setter_id ? names.get(x.setter_id as string) : "Unassigned")),
           open_now: open?.length ?? 0,
-          untouched_now: (open ?? []).filter((x) => x.status === "new").length,
-          unassigned_now: (open ?? []).filter((x) => !x.setter_id).length,
+          untouched_now: untouched,
+          unassigned_now: unassigned,
         },
+        actions: [{ type: "dashboard", dashboard }],
+        say: `${plural(r.length, "new lead")} ${per.label}${unassigned ? `, and ${unassigned} still unassigned` : ""}.`,
       };
     }
 
@@ -325,19 +353,20 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
         source: l.source,
         received: String(l.received_at).slice(0, 10),
       }));
-      const actions: SourciAction[] =
-        data && data.length === 1 ? [{ type: "navigate", href: `/leads/${data[0].id}`, label: String(data[0].name || "Lead") }] : [];
-      return { data: { matches }, actions };
+      if (data && data.length === 1) {
+        return { data: { matches }, actions: [{ type: "navigate", href: `/leads/${data[0].id}`, label: String(data[0].name || "Lead") }], say: `Here's ${data[0].name || "that lead"}.` };
+      }
+      return { data: { matches } };
     }
 
     case "payments_summary": {
       need("payments");
       const today = dublinDate();
       const [{ data: inv }, { data: drafts }] = await Promise.all([
-        db.from("invoices").select("number, amount, currency, due_on, status, clients(name)").eq("status", "open").order("due_on").limit(500),
+        db.from("invoices").select("id, number, amount, currency, due_on, status, clients(name)").eq("status", "open").order("due_on").limit(500),
         db.from("payment_reminders").select("id").eq("status", "draft"),
       ]);
-      const rows = (inv ?? []) as unknown as { number: string; amount: number; currency: string; due_on: string; clients: { name: string } | null }[];
+      const rows = (inv ?? []) as unknown as { id: string; number: string; amount: number; currency: string; due_on: string; clients: { name: string } | null }[];
       const sum = (list: typeof rows) => {
         const m: Record<string, number> = {};
         for (const i of list) m[i.currency] = (m[i.currency] ?? 0) + Number(i.amount);
@@ -345,20 +374,40 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       };
       const overdue = rows.filter((i) => i.due_on < today);
       const soon = rows.filter((i) => i.due_on >= today && i.due_on <= addDays(today, 7));
+      const daysLate = (d: string) => Math.round((Date.parse(today) - Date.parse(d)) / 86400000);
+      const dashboard: SourciDashboard = {
+        eyebrow: "PAYMENTS · NOW",
+        title: "Payments",
+        stats: [
+          { label: "Outstanding", value: sum(rows) },
+          { label: "Overdue", value: overdue.length ? `${overdue.length} · ${sum(overdue)}` : "0", tone: overdue.length ? "alert" : "good" },
+          { label: "Due in 7 days", value: soon.length ? `${soon.length} · ${sum(soon)}` : "0" },
+          { label: "Reminders to send", value: String(drafts?.length ?? 0), tone: drafts?.length ? "alert" : "default" },
+        ],
+        list: {
+          title: overdue.length ? "Overdue" : "Coming up",
+          items: (overdue.length ? overdue : soon).slice(0, 8).map((i) => ({
+            title: `${i.clients?.name ?? "Client"} · ${i.number}`,
+            detail: `${formatMoney(Number(i.amount), i.currency)} · ${i.due_on < today ? `${plural(daysLate(i.due_on), "day")} late` : `due ${i.due_on}`}`,
+            href: `/payments/${i.id}`,
+            tone: i.due_on < today ? "alert" : "default",
+          })),
+        },
+        link: { href: drafts?.length ? "/payments?view=reminders" : "/payments", label: drafts?.length ? "Open reminders to send" : "Open Payments" },
+      };
       return {
         data: {
           outstanding_total: sum(rows),
           open_invoices: rows.length,
           overdue_total: sum(overdue),
-          overdue: overdue.slice(0, 10).map((i) => ({
-            client: i.clients?.name,
-            invoice: i.number,
-            amount: formatMoney(Number(i.amount), i.currency),
-            days_late: Math.round((Date.parse(today) - Date.parse(i.due_on)) / 86400000),
-          })),
+          overdue: overdue.slice(0, 10).map((i) => ({ client: i.clients?.name, invoice: i.number, amount: formatMoney(Number(i.amount), i.currency), days_late: daysLate(i.due_on) })),
           due_next_7_days: soon.map((i) => ({ client: i.clients?.name, invoice: i.number, amount: formatMoney(Number(i.amount), i.currency), due: i.due_on })),
           reminder_drafts_waiting: drafts?.length ?? 0,
         },
+        actions: [{ type: "dashboard", dashboard }],
+        say: overdue.length
+          ? `${plural(overdue.length, "invoice")} overdue, ${sum(overdue)} in total. The details are on screen.`
+          : `Nothing overdue. ${sum(rows)} outstanding in total.`,
       };
     }
 
@@ -366,19 +415,38 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       need("checkins");
       const { data } = await db
         .from("checkins")
-        .select("status, mood, kind, contact_name, ai_summary, clients(name)")
+        .select("status, mood, kind, contact_name, ai_summary, client_id, clients(name)")
         .in("status", ["due", "sent", "replied"])
         .limit(500);
-      const rows = (data ?? []) as unknown as { status: string; mood: string | null; kind: string; contact_name: string | null; ai_summary: string | null; clients: { name: string } | null }[];
+      const rows = (data ?? []) as unknown as { status: string; mood: string | null; kind: string; contact_name: string | null; ai_summary: string | null; client_id: string; clients: { name: string } | null }[];
+      const atRisk = rows.filter((r) => r.mood === "at_risk");
+      const toSend = rows.filter((r) => r.status === "due").length;
+      const dashboard: SourciDashboard = {
+        eyebrow: "CHECK-INS · NOW",
+        title: "Check-ins",
+        stats: [
+          { label: "To send", value: String(toSend), tone: toSend ? "alert" : "default" },
+          { label: "Awaiting reply", value: String(rows.filter((r) => r.status === "sent").length) },
+          { label: "Replies to review", value: String(rows.filter((r) => r.status === "replied").length) },
+          { label: "At risk", value: String(atRisk.length), tone: atRisk.length ? "alert" : "good" },
+        ],
+        list: atRisk.length
+          ? {
+              title: "At risk",
+              items: atRisk.slice(0, 6).map((r) => ({ title: r.clients?.name ?? "Client", detail: r.ai_summary ?? "Unhappy reply", href: `/clients/${r.client_id}`, tone: "alert" as const })),
+            }
+          : undefined,
+        link: { href: atRisk.length ? "/check-ins?view=attention" : "/check-ins", label: "Open Check-ins" },
+      };
       return {
         data: {
-          to_send: rows.filter((r) => r.status === "due").length,
+          to_send: toSend,
           awaiting_reply: rows.filter((r) => r.status === "sent").length,
           replies_to_review: rows.filter((r) => r.status === "replied").length,
-          at_risk: rows
-            .filter((r) => r.mood === "at_risk")
-            .map((r) => ({ client: r.clients?.name, who: r.kind === "va" ? `VA ${r.contact_name ?? ""}`.trim() : "client", summary: r.ai_summary })),
+          at_risk: atRisk.map((r) => ({ client: r.clients?.name, who: r.kind === "va" ? `VA ${r.contact_name ?? ""}`.trim() : "client", summary: r.ai_summary })),
         },
+        actions: [{ type: "dashboard", dashboard }],
+        say: `${plural(toSend, "check-in")} to send${atRisk.length ? `, and ${atRisk.length} at risk` : ""}.`,
       };
     }
 
@@ -386,22 +454,34 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       need("candidates");
       const per = periodBounds(asPeriod(args.period));
       const [{ data: recent }, { data: all }] = await Promise.all([
-        db.from("candidates").select("full_name, ai_recommended_role, ai_score, status").gte("created_at", per.start).lt("created_at", per.end).limit(1000),
+        db.from("candidates").select("id, full_name, ai_recommended_role, ai_score, status").gte("created_at", per.start).lt("created_at", per.end).limit(1000),
         db.from("candidates").select("status").limit(5000),
       ]);
       const r = recent ?? [];
+      const top = r.filter((c) => c.ai_score != null).sort((a, b) => (b.ai_score as number) - (a.ai_score as number)).slice(0, 5);
+      const toReview = (all ?? []).filter((c) => c.status === "new" || c.status === "screened").length;
+      const dashboard: SourciDashboard = {
+        eyebrow: `CANDIDATES · ${per.label.toUpperCase()}`,
+        title: "Candidates",
+        stats: [
+          { label: `New ${per.label}`, value: String(r.length) },
+          { label: "To review", value: String(toReview), tone: toReview ? "alert" : "default" },
+          { label: "Shortlisted / interview", value: String((all ?? []).filter((c) => c.status === "shortlisted" || c.status === "interview").length) },
+        ],
+        list: top.length
+          ? { title: "Top matches", items: top.map((c) => ({ title: `${c.full_name} · ${c.ai_score}%`, detail: c.ai_recommended_role ?? undefined, href: `/candidates/${c.id}` })) }
+          : undefined,
+        link: { href: "/candidates", label: "Open Candidates" },
+      };
       return {
         data: {
           period: per.label,
           new_candidates: r.length,
-          to_review: (all ?? []).filter((c) => c.status === "new" || c.status === "screened").length,
-          shortlisted_or_interview: (all ?? []).filter((c) => c.status === "shortlisted" || c.status === "interview").length,
-          top: r
-            .filter((c) => c.ai_score != null)
-            .sort((a, b) => (b.ai_score as number) - (a.ai_score as number))
-            .slice(0, 3)
-            .map((c) => ({ name: c.full_name, role: c.ai_recommended_role, score: c.ai_score })),
+          to_review: toReview,
+          top: top.slice(0, 3).map((c) => ({ name: c.full_name, role: c.ai_recommended_role, score: c.ai_score })),
         },
+        actions: [{ type: "dashboard", dashboard }],
+        say: `${plural(r.length, "new candidate")} ${per.label}, ${toReview} to review.`,
       };
     }
 
@@ -409,17 +489,35 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       need("clients");
       const [{ data: clients }, { data: concerns }] = await Promise.all([
         db.from("clients").select("status").limit(5000),
-        db.from("concerns").select("severity").neq("status", "resolved").limit(5000),
+        db.from("concerns").select("id, title, severity, client_id, clients(name)").neq("status", "resolved").order("raised_at", { ascending: false }).limit(200),
       ]);
       const c = clients ?? [];
+      const cs = (concerns ?? []) as unknown as { id: string; title: string; severity: string; client_id: string; clients: { name: string } | null }[];
+      const urgent = cs.filter((x) => x.severity === "urgent" || x.severity === "high");
+      const dashboard: SourciDashboard = {
+        eyebrow: "CLIENTS · NOW",
+        title: "Clients",
+        stats: [
+          { label: "Onboarding", value: String(c.filter((x) => x.status === "active").length) },
+          { label: "Live", value: String(c.filter((x) => x.status === "live").length), tone: "good" },
+          { label: "Paused", value: String(c.filter((x) => x.status === "paused").length) },
+          { label: "Open concerns", value: String(cs.length), tone: urgent.length ? "alert" : "default" },
+        ],
+        list: cs.length
+          ? { title: "Open concerns", items: cs.slice(0, 6).map((x) => ({ title: x.clients?.name ?? "Client", detail: `${x.title} (${x.severity})`, href: `/concerns/${x.id}`, tone: urgent.includes(x) ? ("alert" as const) : ("default" as const) })) }
+          : undefined,
+        link: { href: "/", label: "Open Clients" },
+      };
       return {
         data: {
           onboarding: c.filter((x) => x.status === "active").length,
           live: c.filter((x) => x.status === "live").length,
           paused: c.filter((x) => x.status === "paused").length,
-          open_concerns: concerns?.length ?? 0,
-          urgent_or_high_concerns: (concerns ?? []).filter((x) => x.severity === "urgent" || x.severity === "high").length,
+          open_concerns: cs.length,
+          urgent_or_high_concerns: urgent.length,
         },
+        actions: [{ type: "dashboard", dashboard }],
+        say: `${c.filter((x) => x.status === "live").length} live and ${c.filter((x) => x.status === "active").length} onboarding${cs.length ? `, with ${plural(cs.length, "open concern")}` : ""}.`,
       };
     }
 
@@ -514,7 +612,11 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
         attention.push({ title: r.clients?.name ?? "Client", detail: `At risk: ${(r.ai_summary ?? "check-in reply").slice(0, 80)}` });
       }
       const pipeline: SourciPipeline = { total: leads.length, label: "open leads", stages, attention: attention.slice(0, 6) };
-      return { data: { open_leads: leads.length, by_status: stages, needs_attention: attention.slice(0, 6) }, actions: [{ type: "pipeline", pipeline }] };
+      return {
+        data: { open_leads: leads.length, by_status: stages, needs_attention: attention.slice(0, 6) },
+        actions: [{ type: "pipeline", pipeline }],
+        say: `You've got ${plural(leads.length, "open lead")}${attention.length ? `, and ${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} attention` : ", nothing urgent"}.`,
+      };
     }
 
     case "propose_update_lead": {
@@ -719,7 +821,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
 
     case "show_chart": {
       const chart = await buildChart(String(args.metric), asPeriod(args.period), areas, db);
-      return { data: { shown: chart.title, bars: chart.bars }, actions: [{ type: "chart", chart }] };
+      return { data: { shown: chart.title, bars: chart.bars }, actions: [{ type: "chart", chart }], say: `Here's ${chart.title.toLowerCase()}.` };
     }
   }
   return { data: { error: "Unknown tool" } };
@@ -729,9 +831,20 @@ type Db = Awaited<ReturnType<typeof getServerSupabase>>;
 
 /** A proposal is never executed here: it is shown to the user, who confirms in the widget. */
 function proposeOut(confirm: SourciConfirm): ToolOut {
+  const verb: Record<string, string> = {
+    update_lead: "Shall I update it?",
+    create_client: "Want me to create it?",
+    add_note: "Shall I add it?",
+    create_task: "Shall I add it?",
+    invoice_status: "Shall I go ahead?",
+    candidate_status: "Shall I update it?",
+    send_email: "Want me to send it?",
+    notify_team: "Shall I send it?",
+  };
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
     actions: [{ type: "confirm", confirm }],
+    say: `Here's the ${confirm.title.toLowerCase()} on screen. ${verb[confirm.proposal.kind] ?? "Shall I go ahead?"}`,
   };
 }
 
@@ -834,12 +947,12 @@ function systemPrompt(name: string, path: string) {
   return `You are Sourci, the AI teammate built into OutsourceForce's team dashboard (AI receptionists and Philippine virtual assistants for small businesses in the UK, Ireland, Australia, New Zealand and Canada). You are talking to ${name}. You can look things up, show things on screen and prepare changes.
 
 Your answers are SPOKEN aloud, so:
-- Reply in one or two short sentences, warm and natural, like a sharp colleague. No markdown, no lists, no emojis, no URLs.
+- Reply in ONE short sentence (two at most), warm and natural, like a sharp colleague. The details are shown on screen, so never read them out. No markdown, no lists, no emojis, no URLs.
 - Round numbers and amounts ("about twelve hundred pounds"). Never read out long lists; give the top two or three.
 
 How to work:
 - Use the tools for every fact. Never invent data. If something isn't available, say so briefly.
-- Show, don't just tell: open the right page (open_page), draw a chart (show_chart), show a card (show_card) or the pipeline (pipeline_overview).
+- Show, don't just tell. For payments, leads, check-ins, candidates or clients ALWAYS call the matching *_summary tool: it puts a live dashboard on screen. Use open_page only when they ask to go to a page. Charts: show_chart. Pipeline: pipeline_overview.
 - "Report / brief for my meeting with X": call meeting_brief, then show_card with eyebrow "MEETING BRIEF · AUTO-GENERATED", facts like Last touchpoint, Account, Stage, Open invoices; 2-4 talking points as bullets; and heads_up = the one thing they'll probably bring up. Then say "Your brief for X is ready" plus the heads-up in one sentence.
 - "How's our pipeline": call pipeline_overview, then summarise in one sentence (total and how many need attention).
 - "Graph for each department": show_chart department_overview.
@@ -866,7 +979,7 @@ export async function askSourci(input: { text: string; path: string; history: So
       model: SOURCI_MODEL,
       messages,
       tools: TOOLS,
-      reasoning_effort: "low",
+      reasoning_effort: "minimal",
     });
     const msg = res.choices[0]?.message;
     if (!msg) break;
@@ -878,15 +991,28 @@ export async function askSourci(input: { text: string; path: string; history: So
       return { reply: (msg.content ?? "").trim() || "Done.", actions: kept };
     }
     messages.push(msg);
-    for (const call of calls) {
-      let out: ToolOut;
-      try {
-        out = await runTool(call.function.name, JSON.parse(call.function.arguments || "{}"), areas);
-      } catch (e) {
-        out = { data: { error: e instanceof Error ? e.message : "Tool failed" } };
-      }
+    const outs = await Promise.all(
+      calls.map(async (call) => {
+        try {
+          return await runTool(call.function.name, JSON.parse(call.function.arguments || "{}"), areas);
+        } catch (e) {
+          return { data: { error: e instanceof Error ? e.message : "Tool failed" } } as ToolOut;
+        }
+      }),
+    );
+    outs.forEach((out, i) => {
       if (out.actions) actions.push(...out.actions);
-      messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(out.data).slice(0, 8000) });
+      messages.push({ role: "tool", tool_call_id: calls[i].id, content: JSON.stringify(out.data).slice(0, 8000) });
+    });
+    // Fast path: every tool already gave a ready sentence (and something on screen), so answer
+    // now instead of a second AI round. Prefer the data tools' sentence over "Here's <page>".
+    if (outs.every((o) => o.say)) {
+      const says = outs.filter((o, i) => calls[i].function.name !== "open_page").map((o) => o.say as string);
+      const reply = (says.length ? says : outs.map((o) => o.say as string)).join(" ");
+      const lastConfirm = [...actions].reverse().find((a) => a.type === "confirm");
+      const kept: SourciAction[] = actions.filter((a) => a.type !== "confirm");
+      if (lastConfirm) kept.push(lastConfirm);
+      return { reply, actions: kept };
     }
   }
   return { reply: "Sorry, that took too many steps. Could you ask it a simpler way?", actions };

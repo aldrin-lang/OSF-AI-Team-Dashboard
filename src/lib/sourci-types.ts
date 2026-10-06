@@ -23,6 +23,16 @@ export interface SourciPipeline {
   attention: { title: string; detail: string }[];
 }
 
+/** Floating mini-dashboard (payments, leads, check-ins, ...). Rows/buttons can link to pages. */
+export interface SourciDashboard {
+  eyebrow: string;
+  title: string;
+  stats: { label: string; value: string; tone?: "default" | "alert" | "good" }[];
+  list?: { title: string; items: { title: string; detail?: string; href?: string; tone?: "alert" | "default" }[] };
+  bars?: { label: string; value: number }[];
+  link?: { href: string; label: string };
+}
+
 /** A change Sourci wants to make. Executed only after the user confirms. */
 export type SourciProposal =
   | { kind: "update_lead"; leadId: string; leadName: string; status?: string; setterId?: string | null; setterName?: string; note?: string }
@@ -45,6 +55,7 @@ export type SourciAction =
   | { type: "chart"; chart: SourciChart }
   | { type: "card"; card: SourciCard }
   | { type: "pipeline"; pipeline: SourciPipeline }
+  | { type: "dashboard"; dashboard: SourciDashboard }
   | { type: "confirm"; confirm: SourciConfirm }
   | { type: "done"; stamp: string; title: string; detail?: string; href?: string };
 
