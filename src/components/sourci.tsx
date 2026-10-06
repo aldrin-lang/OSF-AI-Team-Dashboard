@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Mic, Send, Volume2, VolumeX, X } from "lucide-react";
+import { Keyboard, Send, Volume2, VolumeX, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   SourciAction,
@@ -48,7 +48,11 @@ type Done = Extract<SourciAction, { type: "done" }>;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|confirm(ed)?|do it|go ahead|send it|create it|please do|correct)\b/i;
 const NO = /^\s*(no|nope|cancel|stop|don'?t|never ?mind|not now)\b/i;
 
-/** Sourci: the team's AI, built into the CRM. Opens full screen; ⌥S to talk, Esc to close. */
+/**
+ * Sourci: the team's AI, built into the CRM. A glowing orb in the corner:
+ * click (or ⌥S) to talk, click again to stop. Short answers show in a bubble;
+ * charts, briefs and confirmations open a side panel. Esc closes.
+ */
 export interface SourciDemo {
   heard?: string;
   reply?: string;
@@ -61,7 +65,9 @@ export interface SourciDemo {
 export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const [open, setOpen] = useState(Boolean(demo));
+  const [panelOpen, setPanelOpen] = useState(Boolean(demo && (demo.card || demo.pipeline || demo.confirm || demo.chart)));
+  const [bubble, setBubble] = useState(Boolean(demo));
+  const [typing, setTyping] = useState(false);
   const [status, setStatus] = useState<Status>("ready");
   const [heard, setHeard] = useState(demo?.heard ?? "");
   const [reply, setReply] = useState(demo?.reply ?? "");
@@ -200,10 +206,9 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         setPending(nextConfirm?.type === "confirm" ? nextConfirm.confirm : null);
         shown = Boolean(nextChart || nextCard || nextPipe || nextConfirm);
         setReply(data.reply);
-        if (nav) {
-          router.push(nav);
-          if (!shown) setOpen(false); // just a page change: show the page
-        }
+        setBubble(true);
+        if (shown) setPanelOpen(true);
+        if (nav) router.push(nav);
         void speak(data.reply);
       } catch {
         setError("Couldn't reach Sourci. Check your connection.");
@@ -214,7 +219,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   );
 
   const listen = useCallback(() => {
-    setOpen(true);
+    setBubble(true);
     const Ctor = recCtor();
     if (!Ctor) {
       setError("Voice input needs Chrome. You can type instead.");
@@ -257,163 +262,181 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const close = useCallback(() => {
     recRef.current?.stop();
     stopSpeaking();
-    setOpen(false);
+    setStatus((st) => (st === "working" ? st : "ready"));
+    setPanelOpen(false);
+    setBubble(false);
+    setTyping(false);
   }, [stopSpeaking]);
+
+  /** Orb click / ⌥S: start listening, or stop whatever Sourci is doing. */
+  const toggle = useCallback(() => {
+    if (status === "listening") return recRef.current?.stop();
+    if (status === "speaking") {
+      stopSpeaking();
+      return setStatus("ready");
+    }
+    if (status === "working") return;
+    listen();
+  }, [listen, status, stopSpeaking]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey && e.code === "KeyS") {
         e.preventDefault();
-        listen();
-      } else if (e.key === "Escape" && open) {
+        toggle();
+      } else if (e.key === "Escape" && (panelOpen || bubble)) {
         close();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, listen, open]);
+  }, [bubble, close, panelOpen, toggle]);
 
-  const hasContent = Boolean(chart || card || pipeline || pending || done);
-  const statusLabel = { ready: "READY", listening: "● LISTENING", working: "○ WORKING…", speaking: "● SPEAKING" }[status];
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-[#071018] py-2 pl-2 pr-4 text-sm font-semibold tracking-wide text-cyan-100 shadow-[0_10px_30px_-8px_rgba(34,211,238,0.55)] ring-1 ring-cyan-400/30"
-        aria-label="Open Sourci"
-        title="Sourci (⌥ S)"
-        style={{ position: "fixed" }}
-      >
-        <Orb size={32} />
-        SOURCI
-      </button>
-    );
-  }
+  const hasPanel = Boolean(chart || card || pipeline || pending || done);
+  const caption = {
+    ready: "Click the orb or press ⌥S to talk",
+    listening: "Listening… click the orb to stop",
+    working: "Working on it…",
+    speaking: "Speaking… click the orb to stop",
+  }[status];
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[#04080d] text-slate-200"
-      role="dialog"
-      aria-label="Sourci"
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundImage:
-          "radial-gradient(ellipse at 50% 35%, rgba(34,211,238,0.10), transparent 60%), linear-gradient(rgba(34,211,238,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.05) 1px, transparent 1px)",
-        backgroundSize: "100% 100%, 48px 48px, 48px 48px",
-      }}
-    >
-      {/* top bar */}
-      <div className="flex items-center gap-3 px-5 py-3 font-mono text-[11px] tracking-[0.18em] text-cyan-300/70">
-        <span className="text-cyan-300">● ONLINE</span>
-        <span className="ml-auto hidden sm:inline">SOURCI · SYS 2.0 · CRM LINK ESTABLISHED</span>
-        <button onClick={() => setMuted((m) => !m)} className="ml-auto rounded p-1.5 hover:bg-white/5 sm:ml-3" aria-label={muted ? "Turn voice on" : "Mute voice"}>
-          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-        </button>
-        <button onClick={close} className="rounded p-1.5 hover:bg-white/5" aria-label="Close Sourci">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* what you said + status */}
-      <div className="flex items-center gap-3 px-5 pb-2">
-        <Orb size={22} />
-        <p className="min-w-0 flex-1 truncate font-mono text-sm text-slate-300">
-          {heard ? `“${heard}”` : <span className="text-slate-500">Listening for your request…</span>}
-        </p>
-        <span className={cn("shrink-0 font-mono text-[10px] tracking-[0.2em]", status === "listening" ? "text-orange-400" : "text-cyan-300/80")}>
-          {statusLabel}
-        </span>
-      </div>
-
-      {/* stage */}
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden px-4 py-6">
-        {status === "listening" && !hasContent ? (
-          <Waveform />
-        ) : !hasContent ? (
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="relative flex items-center justify-center">
-              <span className="absolute h-56 w-56 rounded-full border border-cyan-300/10" />
-              <span className="absolute h-40 w-40 rounded-full border border-cyan-300/15" />
-              <Orb size={96} pulse={status !== "ready"} />
-            </div>
-            <p className="text-5xl font-black tracking-[0.08em] text-cyan-50 drop-shadow-[0_0_24px_rgba(34,211,238,0.6)] sm:text-6xl">SOURCI</p>
-            <p className="font-mono text-sm text-slate-400">Just ask.</p>
+    <>
+      {/* side panel: only when there is something to look at */}
+      {panelOpen && hasPanel && (
+        <aside
+          className="sourci-anim fixed inset-y-0 right-0 z-[60] flex w-full flex-col border-l border-cyan-300/15 bg-[#05090f]/95 text-slate-200 shadow-[-20px_0_60px_-20px_rgba(0,0,0,0.6)] backdrop-blur sm:w-[440px]"
+          style={{ position: "fixed", animation: "sourci-slide .25s ease-out" }}
+          aria-label="Sourci results"
+        >
+          <div className="flex items-center gap-2 border-b border-cyan-300/10 px-4 py-3">
+            <Orb size={18} />
+            <p className="font-mono text-[11px] tracking-[0.25em] text-cyan-200">SOURCI</p>
+            <p className="ml-2 min-w-0 flex-1 truncate font-mono text-[11px] text-slate-500">{heard ? `“${heard}”` : ""}</p>
+            <button onClick={() => setPanelOpen(false)} className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Close panel">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-        ) : (
-          <div className="grid w-full min-w-0 max-w-5xl grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             {pipeline && <PipelinePanel p={pipeline} />}
             {card && <CardPanel c={card} />}
             {chart && <ChartPanel c={chart} />}
             {pending && <ConfirmPanel c={pending} onYes={() => void confirm()} onNo={cancel} busy={status === "working"} />}
-            {done && (
-              <DonePanel
-                d={done}
-                onOpen={(href) => {
-                  router.push(href);
-                  close();
+            {done && <DonePanel d={done} onOpen={(href) => router.push(href)} />}
+          </div>
+        </aside>
+      )}
+
+      {/* bubble + orb in the corner */}
+      <div
+        className={cn("fixed bottom-5 z-[61] flex flex-col items-end gap-2", panelOpen && hasPanel ? "right-5 sm:right-[460px]" : "right-5")}
+        style={{ position: "fixed" }}
+      >
+        {bubble && (
+          <div
+            className="sourci-anim w-[min(86vw,340px)] rounded-2xl border border-cyan-300/20 bg-[#05090f]/95 p-3 text-slate-200 shadow-xl backdrop-blur"
+            style={{ animation: "sourci-in .2s ease-out" }}
+          >
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 flex-1 font-mono text-[10px] tracking-[0.18em] text-cyan-300/80">
+                {status === "listening" ? <span className="text-orange-400">● LISTENING</span> : status === "working" ? "○ WORKING…" : status === "speaking" ? "● SPEAKING" : "SOURCI"}
+              </p>
+              <button onClick={() => setMuted((m) => !m)} className="text-slate-500 hover:text-white" aria-label={muted ? "Turn voice on" : "Mute voice"}>
+                {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={close} className="text-slate-500 hover:text-white" aria-label="Close Sourci">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {heard && <p className="mt-1.5 text-xs text-slate-400">“{heard}”</p>}
+            {status === "listening" && !heard && <MiniWave />}
+            {(error || reply) && (
+              <p className={cn("mt-1.5 text-sm", error ? "text-rose-300" : "text-slate-100")}>{error || reply}</p>
+            )}
+            {!heard && !reply && !error && status === "ready" && <p className="mt-1.5 text-xs text-slate-400">{caption}</p>}
+            {hasPanel && !panelOpen && (
+              <button onClick={() => setPanelOpen(true)} className="mt-2 text-xs font-semibold text-cyan-300 hover:underline">
+                Show details →
+              </button>
+            )}
+            {typing && (
+              <form
+                className="mt-2 flex gap-1.5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const t = typed;
+                  setTyped("");
+                  void ask(t);
                 }}
-              />
+              >
+                <input
+                  autoFocus
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  placeholder={pending ? "yes / no…" : "Type to Sourci…"}
+                  maxLength={500}
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-cyan-300/20 bg-white/5 px-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/50"
+                />
+                <button type="submit" disabled={!typed.trim()} className="rounded-lg px-2 text-cyan-200 ring-1 ring-cyan-300/30 disabled:opacity-30" aria-label="Send">
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              </form>
             )}
           </div>
         )}
-      </div>
 
-      {/* Sourci's reply */}
-      <div className="flex min-h-[44px] justify-center px-4">
-        {(reply || error) && (
-          <p
-            className={cn(
-              "sourci-anim max-w-3xl rounded-lg border px-3 py-2 font-mono text-sm",
-              error ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-cyan-300/20 bg-cyan-300/5 text-slate-200",
-            )}
-            style={{ animation: "sourci-in .25s ease-out" }}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setBubble(true);
+              setTyping((t) => !t);
+            }}
+            className="rounded-full bg-[#05090f]/80 p-2 text-slate-400 opacity-60 ring-1 ring-white/10 transition hover:opacity-100"
+            aria-label="Type instead"
+            title="Type instead"
           >
-            <span className="text-cyan-300">SOURCI ›</span> {error || reply}
-          </p>
-        )}
+            <Keyboard className="h-4 w-4" />
+          </button>
+          <OrbButton status={status} onClick={toggle} />
+        </div>
       </div>
+    </>
+  );
+}
 
-      {/* input */}
-      <form
-        className="mx-auto mb-5 mt-3 flex w-full max-w-2xl items-center gap-2 px-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const t = typed;
-          setTyped("");
-          void ask(t);
-        }}
-      >
-        <button
-          type="button"
-          onClick={listen}
-          className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-1 transition",
-            status === "listening" ? "bg-orange-500/20 text-orange-300 ring-orange-400/50" : "bg-cyan-400/10 text-cyan-200 ring-cyan-300/30 hover:bg-cyan-400/20",
-          )}
-          aria-label={status === "listening" ? "Stop listening" : "Talk"}
-          title="Talk (⌥ S)"
-        >
-          <Mic className="h-5 w-5" />
-        </button>
-        <input
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          placeholder={pending ? "Say or type yes / no…" : "Ask Sourci anything…"}
-          maxLength={500}
-          className="h-11 min-w-0 flex-1 rounded-full border border-cyan-300/20 bg-white/5 px-4 font-mono text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/50"
+/** The corner orb. Calm when idle; glows and pulses while listening; spinning ring while working; ripples while speaking. */
+function OrbButton({ status, onClick }: { status: Status; onClick: () => void }) {
+  const label = { ready: "Talk to Sourci (⌥S)", listening: "Stop listening", working: "Sourci is working", speaking: "Stop speaking" }[status];
+  return (
+    <button onClick={onClick} className="relative flex h-14 w-14 items-center justify-center rounded-full" aria-label={label} title={label}>
+      {status === "speaking" && (
+        <>
+          <span className="sourci-anim absolute inset-0 rounded-full border-2 border-cyan-300/60" style={{ animation: "sourci-ring 1.4s ease-out infinite" }} />
+          <span className="sourci-anim absolute inset-0 rounded-full border-2 border-cyan-300/40" style={{ animation: "sourci-ring 1.4s ease-out .7s infinite" }} />
+        </>
+      )}
+      {status === "working" && (
+        <span
+          className="sourci-anim absolute -inset-1.5 rounded-full border-2 border-transparent border-t-cyan-300 border-r-cyan-300/40"
+          style={{ animation: "sourci-spin .9s linear infinite" }}
         />
-        <button
-          type="submit"
-          disabled={!typed.trim() || status === "working"}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-cyan-200 ring-1 ring-cyan-300/30 hover:bg-cyan-400/10 disabled:opacity-30"
-          aria-label="Send"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </form>
-      <p className="pb-3 text-center font-mono text-[10px] tracking-[0.2em] text-slate-600">⌥ S TO TALK · ESC TO CLOSE</p>
+      )}
+      {status === "listening" && <span className="absolute -inset-2 rounded-full bg-cyan-400/25 blur-md" />}
+      <Orb size={status === "listening" ? 56 : 48} pulse={status === "listening"} glow={status !== "ready"} />
+    </button>
+  );
+}
+
+function MiniWave() {
+  return (
+    <div className="mt-2 flex h-6 items-center gap-[2px]" aria-hidden="true">
+      {Array.from({ length: 28 }, (_, i) => (
+        <span
+          key={i}
+          className="sourci-anim block w-[2px] rounded-full bg-orange-400/90"
+          style={{ height: `${30 + ((i * 37) % 70)}%`, animation: `sourci-wave ${0.7 + ((i * 13) % 7) / 10}s ease-in-out ${(i % 9) * 0.07}s infinite` }}
+        />
+      ))}
     </div>
   );
 }
@@ -421,7 +444,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 // ---------------------------------------------------------------------------
 // Pieces
 // ---------------------------------------------------------------------------
-function Orb({ size, pulse }: { size: number; pulse?: boolean }) {
+function Orb({ size, pulse, glow }: { size: number; pulse?: boolean; glow?: boolean }) {
   return (
     <span
       className="sourci-anim inline-block shrink-0 rounded-full"
@@ -429,31 +452,13 @@ function Orb({ size, pulse }: { size: number; pulse?: boolean }) {
         width: size,
         height: size,
         background: "radial-gradient(circle at 35% 30%, #effcff 0%, #67e8f9 32%, #0891b2 70%, #164e63 100%)",
-        boxShadow: `0 0 ${size / 2}px rgba(34,211,238,0.55), 0 0 ${size}px rgba(34,211,238,0.25)`,
+        boxShadow: glow
+          ? `0 0 ${size * 0.7}px rgba(34,211,238,0.8), 0 0 ${size * 1.4}px rgba(34,211,238,0.4)`
+          : `0 0 ${size / 3}px rgba(34,211,238,0.45), 0 0 ${size * 0.7}px rgba(34,211,238,0.18)`,
         animation: pulse ? "sourci-pulse 1.6s ease-in-out infinite" : undefined,
       }}
       aria-hidden="true"
     />
-  );
-}
-
-function Waveform() {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <p className="font-mono text-[11px] tracking-[0.3em] text-orange-400">LISTENING</p>
-      <div className="flex h-16 items-center gap-[3px]" aria-hidden="true">
-        {Array.from({ length: 40 }, (_, i) => (
-          <span
-            key={i}
-            className="sourci-anim block w-[3px] rounded-full bg-orange-400/90"
-            style={{
-              height: `${30 + ((i * 37) % 70)}%`,
-              animation: `sourci-wave ${0.7 + ((i * 13) % 7) / 10}s ease-in-out ${(i % 9) * 0.07}s infinite`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -474,7 +479,7 @@ const Eyebrow = ({ children, tone = "cyan" }: { children: React.ReactNode; tone?
 
 function CardPanel({ c }: { c: SourciCard }) {
   return (
-    <Panel className="md:col-span-2">
+    <Panel>
       <div className="flex items-start justify-between gap-3">
         {c.eyebrow && <Eyebrow>{c.eyebrow}</Eyebrow>}
         <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 font-mono text-[10px] tracking-widest text-cyan-200">READY ✓</span>
@@ -561,7 +566,7 @@ function ChartPanel({ c }: { c: SourciChart }) {
   const bars = c.bars.slice(0, 14);
   const max = Math.max(1, ...bars.map((b) => b.value));
   return (
-    <Panel className="md:col-span-2">
+    <Panel>
       <Eyebrow>{(c.subtitle ?? "").toUpperCase() || "CHART"}</Eyebrow>
       <h3 className="mt-1 text-lg font-bold text-white">{c.title}</h3>
       {bars.length === 0 ? (
@@ -598,7 +603,7 @@ function ChartPanel({ c }: { c: SourciChart }) {
 
 function ConfirmPanel({ c, onYes, onNo, busy }: { c: SourciConfirm; onYes: () => void; onNo: () => void; busy: boolean }) {
   return (
-    <Panel className="md:col-span-2 border-amber-300/30">
+    <Panel className="border-amber-300/30">
       <Eyebrow>AWAITING YOUR OK</Eyebrow>
       <h3 className="mt-1 text-xl font-bold text-white">{c.title}</h3>
       <dl className="mt-3 space-y-2">
@@ -628,7 +633,7 @@ function ConfirmPanel({ c, onYes, onNo, busy }: { c: SourciConfirm; onYes: () =>
 
 function DonePanel({ d, onOpen }: { d: Done; onOpen: (href: string) => void }) {
   return (
-    <Panel className="relative md:col-span-2">
+    <Panel className="relative">
       <Eyebrow>DONE · BY SOURCI</Eyebrow>
       <h3 className="mt-1 text-xl font-bold text-white">{d.title}</h3>
       {d.detail && <p className="mt-1 text-sm text-slate-300">{d.detail}</p>}
