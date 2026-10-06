@@ -195,6 +195,40 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       return { ok: true, message: `Sent to ${to}.`, stamp: "SENT", title: subject, href: p.clientId ? `/clients/${p.clientId}` : undefined };
     }
 
+    case "bulk_update_leads": {
+      need("leads");
+      const ids = (p.leadIds ?? []).filter((x) => UUID.test(x)).slice(0, 100);
+      if (!ids.length) throw new Error("No leads to change");
+      const patch: Record<string, unknown> = {};
+      const parts: string[] = [];
+      if (p.setterId !== undefined) {
+        if (p.setterId !== null && !UUID.test(p.setterId)) throw new Error("Bad setter id");
+        patch.setter_id = p.setterId;
+        patch.assigned_at = p.setterId ? new Date().toISOString() : null;
+        patch.assigned_by = `Sourci (${me.full_name || me.email})`;
+        parts.push(`Setter → ${p.setterName ?? "Unassigned"}`);
+      }
+      if (p.status) {
+        if (!(p.status in LEAD_STATUS)) throw new Error("Unknown status");
+        patch.status = p.status;
+        parts.push(`Status → ${LEAD_STATUS[p.status as keyof typeof LEAD_STATUS].label}`);
+      }
+      if (!parts.length) throw new Error("Nothing to change");
+      const { data: changed, error } = await db.from("leads").update(patch).in("id", ids).select("id");
+      if (error) throw new Error(error.message);
+      const n = changed?.length ?? 0;
+      if (n) {
+        await db.from("lead_events").insert((changed ?? []).map((l) => ({ lead_id: l.id, kind: "note", summary: `Sourci: ${parts.join(", ")}`, actor_id: me.id })));
+      }
+      if (p.setterId) {
+        const { data: setter } = await db.from("setters").select("profile_id").eq("id", p.setterId).maybeSingle();
+        if (setter?.profile_id) {
+          await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${n} lead${n === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/leads" });
+        }
+      }
+      return { ok: true, message: `Done. ${n} lead${n === 1 ? "" : "s"} updated${p.setterName ? `, now with ${p.setterName}` : ""}.`, stamp: "UPDATED", title: `${n} leads`, href: "/leads" };
+    }
+
     case "notify_team": {
       const title = clip(p.title, 200);
       if (!title) throw new Error("The reminder is empty");

@@ -265,6 +265,22 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: { type: "object", properties: { message: { type: "string" }, details: { type: "string" }, audience: { type: "string", enum: ["everyone", "sales", "marketing", "client_success", "operations", "recruitment", "accounts"] } }, required: ["message", "details", "audience"], additionalProperties: false },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_leads",
+      description: "Show a list of leads on screen by group: unassigned, untouched (status new), open, today, no_answer, contacted, call_booked, or from_setter (give setter). service filters ai / va / premium / any. Covers the last 30 days.",
+      parameters: { type: "object", properties: { group: { type: "string", enum: ["unassigned", "untouched", "open", "today", "no_answer", "contacted", "call_booked", "from_setter"] }, setter: { type: "string" }, service: { type: "string", enum: ["any", "ai", "va", "premium"] } }, required: ["group", "setter", "service"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_leads",
+      description: "Prepare a change to MANY leads at once (last 30 days), e.g. assign all unassigned leads to Dean, or move all no_answer leads to lost. group selects the leads (same groups as list_leads; from_setter needs from_setter). assign_to = setter name, \"nobody\" to unassign, or empty. set_status = new status or empty. The user must confirm.",
+      parameters: { type: "object", properties: { group: { type: "string", enum: ["unassigned", "untouched", "open", "today", "no_answer", "contacted", "call_booked", "from_setter"] }, from_setter: { type: "string" }, service: { type: "string", enum: ["any", "ai", "va", "premium"] }, assign_to: { type: "string" }, set_status: { type: "string", enum: ["", "new", "contacted", "call_booked", "no_answer", "not_interested", "won", "lost"] } }, required: ["group", "from_setter", "service", "assign_to", "set_status"], additionalProperties: false },
+    },
+  },
 ];
 
 /** `say` = a ready one-sentence spoken reply, so simple questions skip a second AI round. */
@@ -290,10 +306,10 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       need("leads");
       const per = periodBounds(asPeriod(args.period));
       const [{ data: rows }, { data: open }, { data: setters }, { data: latest }] = await Promise.all([
-        db.from("leads").select("service, source, setter_id").eq("historical", false).gte("received_at", per.start).lt("received_at", per.end).limit(5000),
+        db.from("leads").select("service, source, setter_id").gte("received_at", per.start).lt("received_at", per.end).limit(5000),
         db.from("leads").select("status, setter_id").in("status", [...OPEN_STATUSES]).limit(10000),
         db.from("setters").select("id, name"),
-        db.from("leads").select("id, name, service, source, received_at").eq("historical", false).gte("received_at", per.start).lt("received_at", per.end).order("received_at", { ascending: false }).limit(6),
+        db.from("leads").select("id, name, service, source, received_at").gte("received_at", per.start).lt("received_at", per.end).order("received_at", { ascending: false }).limit(6),
       ]);
       const names = new Map((setters ?? []).map((s) => [s.id as string, s.name as string]));
       const r = rows ?? [];
@@ -590,7 +606,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       need("leads");
       const today = dublinDate();
       const [{ data: open }, { data: overdue }, { data: risk }] = await Promise.all([
-        db.from("leads").select("name, status, setter_id, received_at").eq("historical", false).in("status", [...OPEN_STATUSES]).order("received_at").limit(5000),
+        db.from("leads").select("name, status, setter_id, received_at").in("status", [...OPEN_STATUSES]).order("received_at").limit(5000),
         areas.includes("payments")
           ? db.from("invoices").select("number, due_on, clients(name)").eq("status", "open").lt("due_on", today).limit(20)
           : Promise.resolve({ data: [] as unknown[] }),
@@ -795,6 +811,81 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       });
     }
 
+    case "list_leads": {
+      need("leads");
+      let setterId: string | null = null;
+      let setterName = "";
+      if (args.group === "from_setter") {
+        const f = await findSetter(db, clean(args.setter, 60));
+        if ("error" in f) return { data: { error: f.error } };
+        if ("ask" in f) return { data: { ask_which_setter: f.ask } };
+        setterId = f.id;
+        setterName = f.name;
+      }
+      const rows = await leadsInGroup(db, String(args.group), String(args.service ?? "any"), setterId);
+      const { data: setters } = await db.from("setters").select("id, name");
+      const names = new Map((setters ?? []).map((x) => [x.id as string, x.name as string]));
+      const label = setterName ? `${setterName}'s leads` : GROUP_LABEL[String(args.group)] ?? "leads";
+      const dashboard: SourciDashboard = {
+        eyebrow: "LEADS · LAST 30 DAYS",
+        title: label.charAt(0).toUpperCase() + label.slice(1),
+        stats: [{ label: "Count", value: String(rows.length), tone: args.group === "unassigned" && rows.length ? "alert" : "default" }],
+        list: {
+          title: label,
+          items: rows.slice(0, 15).map((l) => ({
+            title: l.name || "Unnamed lead",
+            detail: [SERVICE_LABEL[l.service] ?? l.service, LEAD_STATUS[l.status as keyof typeof LEAD_STATUS]?.label ?? l.status, l.setter_id ? names.get(l.setter_id) : "Unassigned", String(l.received_at).slice(0, 10)].filter(Boolean).join(" · "),
+            href: `/leads/${l.id}`,
+          })),
+        },
+        link: { href: "/leads", label: "Open Leads" },
+      };
+      return {
+        data: { count: rows.length, leads: rows.slice(0, 15).map((l) => l.name) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: rows.length ? `${rows.length} ${rows.length === 1 ? label.replace(/s$/, "") : label}. They're on screen.` : `No ${label} right now.`,
+      };
+    }
+
+    case "propose_bulk_leads": {
+      need("leads");
+      let fromId: string | null = null;
+      if (args.group === "from_setter") {
+        const f = await findSetter(db, clean(args.from_setter, 60));
+        if ("error" in f) return { data: { error: f.error } };
+        if ("ask" in f) return { data: { ask_which_setter: f.ask } };
+        fromId = f.id;
+      }
+      const rows = (await leadsInGroup(db, String(args.group), String(args.service ?? "any"), fromId)).slice(0, 100);
+      if (!rows.length) return { data: { error: `There are no ${GROUP_LABEL[String(args.group)] ?? "leads"} to change` }, say: `There are no ${GROUP_LABEL[String(args.group)] ?? "leads"} to change.` };
+      const pr: SourciProposal = { kind: "bulk_update_leads", leadIds: rows.map((r) => r.id) };
+      const preview: { label: string; value: string }[] = [
+        { label: "Leads", value: `${rows.length} ${GROUP_LABEL[String(args.group)] ?? "leads"}` },
+        { label: "Who", value: rows.slice(0, 8).map((r) => r.name || "Unnamed").join(", ") + (rows.length > 8 ? ` +${rows.length - 8} more` : "") },
+      ];
+      const to = clean(args.assign_to, 60);
+      if (to) {
+        if (/^(nobody|none|no one|unassign)/i.test(to)) {
+          pr.setterId = null;
+          pr.setterName = "Unassigned";
+        } else {
+          const f = await findSetter(db, to);
+          if ("error" in f) return { data: { error: f.error } };
+          if ("ask" in f) return { data: { ask_which_setter: f.ask } };
+          pr.setterId = f.id;
+          pr.setterName = f.name;
+        }
+        preview.push({ label: "Assign to", value: pr.setterName ?? "" });
+      }
+      const st = String(args.set_status ?? "");
+      if (st && st in LEAD_STATUS) {
+        pr.status = st;
+        preview.push({ label: "New status", value: LEAD_STATUS[st as keyof typeof LEAD_STATUS].label });
+      }
+      if (preview.length === 2) return { data: { error: "Say what to change: who to assign them to, or a new status" } };
+      return proposeOut({ title: `Update ${plural(rows.length, "lead")}`, preview, proposal: pr });
+    }
+
     case "propose_team_reminder": {
       const message = String(args.message ?? "").trim().slice(0, 200);
       if (!message) return { data: { error: "The reminder is empty" } };
@@ -828,6 +919,58 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
 }
 
 type Db = Awaited<ReturnType<typeof getServerSupabase>>;
+type LeadRow = { id: string; name: string; status: string; service: string; source: string | null; setter_id: string | null; received_at: string };
+
+/** Leads in a named group (last 30 days, newest first). Uses the user's RLS client. */
+async function leadsInGroup(db: Db, group: string, service: string, setterId: string | null): Promise<LeadRow[]> {
+  const since = dublinDayBounds(addDays(dublinDate(), -30)).start;
+  let q = db.from("leads").select("id, name, status, service, source, setter_id, received_at").gte("received_at", since).order("received_at", { ascending: false }).limit(500);
+  if (service && service !== "any") q = q.eq("service", service);
+  switch (group) {
+    case "unassigned":
+      q = q.is("setter_id", null).in("status", [...OPEN_STATUSES]);
+      break;
+    case "untouched":
+      q = q.eq("status", "new");
+      break;
+    case "open":
+      q = q.in("status", [...OPEN_STATUSES]);
+      break;
+    case "today":
+      q = q.gte("received_at", dublinDayBounds(dublinDate()).start);
+      break;
+    case "no_answer":
+    case "contacted":
+    case "call_booked":
+      q = q.eq("status", group);
+      break;
+    case "from_setter":
+      if (!setterId) return [];
+      q = q.eq("setter_id", setterId);
+      break;
+  }
+  const { data } = await q;
+  return (data ?? []) as LeadRow[];
+}
+
+async function findSetter(db: Db, name: string): Promise<{ id: string; name: string } | { error: string } | { ask: string[] }> {
+  const { data } = await db.from("setters").select("id, name").ilike("name", `%${name}%`).limit(3);
+  if (!data?.length) return { error: `No setter called "${name}"` };
+  if (data.length > 1) return { ask: data.map((x) => x.name as string) };
+  return { id: data[0].id as string, name: data[0].name as string };
+}
+
+const GROUP_LABEL: Record<string, string> = {
+  unassigned: "unassigned leads",
+  untouched: "untouched leads",
+  open: "open leads",
+  today: "today's leads",
+  no_answer: "no-answer leads",
+  contacted: "contacted leads",
+  call_booked: "call-booked leads",
+  from_setter: "leads",
+};
+
 
 /** A proposal is never executed here: it is shown to the user, who confirms in the widget. */
 function proposeOut(confirm: SourciConfirm): ToolOut {
@@ -840,6 +983,7 @@ function proposeOut(confirm: SourciConfirm): ToolOut {
     candidate_status: "Shall I update it?",
     send_email: "Want me to send it?",
     notify_team: "Shall I send it?",
+    bulk_update_leads: "Shall I go ahead?",
   };
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
@@ -856,7 +1000,7 @@ async function buildChart(metric: string, period: Period, areas: Area[], db: Db)
     const { data } = await db
       .from("leads")
       .select("service, source, setter_id, received_at")
-      .eq("historical", false)
+      
       .gte("received_at", per.start)
       .lt("received_at", per.end)
       .limit(5000);
@@ -916,7 +1060,7 @@ async function buildChart(metric: string, period: Period, areas: Area[], db: Db)
       const today = dublinDate();
       const bars: { label: string; value: number }[] = [];
       if (has("leads")) {
-        const { data } = await db.from("leads").select("id").eq("historical", false).gte("received_at", per.start).lt("received_at", per.end).limit(5000);
+        const { data } = await db.from("leads").select("id").gte("received_at", per.start).lt("received_at", per.end).limit(5000);
         bars.push({ label: `Sales: new leads (${per.label})`, value: data?.length ?? 0 });
       }
       if (has("clients")) {
@@ -957,6 +1101,7 @@ How to work:
 - "How's our pipeline": call pipeline_overview, then summarise in one sentence (total and how many need attention).
 - "Graph for each department": show_chart department_overview.
 - CHANGES: to change anything (lead status/setter/note, new client, client note, task, invoice paid/void, candidate status, email, team reminder) call the matching propose_ tool. It does NOT change anything; it shows a confirmation card. Then ask a short yes/no question, e.g. "Want me to create it?" or "Shall I send it?". Never say it is done.
+- For several leads at once ("assign all unassigned leads to Dean", "mark all no-answer leads lost") use propose_bulk_leads; to show a group of leads use list_leads.
 - Only ONE propose_ tool per reply. If a tool returns ask_which, ask the user which one they mean.
 - You cannot delete anything, move money, or charge cards. Say so if asked.
 - Periods: default to last_7_days unless they say today, yesterday or this month.

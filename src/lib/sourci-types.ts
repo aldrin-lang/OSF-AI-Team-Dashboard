@@ -42,7 +42,8 @@ export type SourciProposal =
   | { kind: "invoice_status"; invoiceId: string; number: string; status: "paid" | "void" }
   | { kind: "candidate_status"; candidateId: string; name: string; status: string }
   | { kind: "send_email"; to: string; subject: string; body: string; clientId?: string; clientName?: string }
-  | { kind: "notify_team"; title: string; body?: string; audience: string; recipientIds: string[] };
+  | { kind: "notify_team"; title: string; body?: string; audience: string; recipientIds: string[] }
+  | { kind: "bulk_update_leads"; leadIds: string[]; setterId?: string | null; setterName?: string; status?: string };
 
 export interface SourciConfirm {
   title: string; // e.g. "Create client profile"
