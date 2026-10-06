@@ -287,8 +287,14 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 type ToolOut = { data: unknown; actions?: SourciAction[]; say?: string };
 const clean = (v: unknown, n = 200) => String(v ?? "").replace(/[%,()*]/g, " ").trim().slice(0, n);
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+/** Small variety so Sourci doesn't sound like a recording. */
+const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
+const NUM = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+const num = (n: number) => (n >= 0 && n < NUM.length ? NUM[n] : String(n));
+const firstName = (s: string | null | undefined) => (s ?? "").trim().split(/\s+/)[0] || "";
 
-async function runTool(name: string, args: Record<string, unknown>, areas: Area[]): Promise<ToolOut> {
+async function runTool(name: string, args: Record<string, unknown>, areas: Area[], user = ""): Promise<ToolOut> {
+  const hi = user ? pick([`${user}, `, "", ""]) : "";
   const db = await getServerSupabase();
   const need = (a: Area) => {
     if (!areas.includes(a)) throw new Error(`Not available for this user's department (${a})`);
@@ -299,7 +305,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const p = PAGES[String(args.page)];
       if (!p) return { data: { error: "Unknown page" } };
       if (p.area) need(p.area);
-      return { data: { opened: p.label }, actions: [{ type: "navigate", href: p.href, label: p.label }], say: `Here's ${p.label}.` };
+      return { data: { opened: p.label }, actions: [{ type: "navigate", href: p.href, label: p.label }], say: pick([`Sure, here's ${p.label}.`, `Opening ${p.label} for you.`, `Here you go, ${p.label}.`]) };
     }
 
     case "leads_summary": {
@@ -348,7 +354,14 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
           unassigned_now: unassigned,
         },
         actions: [{ type: "dashboard", dashboard }],
-        say: `${plural(r.length, "new lead")} ${per.label}${unassigned ? `, and ${unassigned} still unassigned` : ""}.`,
+        say: (() => {
+          if (!r.length) return `${hi}it's been quiet, no new leads ${per.label} yet. I'll keep an eye out.`;
+          const top = byService[0];
+          const lead = `${hi}${pick(["nice", "good stuff", "right"])}, ${num(r.length)} new ${r.length === 1 ? "lead" : "leads"} ${per.label}${top && r.length > 1 ? `, mostly ${top.label}` : ""}.`;
+          if (unassigned) return `${lead} ${num(unassigned)} of the open ones ${unassigned === 1 ? "hasn't" : "haven't"} got a setter yet. Want me to assign them?`;
+          if (untouched) return `${lead} ${num(untouched)} ${untouched === 1 ? "is" : "are"} still waiting for a first call.`;
+          return `${lead} Everyone's covered, nice work.`;
+        })(),
       };
     }
 
@@ -370,7 +383,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
         received: String(l.received_at).slice(0, 10),
       }));
       if (data && data.length === 1) {
-        return { data: { matches }, actions: [{ type: "navigate", href: `/leads/${data[0].id}`, label: String(data[0].name || "Lead") }], say: `Here's ${data[0].name || "that lead"}.` };
+        return { data: { matches }, actions: [{ type: "navigate", href: `/leads/${data[0].id}`, label: String(data[0].name || "Lead") }], say: pick([`Found ${data[0].name || "them"}, opening it now.`, `Here's ${data[0].name || "that lead"}.`]) };
       }
       return { data: { matches } };
     }
@@ -421,9 +434,17 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
           reminder_drafts_waiting: drafts?.length ?? 0,
         },
         actions: [{ type: "dashboard", dashboard }],
-        say: overdue.length
-          ? `${plural(overdue.length, "invoice")} overdue, ${sum(overdue)} in total. The details are on screen.`
-          : `Nothing overdue. ${sum(rows)} outstanding in total.`,
+        say: (() => {
+          if (!rows.length) return `${hi}good news, every invoice is paid up. Nothing outstanding.`;
+          if (overdue.length) {
+            const worst = [...overdue].sort((a, b) => a.due_on.localeCompare(b.due_on))[0];
+            const lead = overdue.length === 1
+              ? `${hi}one invoice is overdue, ${worst.clients?.name ?? "a client"}, ${formatMoney(Number(worst.amount), worst.currency)}, ${num(daysLate(worst.due_on))} days late.`
+              : `${hi}${num(overdue.length)} invoices are overdue, ${sum(overdue)} in total. The oldest is ${worst.clients?.name ?? "a client"} at ${num(daysLate(worst.due_on))} days.`;
+            return drafts?.length ? `${lead} There's a reminder ready to go. Want me to open it?` : `${lead} Want me to draft them a friendly reminder?`;
+          }
+          return `${hi}nothing overdue, lovely. ${sum(rows)} still to come in${soon.length ? `, with ${num(soon.length)} due this week` : ""}.`;
+        })(),
       };
     }
 
@@ -462,7 +483,11 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
           at_risk: atRisk.map((r) => ({ client: r.clients?.name, who: r.kind === "va" ? `VA ${r.contact_name ?? ""}`.trim() : "client", summary: r.ai_summary })),
         },
         actions: [{ type: "dashboard", dashboard }],
-        say: `${plural(toSend, "check-in")} to send${atRisk.length ? `, and ${atRisk.length} at risk` : ""}.`,
+        say: (() => {
+          if (atRisk.length) return `${hi}heads up, ${atRisk[0].clients?.name ?? "a client"} doesn't sound happy${atRisk.length > 1 ? `, and ${num(atRisk.length - 1)} more ${atRisk.length === 2 ? "is" : "are"} at risk` : ""}. Worth a call today.${toSend ? ` There ${toSend === 1 ? "is" : "are"} also ${num(toSend)} check-${toSend === 1 ? "in" : "ins"} ready to send.` : ""}`;
+          if (toSend) return `${hi}${num(toSend)} check-${toSend === 1 ? "in is" : "ins are"} ready to send. Everyone else seems happy.`;
+          return `${hi}all quiet on the check-in front, no one at risk.`;
+        })(),
       };
     }
 
@@ -497,7 +522,11 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
           top: top.slice(0, 3).map((c) => ({ name: c.full_name, role: c.ai_recommended_role, score: c.ai_score })),
         },
         actions: [{ type: "dashboard", dashboard }],
-        say: `${plural(r.length, "new candidate")} ${per.label}, ${toReview} to review.`,
+        say: (() => {
+          if (!r.length) return `${hi}no new applicants ${per.label}.${toReview ? ` There ${toReview === 1 ? "is" : "are"} still ${num(toReview)} waiting for a review though.` : ""}`;
+          const best = top[0];
+          return `${hi}${num(r.length)} new ${r.length === 1 ? "applicant" : "applicants"} ${per.label}.${best ? ` The standout is ${firstName(best.full_name)}, ${best.ai_score} percent match for ${best.ai_recommended_role ?? "a VA role"}.` : ""}${toReview ? ` ${num(toReview)} to review.` : ""}`;
+        })(),
       };
     }
 
@@ -533,7 +562,14 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
           urgent_or_high_concerns: urgent.length,
         },
         actions: [{ type: "dashboard", dashboard }],
-        say: `${c.filter((x) => x.status === "live").length} live and ${c.filter((x) => x.status === "active").length} onboarding${cs.length ? `, with ${plural(cs.length, "open concern")}` : ""}.`,
+        say: (() => {
+          const live = c.filter((x) => x.status === "live").length;
+          const onb = c.filter((x) => x.status === "active").length;
+          const lead = `${hi}${num(live)} ${live === 1 ? "client is" : "clients are"} live and ${num(onb)} onboarding.`;
+          if (urgent.length) return `${lead} One thing to look at: ${urgent[0].clients?.name ?? "a client"} has an urgent concern, ${urgent[0].title}.`;
+          if (cs.length) return `${lead} ${num(cs.length)} open ${cs.length === 1 ? "concern" : "concerns"}, nothing urgent.`;
+          return `${lead} No fires today.`;
+        })(),
       };
     }
 
@@ -631,7 +667,14 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       return {
         data: { open_leads: leads.length, by_status: stages, needs_attention: attention.slice(0, 6) },
         actions: [{ type: "pipeline", pipeline }],
-        say: `You've got ${plural(leads.length, "open lead")}${attention.length ? `, and ${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} attention` : ", nothing urgent"}.`,
+        say: (() => {
+          const fresh = leads.filter((l) => l.status === "new").length;
+          const lead = `${hi}here's your pipeline. ${num(leads.length)} open ${leads.length === 1 ? "lead" : "leads"}${fresh ? `, ${num(fresh)} still brand new` : ""}.`;
+          if (unassigned.length) return `${lead} ${num(unassigned.length)} ${unassigned.length === 1 ? "hasn't" : "haven't"} got a setter yet. Want me to assign them?`;
+          if (stale.length) return `${lead} ${num(stale.length)} ${stale.length === 1 ? "has" : "have"} been waiting over two days for a call, worth a nudge.`;
+          if (attention.length) return `${lead} ${num(attention.length)} ${attention.length === 1 ? "thing needs" : "things need"} a look, they're on the right.`;
+          return `${lead} Looking healthy, nothing urgent.`;
+        })(),
       };
     }
 
@@ -843,7 +886,11 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       return {
         data: { count: rows.length, leads: rows.slice(0, 15).map((l) => l.name) },
         actions: [{ type: "dashboard", dashboard }],
-        say: rows.length ? `${rows.length} ${rows.length === 1 ? label.replace(/s$/, "") : label}. They're on screen.` : `No ${label} right now.`,
+        say: !rows.length
+          ? pick([`${hi}good news, no ${label} right now.`, `${hi}there aren't any ${label} at the moment.`])
+          : args.group === "unassigned"
+            ? `${hi}here ${rows.length === 1 ? "is the" : "are the"} ${num(rows.length)} unassigned ${rows.length === 1 ? "lead" : "leads"}. Want me to give ${rows.length === 1 ? "it" : "them"} to someone?`
+            : `${hi}here ${rows.length === 1 ? "is" : "are"} ${num(rows.length)} ${rows.length === 1 ? label.replace(/s$/, "") : label}.`,
       };
     }
 
@@ -912,7 +959,10 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
 
     case "show_chart": {
       const chart = await buildChart(String(args.metric), asPeriod(args.period), areas, db);
-      return { data: { shown: chart.title, bars: chart.bars }, actions: [{ type: "chart", chart }], say: `Here's ${chart.title.toLowerCase()}.` };
+      return { data: { shown: chart.title, bars: chart.bars }, actions: [{ type: "chart", chart }], say: (() => {
+        const top = [...chart.bars].sort((a, b) => b.value - a.value)[0];
+        return `${hi}here's ${chart.title.toLowerCase()}.${top && top.value > 0 ? ` ${top.label} leads the way with ${num(top.value)}.` : ""}`;
+      })() };
     }
   }
   return { data: { error: "Unknown tool" } };
@@ -988,7 +1038,7 @@ function proposeOut(confirm: SourciConfirm): ToolOut {
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
     actions: [{ type: "confirm", confirm }],
-    say: `Here's the ${confirm.title.toLowerCase()} on screen. ${verb[confirm.proposal.kind] ?? "Shall I go ahead?"}`,
+    say: `${pick(["Got it.", "No problem.", "Sure thing."])} I've got the ${confirm.title.toLowerCase()} ready for you. ${verb[confirm.proposal.kind] ?? "Shall I go ahead?"}`,
   };
 }
 
@@ -1090,8 +1140,10 @@ async function buildChart(metric: string, period: Period, areas: Area[], db: Db)
 function systemPrompt(name: string, path: string) {
   return `You are Sourci, the AI teammate built into OutsourceForce's team dashboard (AI receptionists and Philippine virtual assistants for small businesses in the UK, Ireland, Australia, New Zealand and Canada). You are talking to ${name}. You can look things up, show things on screen and prepare changes.
 
+Personality: warm, upbeat and helpful, like a sharp colleague from the Irish office who's on the user's side. Use their first name now and then. Don't just answer: add one useful observation (what stands out, what's urgent) and offer the obvious next step ("Want me to assign them?", "Shall I draft a reminder?"). Light humour is fine; never waffle.
+
 Your answers are SPOKEN aloud, so:
-- Reply in ONE short sentence (two at most), warm and natural, like a sharp colleague. The details are shown on screen, so never read them out. No markdown, no lists, no emojis, no URLs.
+- Reply in one to three short sentences: the answer, one insight, and an offer of a next step. The details are on screen, so never read out lists or tables. No markdown, no lists, no emojis, no URLs.
 - Round numbers and amounts ("about twelve hundred pounds"). Never read out long lists; give the top two or three.
 
 How to work:
@@ -1139,7 +1191,7 @@ export async function askSourci(input: { text: string; path: string; history: So
     const outs = await Promise.all(
       calls.map(async (call) => {
         try {
-          return await runTool(call.function.name, JSON.parse(call.function.arguments || "{}"), areas);
+          return await runTool(call.function.name, JSON.parse(call.function.arguments || "{}"), areas, input.userName);
         } catch (e) {
           return { data: { error: e instanceof Error ? e.message : "Tool failed" } } as ToolOut;
         }
@@ -1152,8 +1204,9 @@ export async function askSourci(input: { text: string; path: string; history: So
     // Fast path: every tool already gave a ready sentence (and something on screen), so answer
     // now instead of a second AI round. Prefer the data tools' sentence over "Here's <page>".
     if (outs.every((o) => o.say)) {
-      const says = outs.filter((o, i) => calls[i].function.name !== "open_page").map((o) => o.say as string);
-      const reply = (says.length ? says : outs.map((o) => o.say as string)).join(" ");
+      const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+      const says = outs.filter((o, i) => calls[i].function.name !== "open_page").map((o) => cap(o.say as string));
+      const reply = (says.length ? says : outs.map((o) => cap(o.say as string))).join(" ");
       const lastConfirm = [...actions].reverse().find((a) => a.type === "confirm");
       const kept: SourciAction[] = actions.filter((a) => a.type !== "confirm");
       if (lastConfirm) kept.push(lastConfirm);
