@@ -21,7 +21,7 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - `src/lib/server/{candidates,checkins,payments,daily-report}.ts` — server logic; pages in `src/app/(app)/{candidates,check-ins,payments,reports/daily}`.
 - `src/app/api/webhooks/candidate/route.ts` — PIT form webhook (fails closed).
 - `src/lib/areas.ts` + `getMyAreas`/`requireArea` (`src/lib/auth.ts`) + `requireActorArea` (`src/lib/server/rbac.ts`) — department access. Every new page/table must pick an area (RLS uses `public.has_area()`).
-- `src/lib/server/sorcy.ts` + `src/components/sorcy.tsx` + `src/app/api/sorcy/` — Sorcy voice assistant (OpenAI tools; read/navigate/chart only).
+- `src/lib/server/sourci.ts` (tools/prompt) + `sourci-exec.ts` (confirmed changes) + `src/components/sourci.tsx` + `src/app/api/sourci/` — Sourci voice assistant. Changes only via propose → user confirms → executeProposal.
 - `supabase/migrations/` — schema, RLS, `allocate_lead`. `supabase/demo_ops_*.sql` — demo data add/remove (not migrations).
 
 ## Check before saying done

@@ -14,7 +14,8 @@ export type NotifyEvent =
   | "candidate_recommendation"
   | "checkin_attention"
   | "payment_reminders"
-  | "daily_report";
+  | "daily_report"
+  | "team_reminder";
 
 const PREF_KEYS: Partial<Record<NotifyEvent, { inApp: keyof NotificationPreferences; email: keyof NotificationPreferences }>> = {
   assigned_to_me: { inApp: "assigned_to_me_in_app", email: "assigned_to_me_email" },

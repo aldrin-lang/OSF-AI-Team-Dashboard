@@ -1,6 +1,6 @@
 import { getCurrentProfile, hasRole } from "@/lib/auth";
 
-// Text-to-speech for Sorcy via ElevenLabs. Returns 204 when ElevenLabs isn't
+// Text-to-speech for Sourci via ElevenLabs. Returns 204 when ElevenLabs isn't
 // configured, and the widget falls back to the browser's built-in voice.
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({ text, model_id: process.env.ELEVENLABS_MODEL || "eleven_flash_v2_5" }),
   });
   if (!res.ok || !res.body) {
-    console.error("[sorcy speak] ElevenLabs", res.status);
+    console.error("[sourci speak] ElevenLabs", res.status);
     return new Response(null, { status: 204 }); // fall back to browser voice
   }
   return new Response(res.body, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" } });
