@@ -122,6 +122,14 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const [typed, setTyped] = useState("");
   const [muted, setMuted] = useState(false);
   const history = useRef<SourciTurn[]>([]);
+  // Things you've asked Sourci to remember (per browser, max 30) + recent conversation (survives a reload)
+  const memoryRef = useRef<string[]>([]);
+  useEffect(() => {
+    try {
+      memoryRef.current = JSON.parse(localStorage.getItem("sourci-memory") ?? "[]");
+      history.current = JSON.parse(sessionStorage.getItem("sourci-history") ?? "[]");
+    } catch {}
+  }, []);
   const recRef = useRef<Rec | null>(null);
   const bargeRef = useRef<Rec | null>(null); // listens while Sourci speaks, so you can cut in
   const speakIdRef = useRef(0); // ignores "finished speaking" from a voice we already cut off
@@ -301,6 +309,9 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 
   const remember = (role: SourciTurn["role"], content: string) => {
     history.current = [...history.current, { role, content }].slice(-8);
+    try {
+      sessionStorage.setItem("sourci-history", JSON.stringify(history.current));
+    } catch {}
   };
 
   /** Run a confirmed change (or an undo) on the server and show the stamp. */
@@ -393,7 +404,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         const res = await fetch("/api/sourci", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: q, path: pathname, history: history.current }),
+          body: JSON.stringify({ text: q, path: pathname, history: history.current, memory: memoryRef.current }),
         });
         const data = (await res.json()) as SourciReply;
         if (id !== reqRef.current) return; // you asked something else meanwhile
@@ -412,6 +423,15 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         const nextConfirm = data.actions.find((a) => a.type === "confirm");
         const nextDash = data.actions.find((a) => a.type === "dashboard");
         for (const a of data.actions) if (a.type === "navigate") nav = a.href;
+        for (const a of data.actions) {
+          if (a.type === "remember") memoryRef.current = [...memoryRef.current.filter((m) => m.toLowerCase() !== a.fact.toLowerCase()), a.fact].slice(-30);
+          if (a.type === "forget") memoryRef.current = /^(all|everything)$/i.test(a.match) ? [] : memoryRef.current.filter((m) => !m.toLowerCase().includes(a.match.toLowerCase()));
+          if (a.type === "remember" || a.type === "forget") {
+            try {
+              localStorage.setItem("sourci-memory", JSON.stringify(memoryRef.current));
+            } catch {}
+          }
+        }
         setChart(nextChart?.type === "chart" ? nextChart.chart : null);
         setCard(nextCard?.type === "card" ? nextCard.card : null);
         setPipeline(nextPipe?.type === "pipeline" ? nextPipe.pipeline : null);

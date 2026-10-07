@@ -78,7 +78,9 @@ export type SourciAction =
   | { type: "pipeline"; pipeline: SourciPipeline }
   | { type: "dashboard"; dashboard: SourciDashboard }
   | { type: "confirm"; confirm: SourciConfirm }
-  | { type: "done"; stamp: string; title: string; detail?: string; href?: string; undo?: SourciProposal };
+  | { type: "done"; stamp: string; title: string; detail?: string; href?: string; undo?: SourciProposal }
+  | { type: "remember"; fact: string }
+  | { type: "forget"; match: string };
 
 export interface SourciTurn {
   role: "user" | "assistant";

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ reply: "", actions: [], error: "Sourci isn't switched on yet (OPENAI_API_KEY missing)." }, { status: 503 });
   }
 
-  let body: { text?: unknown; path?: unknown; history?: unknown };
+  let body: { text?: unknown; path?: unknown; history?: unknown; memory?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -32,7 +32,10 @@ export async function POST(request: Request) {
 
   try {
     if (text === "__hello__") return NextResponse.json(await sourciHello((me.full_name || me.email).split(" ")[0]));
-    const r = await askSourci({ text, path, history, userName: (me.full_name || me.email).split(" ")[0] });
+    const memory = Array.isArray(body.memory)
+      ? (body.memory as unknown[]).filter((m): m is string => typeof m === "string").map((m) => m.slice(0, 200)).slice(0, 30)
+      : [];
+    const r = await askSourci({ text, path, history, memory, userName: (me.full_name || me.email).split(" ")[0] });
     return NextResponse.json(r);
   } catch (e) {
     console.error("[sourci]", e);
