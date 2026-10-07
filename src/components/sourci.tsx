@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AudioLines, Check, Keyboard, Send, Volume2, VolumeX, X } from "lucide-react";
-import { audioCtx, chime, femaleVoice, levelOf, micMeter, playMp3 } from "@/components/sourci-audio";
+import { ackClip, audioCtx, chime, fadeOut, femaleVoice, levelOf, micMeter, playBlob, playMp3, warmAcks } from "@/components/sourci-audio";
 import { DEFAULT_VOICE, SOURCI_VOICES, isSourciVoice, type SourciVoice } from "@/lib/sourci-voices";
 import { cn } from "@/lib/utils";
 import type {
@@ -23,7 +23,8 @@ import type {
 // ---------------------------------------------------------------------------
 interface RecResult {
   isFinal: boolean;
-  0: { transcript: string };
+  length: number;
+  [i: number]: { transcript: string };
 }
 interface RecEvent {
   resultIndex: number;
@@ -33,6 +34,7 @@ interface Rec {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
+  maxAlternatives: number;
   onresult: ((e: RecEvent) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -52,6 +54,8 @@ type Done = Extract<SourciAction, { type: "done" }>;
 
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|confirm(ed)?|do it|go ahead|send it|create it|please do|correct)\b/i;
 const NO = /^\s*(no|nope|cancel|stop|don'?t|never ?mind|not now)\b/i;
+/** For big changes a plain "yes" isn't enough. */
+const STRONG_YES = /\b(confirm(ed)?|send (it|them)|do it|go ahead|create them|hire (him|her|them))\b/i;
 
 /** Always-on switches itself off after this long with nothing said (saves the mic/battery). */
 const IDLE_OFF_MS = 10 * 60_000;
@@ -110,6 +114,8 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const outAnRef = useRef<AnalyserNode | null>(null);
   const micRef = useRef<{ analyser: AnalyserNode; stop: () => void } | null>(null);
   const statusRef = useRef<Status>("ready");
+  const ackRef = useRef<{ audio: HTMLAudioElement; done: Promise<void> } | null>(null);
+  const sayingRef = useRef<{ text: string; audio: HTMLAudioElement | null } | null>(null); // for trimming history when interrupted
   const orbRef = useRef<HTMLSpanElement | null>(null);
   const [reply, setReply] = useState(demo?.reply ?? "");
   const [error, setError] = useState("");
@@ -134,7 +140,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const bargeRef = useRef<Rec | null>(null); // listens while Sourci speaks, so you can cut in
   const speakIdRef = useRef(0); // ignores "finished speaking" from a voice we already cut off
   const reqRef = useRef(0); // ignores answers to a question we already replaced
-  const askRef = useRef<((t: string) => void) | null>(null);
+  const askRef = useRef<((t: string, alts?: string[]) => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Always-on: once switched on, Sourci keeps listening (between answers, while
   // dashboards are open, through silence) until you switch it off.
@@ -149,8 +155,22 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 
   const stopSpeaking = useCallback(() => {
     speakIdRef.current++;
-    audioRef.current?.pause();
+    // If she was cut off mid-sentence, remember only what was actually said.
+    const said = sayingRef.current;
+    if (said?.audio && !said.audio.ended && said.audio.duration > 0) {
+      const frac = Math.min(1, said.audio.currentTime / said.audio.duration);
+      const words = said.text.split(/\s+/);
+      const cut = words.slice(0, Math.max(1, Math.round(words.length * frac))).join(" ");
+      const h = history.current;
+      if (h.length && h[h.length - 1].role === "assistant" && frac < 0.95) {
+        h[h.length - 1] = { role: "assistant", content: `${cut}… (interrupted)` };
+      }
+    }
+    sayingRef.current = null;
+    fadeOut(audioRef.current);
     audioRef.current = null;
+    ackRef.current?.audio.pause();
+    ackRef.current = null;
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
   }, []);
 
@@ -236,6 +256,9 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         });
         if (id !== speakIdRef.current) return;
         if (res.status === 200) {
+          if (ackRef.current) await ackRef.current.done; // let "On it." finish first
+          ackRef.current = null;
+          if (id !== speakIdRef.current) return;
           const p = await playMp3(res); // starts on the first streamed chunk
           if (id !== speakIdRef.current) {
             p.audio.pause();
@@ -243,6 +266,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
           }
           audioRef.current = p.audio;
           outAnRef.current = p.analyser;
+          sayingRef.current = { text, audio: p.audio };
           startBarge(text);
           void p.done.then(finished);
           return;
@@ -251,6 +275,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         /* fall back to the browser voice */
       }
       if (id !== speakIdRef.current) return;
+      ackRef.current = null;
       const synth = window.speechSynthesis;
       if (!synth) return finished();
       const u = new SpeechSynthesisUtterance(text);
@@ -303,6 +328,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       audioCtx();
       stopSpeaking();
       void speak(`Hi, I'm Sourci. This is how I'll sound from now on.`, { voiceOverride: v });
+      warmAcks(v);
     },
     [speak, stopSpeaking],
   );
@@ -373,7 +399,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   }, [speak]);
 
   const ask = useCallback(
-    async (text: string) => {
+    async (text: string, alternatives: string[] = []) => {
       const q = text.trim();
       if (!q) return;
       stopSpeaking();
@@ -383,7 +409,14 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       setError("");
       if (!hello && /^\s*(undo( that| it| the last( one| change)?)?|put (it|them) back|revert( that| it)?)[.!]*\s*$/i.test(q)) return undo();
       // A spoken yes/no answers the pending confirmation directly.
-      if (!hello && pending && YES.test(q)) return void confirm();
+      if (!hello && pending && YES.test(q)) {
+        if (pending.strong && !STRONG_YES.test(q)) {
+          const m = "Just to be safe with this one, say confirm, or tap the button.";
+          setReply(m);
+          return void speak(m);
+        }
+        return void confirm();
+      }
       if (!hello && pending && NO.test(q)) return cancel();
       if (/^\s*(that'?s all|that is all|stop listening|turn off|switch off|go to sleep|bye|goodbye|good night)\b/i.test(q) && q.split(/\s+/).length <= 6) {
         convoRef.current = false;
@@ -400,13 +433,26 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       setDone(null);
       setStatus("working");
       const id = ++reqRef.current;
+      // If the answer isn't back in ~0.7s, say a quick cached "On it." so there's no dead air.
+      const ackTimer = setTimeout(() => {
+        if (id !== reqRef.current || muted || !convoRef.current || hello) return;
+        void ackClip(voice).then(async (b) => {
+          if (!b || id !== reqRef.current || statusRef.current !== "working") return;
+          try {
+            const p = await playBlob(b);
+            ackRef.current = { audio: p.audio, done: p.done };
+            outAnRef.current = p.analyser;
+          } catch {}
+        });
+      }, 700);
       try {
         const res = await fetch("/api/sourci", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: q, path: pathname, history: history.current, memory: memoryRef.current }),
+          body: JSON.stringify({ text: q, path: pathname, history: history.current, memory: memoryRef.current, alternatives: alternatives.filter((a) => a.trim().toLowerCase() !== q.toLowerCase()) }),
         });
         const data = (await res.json()) as SourciReply;
+        clearTimeout(ackTimer);
         if (id !== reqRef.current) return; // you asked something else meanwhile
         if (!res.ok || data.error) {
           setError(data.error || "Sourci couldn't answer.");
@@ -445,18 +491,19 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         if (nav) router.push(nav);
         void speak(data.reply);
       } catch {
+        clearTimeout(ackTimer);
         if (id !== reqRef.current) return;
         setError("Couldn't reach Sourci. Check your connection.");
         setStatus("ready");
       }
     },
-    [cancel, confirm, pathname, pending, router, speak, stopBarge, stopSpeaking, undo],
+    [cancel, confirm, muted, pathname, pending, router, speak, stopBarge, stopSpeaking, undo, voice],
   );
 
   useEffect(() => {
-    askRef.current = (t: string) => {
+    askRef.current = (t: string, alts?: string[]) => {
       convoRef.current = true;
-      void ask(t);
+      void ask(t, alts);
     };
   }, [ask]);
 
@@ -478,12 +525,20 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     rec.lang = "en-IE";
     rec.interimResults = true;
     rec.continuous = false;
+    rec.maxAlternatives = 3;
     let finalText = "";
+    let alts: string[] = [];
     rec.onresult = (e) => {
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
+        if (r.isFinal) {
+          // other ways the last bit could have been heard (names especially)
+          const others: string[] = [];
+          for (let k = 1; k < Math.min(r.length, 3); k++) if (r[k]?.transcript) others.push(finalText + r[k].transcript);
+          alts = others;
+          finalText += r[0].transcript;
+        }
         else interim += r[0].transcript;
       }
       setHeard((finalText + " " + interim).trim());
@@ -501,7 +556,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       recRef.current = null;
       if (finalText.trim()) {
         lastActivity.current = Date.now();
-        void ask(finalText);
+        void ask(finalText, alts);
       } else if (convoRef.current && Date.now() - lastActivity.current < IDLE_OFF_MS) {
         setTimeout(() => convoRef.current && listenRef.current?.(), 250); // silence: keep listening
       } else {
@@ -575,6 +630,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     setOn(true);
     lastActivity.current = Date.now();
     chime("on");
+    if (!muted) warmAcks(voice);
     void micMeter().then((m) => {
       if (convoRef.current) micRef.current = m;
       else m?.stop();
@@ -589,7 +645,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     } catch {}
     if (greet) void askRef.current?.("__hello__");
     else listen();
-  }, [close, listen, status, stopBarge, stopSpeaking]);
+  }, [close, listen, muted, status, stopBarge, stopSpeaking, voice]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1049,12 +1105,12 @@ function ConfirmPanel({ c, onYes, onNo, busy }: { c: SourciConfirm; onYes: () =>
           disabled={busy}
           className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-semibold text-[#04080d] hover:bg-cyan-200 disabled:opacity-50"
         >
-          Yes, do it
+          {c.strong ? "Confirm" : "Yes, do it"}
         </button>
         <button onClick={onNo} disabled={busy} className="rounded-full px-5 py-2 text-sm text-slate-300 ring-1 ring-white/15 hover:bg-white/5">
           Cancel
         </button>
-        <span className="ml-auto hidden self-center font-mono text-[10px] tracking-widest text-slate-500 sm:inline">OR SAY “YES” / “NO”</span>
+        <span className="ml-auto hidden self-center font-mono text-[10px] tracking-widest text-slate-500 sm:inline">{c.strong ? "OR SAY “CONFIRM” / “CANCEL”" : "OR SAY “YES” / “NO”"}</span>
       </div>
     </Panel>
   );

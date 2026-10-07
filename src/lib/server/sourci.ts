@@ -11,6 +11,7 @@ import type { Area } from "@/lib/areas";
 import { SHEET_TEMPLATES, formatCell, parseCell, type SheetColumn, type CellValue } from "@/lib/sheets";
 import { clientNames, matchCandidates } from "@/lib/server/staffing";
 import { ROLE_STATUS } from "@/lib/labels";
+import { bestMatches } from "@/lib/fuzzy";
 import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashboard, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
 
 /**
@@ -600,6 +601,14 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       name: "forget",
       description: "Forget a saved fact (match = a word from it) or everything (match = 'all').",
       parameters: { type: "object", properties: { match: { type: "string" } }, required: ["match"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "resolve_name",
+      description: "Call this when a name the user said finds nothing (speech recognition often mishears names): returns the closest real names across clients, leads, candidates, placed VAs, team members and setters, with a 0-1 score. kind narrows it (any|client|lead|candidate|va|team|setter).",
+      parameters: { type: "object", properties: { name: { type: "string" }, kind: { type: "string", enum: ["any", "client", "lead", "candidate", "va", "team", "setter"] } }, required: ["name", "kind"], additionalProperties: false },
     },
   },
   {
@@ -1986,6 +1995,32 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       return { data: { forgot: match }, actions: [{ type: "forget", match }], say: /^all|everything$/i.test(match) ? "Done, I've cleared everything you told me." : "Done, I've forgotten that." };
     }
 
+    case "resolve_name": {
+      const heard = String(args.name ?? "").trim().slice(0, 80);
+      if (!heard) return { data: { error: "Which name?" } };
+      const kind = String(args.kind ?? "any");
+      const want = (k: string) => kind === "any" || kind === k;
+      const pools: Promise<{ name: string; kind: string }[]>[] = [];
+      const load = (k: string, q: PromiseLike<{ data: Record<string, unknown>[] | null }>, col: string) =>
+        pools.push(Promise.resolve(q).then((r) => (r.data ?? []).map((x) => ({ name: String(x[col] ?? ""), kind: k })).filter((x) => x.name)));
+      if (want("client") && areas.includes("clients")) load("client", db.from("clients").select("name").limit(3000), "name");
+      if (want("lead") && areas.includes("leads")) load("lead", db.from("leads").select("name").order("received_at", { ascending: false }).limit(3000), "name");
+      if (want("candidate") && areas.includes("candidates")) load("candidate", db.from("candidates").select("full_name").limit(3000), "full_name");
+      if (want("va") && areas.includes("clients")) load("va", db.from("va_placements").select("va_name").limit(2000), "va_name");
+      if (want("team")) load("team member", db.from("profiles").select("full_name").eq("active", true), "full_name");
+      if (want("setter") && areas.includes("leads")) load("setter", db.from("setters").select("name"), "name");
+      const all = (await Promise.all(pools)).flat();
+      const seen = new Set<string>();
+      const uniq = all.filter((x) => {
+        const k = `${x.kind}:${x.name.toLowerCase()}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const m = bestMatches(heard, uniq, (x) => x.name, 5, 0.8);
+      return { data: { heard, matches: m.map((x) => ({ name: x.item.name, kind: x.item.kind, score: Number(x.score.toFixed(2)) })), advice: "One match ≥0.9 and clearly ahead: use it and say the name you used. Otherwise ask 'Did you mean A or B?'. None: say you couldn't find that name." } };
+    }
+
     case "today_briefing": {
       const today = dublinDate();
       const items: { title: string; detail?: string; href?: string; tone?: "alert" | "default" }[] = [];
@@ -2355,7 +2390,17 @@ async function findPeople(db: Db, list: string, meId: string): Promise<{ ids: { 
   return { ids, problems };
 }
 
-function proposeOut(confirm: SourciConfirm): ToolOut {
+/** Big or outward-facing changes need an explicit "confirm" (or a click), not just "yeah". */
+function isStrong(p: SourciProposal): boolean {
+  if (["send_email", "bulk_email", "bulk_invoices", "send_reminders", "send_checkins", "bulk_convert", "hire", "create_invoice"].includes(p.kind)) return true;
+  if (p.kind === "bulk_update") return p.ids.length >= 20;
+  if (p.kind === "distribute") return p.groups.reduce((n, g) => n + g.ids.length, 0) >= 20;
+  if (p.kind === "bulk_update_leads") return p.leadIds.length >= 20;
+  return false;
+}
+
+function proposeOut(confirmIn: SourciConfirm): ToolOut {
+  const confirm: SourciConfirm = { ...confirmIn, strong: isStrong(confirmIn.proposal) };
   const verb: Record<string, string> = {
     update_lead: "Shall I update it?",
     create_client: "Want me to create it?",
@@ -2382,7 +2427,7 @@ function proposeOut(confirm: SourciConfirm): ToolOut {
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
     actions: [{ type: "confirm", confirm }],
-    say: `${pick(["Okay.", "Right.", "Sure.", "Done, nearly."])} ${pick([`${confirm.title} is ready on screen.`, `I've set up the ${confirm.title.toLowerCase()} for you to check.`, `Take a look at the ${confirm.title.toLowerCase()}.`])} ${verb[confirm.proposal.kind] ?? "Shall I go ahead?"}`,
+    say: `${pick(["Okay.", "Right.", "Sure."])} ${pick([`${confirm.title} is ready on screen.`, `I've set up the ${confirm.title.toLowerCase()} for you to check.`, `Take a look at the ${confirm.title.toLowerCase()}.`])} ${confirm.strong ? "Say confirm when you're happy, or tap the button." : (verb[confirm.proposal.kind] ?? "Shall I go ahead?")}`,
   };
 }
 
@@ -2504,6 +2549,7 @@ How to work:
 - "What needs me today / what did I miss / morning briefing": today_briefing. Saved daily report: daily_report.
 - SHEETS (the team's trackers inside the CRM, like Google Sheets): sheets_overview lists them; read_sheet answers questions about one; propose_sheet_row logs a row ("log 40 calls and 3 bookings for me today in Daily KPIs"); propose_create_sheet starts a new one from a template.
 - VA STAFFING: roles_summary = open roles (client job orders). role_matches = best candidates for a role. propose_open_role when a client wants a VA. propose_shortlist to put candidates on a role. propose_hire to hire someone on a role (creates the placement). vas_summary = every placed VA across clients.
+- Names are often misheard. If a name finds nothing, call resolve_name (and consider the "also heard" alternatives) before giving up. If the audio was clearly garbled, just ask "Sorry, say that again?".
 - If they tell you something lasting about themselves or the team ("call me…", "Dean handles…", "I prefer…"), call remember. "Forget that" = forget.
 - If the request truly can't be done with your tools, call log_wish, then say so. Never pretend something was done.
 - When the user says "all" or "every" (e.g. "make Paul the manager of all clients"), do exactly that with all_records true; don't ask them to narrow it down. The confirmation card shows the count.
@@ -2517,15 +2563,23 @@ How to work:
 ${memory.length ? `What ${name} has asked you to remember (use it naturally, don't recite it):\n${memory.map((m) => `- ${m}`).join("\n")}\n\n` : ""}The user is on page: ${path}. Today's date (Ireland) is ${dublinDate()}.`;
 }
 
-export async function askSourci(input: { text: string; path: string; history: SourciTurn[]; userName: string; memory?: string[] }): Promise<SourciReply> {
+export async function askSourci(input: { text: string; path: string; history: SourciTurn[]; userName: string; memory?: string[]; alternatives?: string[] }): Promise<SourciReply> {
+  const t0 = Date.now();
+  const used: string[] = [];
   const areas = await getMyAreas();
   const meId = (await getCurrentProfile())?.id ?? "";
   const actions: SourciAction[] = [];
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt(input.userName, input.path, input.memory ?? []) },
     ...input.history.slice(-6).map((t) => ({ role: t.role, content: t.content.slice(0, 1000) }) as OpenAI.Chat.Completions.ChatCompletionMessageParam),
-    { role: "user", content: input.text.slice(0, 1000) },
+    {
+      role: "user",
+      content:
+        input.text.slice(0, 1000) +
+        (input.alternatives?.length ? `\n(speech recognition also heard: ${input.alternatives.map((a) => `"${a.slice(0, 200)}"`).join(" | ")})` : ""),
+    },
   ];
+  const log = (how: string) => console.info(`[sourci] ${how} in ${Date.now() - t0}ms, tools: ${used.join(", ") || "none"}`);
 
   for (let round = 0; round < 5; round++) {
     const res = await getClient().chat.completions.create({
@@ -2537,7 +2591,9 @@ export async function askSourci(input: { text: string; path: string; history: So
     const msg = res.choices[0]?.message;
     if (!msg) break;
     const calls = (msg.tool_calls ?? []).filter((c) => c.type === "function");
+    used.push(...calls.map((c) => c.function.name));
     if (!calls.length) {
+      log(`answered (${round + 1} rounds)`);
       const lastConfirm = [...actions].reverse().find((a) => a.type === "confirm");
       const kept: SourciAction[] = actions.filter((a) => a.type !== "confirm");
       if (lastConfirm) kept.push(lastConfirm);
@@ -2566,6 +2622,7 @@ export async function askSourci(input: { text: string; path: string; history: So
       const lastConfirm = [...actions].reverse().find((a) => a.type === "confirm");
       const kept: SourciAction[] = actions.filter((a) => a.type !== "confirm");
       if (lastConfirm) kept.push(lastConfirm);
+      log("fast path");
       return { reply, actions: kept };
     }
   }

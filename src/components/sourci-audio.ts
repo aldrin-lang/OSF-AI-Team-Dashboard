@@ -176,3 +176,79 @@ export function femaleVoice(): SpeechSynthesisVoice | undefined {
   }
   return vs.find((v) => /en-(GB|IE)/i.test(v.lang)) ?? vs[0];
 }
+
+/** Play an already-fetched clip (cached acknowledgements). */
+export async function playBlob(blob: Blob): Promise<{ audio: HTMLAudioElement; analyser: AnalyserNode | null; done: Promise<void> }> {
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  const analyser = meter(audio);
+  const done = new Promise<void>((r) => {
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      r();
+    };
+    audio.onerror = () => r();
+    audio.onpause = () => r();
+  });
+  await audio.play();
+  return { audio, analyser, done };
+}
+
+/** Fade a voice out over ~120 ms instead of cutting it dead (feels far less abrupt when interrupted). */
+export function fadeOut(audio: HTMLAudioElement | null) {
+  if (!audio) return;
+  const start = audio.volume;
+  const steps = 6;
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    audio.volume = Math.max(0, start * (1 - i / steps));
+    if (i >= steps) {
+      clearInterval(iv);
+      audio.pause();
+    }
+  }, 20);
+}
+
+// Short acknowledgements, recorded once per voice then played from the browser cache (no credits after the first time).
+const ACKS = ["On it.", "Checking now.", "Okay, looking.", "Right, pulling that up."];
+const clipMem = new Map<string, Blob>();
+
+async function clip(voice: string, text: string): Promise<Blob | null> {
+  const key = `${voice}:${text}`;
+  const hit = clipMem.get(key);
+  if (hit) return hit;
+  const url = `/__sourci-clip/${encodeURIComponent(voice)}/${encodeURIComponent(text)}`;
+  try {
+    const cache = typeof caches !== "undefined" ? await caches.open("sourci-clips-v1") : null;
+    const cached = await cache?.match(url);
+    if (cached) {
+      const b = await cached.blob();
+      clipMem.set(key, b);
+      return b;
+    }
+    const res = await fetch("/api/sourci/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, voice }) });
+    if (res.status !== 200) return null; // no ElevenLabs: skip acknowledgements rather than use the robot voice
+    const b = await res.blob();
+    clipMem.set(key, b);
+    await cache?.put(url, new Response(b, { headers: { "Content-Type": "audio/mpeg" } }));
+    return b;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch this voice's acknowledgements in the background so they're instant later. */
+export function warmAcks(voice: string) {
+  void (async () => {
+    for (const t of ACKS) await clip(voice, t);
+  })();
+}
+
+/** A random cached acknowledgement for this voice (null if not cached yet / no ElevenLabs). */
+export async function ackClip(voice: string): Promise<Blob | null> {
+  const ready = ACKS.filter((t) => clipMem.has(`${voice}:${t}`));
+  const t = (ready.length ? ready : ACKS)[Math.floor(Math.random() * (ready.length || ACKS.length))];
+  return clipMem.get(`${voice}:${t}`) ?? (ready.length ? null : clip(voice, t));
+}
+

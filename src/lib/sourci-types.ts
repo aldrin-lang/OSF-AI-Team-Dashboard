@@ -69,6 +69,8 @@ export interface SourciConfirm {
   title: string; // e.g. "Create client profile"
   preview: { label: string; value: string }[];
   proposal: SourciProposal;
+  /** Big/outward-facing change: needs "confirm" (or a click), not just "yes". */
+  strong?: boolean;
 }
 
 export type SourciAction =
