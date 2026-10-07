@@ -9,6 +9,11 @@ import { dublinDate, isIsoDate, textToHtml } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
 import type { Profile } from "@/lib/types";
 import type { SourciProposal } from "@/lib/sourci-types";
+import { ENTITIES, type EntityKey } from "@/lib/server/sourci-records";
+import { moveClientStage } from "@/app/(app)/clients/actions";
+import { sendReminder } from "@/lib/server/payments";
+import { sendCheckinEmail } from "@/lib/server/checkins";
+import { CURRENCIES } from "@/lib/ops-core";
 
 /**
  * Runs a change Sourci proposed, AFTER the user pressed/said "yes".
@@ -227,6 +232,197 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         }
       }
       return { ok: true, message: `Done. ${n} lead${n === 1 ? "" : "s"} updated${p.setterName ? `, now with ${p.setterName}` : ""}.`, stamp: "UPDATED", title: `${n} leads`, href: "/leads" };
+    }
+
+    case "bulk_update": {
+      const ent = ENTITIES[p.entity as EntityKey];
+      if (!ent) throw new Error("Unknown record type");
+      if (ent.area) need(ent.area);
+      const ids = (p.ids ?? []).filter((x) => UUID.test(x)).slice(0, 200);
+      if (!ids.length) throw new Error("Nothing to change");
+      const patch: Record<string, unknown> = {};
+      const appends: { col: string; text: string }[] = [];
+      const said: string[] = [];
+      for (const c of p.changes ?? []) {
+        const def = ent.editable[c.field];
+        if (!def) throw new Error(`Can't change ${c.field}`);
+        if (def.managerOnly && me.role === "member") throw new Error("Only managers can change that.");
+        const v = c.value;
+        if (def.kind === "enum" && !(typeof v === "string" && def.values?.includes(v))) throw new Error(`Bad value for ${c.field}`);
+        if ((def.kind === "person" || def.kind === "setter") && !(v === null || (typeof v === "string" && UUID.test(v)))) throw new Error(`Bad value for ${c.field}`);
+        if (def.kind === "date" && !(typeof v === "string" && isIsoDate(v))) throw new Error(`Bad date for ${c.field}`);
+        if (def.kind === "number" && !(typeof v === "number" && (def.min == null || v >= def.min) && (def.max == null || v <= def.max))) throw new Error(`Bad number for ${c.field}`);
+        if (def.kind === "bool" && typeof v !== "boolean") throw new Error(`Bad value for ${c.field}`);
+        if (def.append) {
+          appends.push({ col: def.col, text: clip(v, 2000) });
+        } else {
+          patch[def.col] = v;
+        }
+        said.push(`${c.field.replace(/_/g, " ")} → ${c.display}`);
+        // side effects that keep the record consistent, same as the buttons do
+        if (p.entity === "leads" && c.field === "setter") {
+          patch.assigned_at = v ? new Date().toISOString() : null;
+          patch.assigned_by = `Sourci (${me.full_name || me.email})`;
+        }
+        if (p.entity === "concerns" && c.field === "status") patch.resolved_at = v === "resolved" ? new Date().toISOString() : null;
+        if (p.entity === "invoices" && c.field === "status") patch.paid_on = v === "paid" ? dublinDate() : null;
+      }
+      let changed: string[] = ids;
+      if (Object.keys(patch).length) {
+        const { data, error } = await db.from(ent.table).update(patch).in("id", ids).select("id");
+        if (error) throw new Error(error.message);
+        changed = (data ?? []).map((r) => r.id as string);
+      }
+      for (const a of appends) {
+        const { data: rows } = await db.from(ent.table).select(`id, ${a.col}`).in("id", changed);
+        for (const r of (rows ?? []) as unknown as Record<string, unknown>[]) {
+          const prev = (r[a.col] as string | null) ?? "";
+          await db.from(ent.table).update({ [a.col]: [prev, `${dublinDate()}: ${a.text}`].filter(Boolean).join("\n") }).eq("id", r.id as string);
+        }
+      }
+      if (p.entity === "invoices" && patch.status && patch.status !== "open") {
+        await db.from("payment_reminders").update({ status: "skipped" }).in("invoice_id", changed).eq("status", "draft");
+      }
+      const summary = `Sourci: ${said.join(", ")}`;
+      if (ent.logAs === "lead" && changed.length) {
+        await db.from("lead_events").insert(changed.map((id) => ({ lead_id: id, kind: "note", summary, actor_id: me.id })));
+      } else if (ent.logAs === "client" || ent.logAs === "concern") {
+        const entityIds = p.entity === "invoices"
+          ? ((await db.from("invoices").select("client_id").in("id", changed)).data ?? []).map((r) => r.client_id as string)
+          : changed;
+        for (const id of [...new Set(entityIds)].slice(0, 100)) {
+          await logActivity({ entity: ent.logAs === "concern" ? "concern" : "client", entityId: id, verb: "updated", summary });
+        }
+      }
+      if (p.entity === "leads") {
+        const setterChange = (p.changes ?? []).find((c) => c.field === "setter" && c.value);
+        if (setterChange) {
+          const { data: setter } = await db.from("setters").select("profile_id").eq("id", setterChange.value as string).maybeSingle();
+          if (setter?.profile_id) await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${changed.length} lead${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/leads" });
+        }
+      }
+      if (p.entity === "tasks") {
+        const a = (p.changes ?? []).find((c) => c.field === "assignee" && c.value && c.value !== me.id);
+        if (a) await notifyUsers({ userIds: [a.value as string], event: "assigned_to_me", title: `${changed.length} task${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/my-desk" });
+      }
+      const n = changed.length;
+      return { ok: true, message: `Done. ${n} ${n === 1 ? ent.label.replace(/s$/, "") : ent.label} updated.`, stamp: "UPDATED", title: `${n} ${ent.label}`, href: p.entity === "leads" ? "/leads" : undefined };
+    }
+
+    case "move_stage": {
+      need("clients");
+      if (!UUID.test(p.stageId)) throw new Error("Bad stage");
+      const ids = (p.clientIds ?? []).filter((x) => UUID.test(x)).slice(0, 50);
+      const blocked: string[] = [];
+      let moved = 0;
+      for (const id of ids) {
+        const r = await moveClientStage({ clientId: id, toStageId: p.stageId });
+        if (r.ok) moved++;
+        else {
+          const { data: c } = await db.from("clients").select("name").eq("id", id).maybeSingle();
+          blocked.push(`${c?.name ?? "a client"} (${r.error})`);
+        }
+      }
+      const msg = `${moved} moved to ${p.stageName}.${blocked.length ? ` ${blocked.length} blocked: ${blocked.slice(0, 3).join("; ")}` : ""}`;
+      return { ok: moved > 0, message: msg, stamp: moved ? "MOVED" : "BLOCKED", title: `Stage: ${p.stageName}`, href: ids.length === 1 ? `/clients/${ids[0]}` : "/pipeline" };
+    }
+
+    case "convert_lead": {
+      need("leads");
+      need("clients");
+      if (!UUID.test(p.leadId)) throw new Error("Bad lead id");
+      const { data: lead } = await db.from("leads").select("*").eq("id", p.leadId).maybeSingle();
+      if (!lead) throw new Error("Lead not found");
+      if (lead.client_id) return { ok: true, message: `${lead.name} is already a client.`, stamp: "ALREADY", title: lead.name as string, href: `/clients/${lead.client_id}` };
+      if (lead.service === "va" || lead.service === "premium") throw new Error("VA onboarding isn't in the dashboard yet");
+      const { data: firstStage } = await db.from("pipeline_stages").select("id").eq("pipeline", "ai").order("position").limit(1).maybeSingle();
+      let closedBy: string | null = null;
+      if (lead.setter_id) closedBy = ((await db.from("setters").select("name").eq("id", lead.setter_id).maybeSingle()).data?.name as string) ?? null;
+      const name = (lead.name as string) || (lead.email as string) || "New client";
+      const { data: client, error } = await db
+        .from("clients")
+        .insert({ pipeline: "ai", name, contact_email: lead.email, source: lead.source, country: lead.country, closed_by: closedBy, stage_id: firstStage?.id ?? null })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      const { data: templates } = await db.from("checklist_templates").select("key, label, position").eq("pipeline", "ai").order("position");
+      if (templates?.length) await db.from("checklist_items").insert(templates.map((t) => ({ client_id: client.id, key: t.key, label: t.label, position: t.position })));
+      await db.from("leads").update({ client_id: client.id, status: "won" }).eq("id", p.leadId);
+      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "converted", summary: "Converted to an AI receptionist client (via Sourci)", actor_id: me.id });
+      await logActivity({ entity: "client", entityId: client.id, verb: "created", summary: `Created ${name} from a lead (via Sourci)` });
+      return { ok: true, message: `${name} is now a client, at the first onboarding stage.`, stamp: "CONVERTED", title: name, href: `/clients/${client.id}` };
+    }
+
+    case "create_invoice": {
+      need("payments");
+      if (me.role === "member") throw new Error("Only managers can add invoices.");
+      if (!UUID.test(p.clientId)) throw new Error("Bad client");
+      const amount = Math.round(Number(p.amount) * 100) / 100;
+      if (!(amount > 0)) throw new Error("Amount must be more than 0");
+      if (!(CURRENCIES as readonly string[]).includes(p.currency)) throw new Error("Unknown currency");
+      if (!isIsoDate(p.dueOn)) throw new Error("Bad due date");
+      const number = clip(p.number, 60);
+      if (!number) throw new Error("Invoice number is required");
+      const billTo = clip(p.billTo, 200);
+      if (billTo && !EMAIL.test(billTo)) throw new Error("Billing email doesn't look right");
+      const issued = dublinDate();
+      const { data, error } = await db
+        .from("invoices")
+        .insert({ client_id: p.clientId, number, amount, currency: p.currency, issued_on: p.dueOn < issued ? p.dueOn : issued, due_on: p.dueOn, description: clip(p.description, 500) || null, bill_to_email: billTo || null, created_by: me.id })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.code === "23505" ? `Invoice ${number} already exists` : error.message);
+      await logActivity({ entity: "client", entityId: p.clientId, verb: "updated", summary: `Invoice ${number} added (via Sourci)` });
+      return { ok: true, message: `Invoice ${number} added for ${p.clientName}. Reminders will go out automatically from three days before it's due.`, stamp: "CREATED", title: `Invoice ${number}`, href: `/payments/${data.id}` };
+    }
+
+    case "create_concern": {
+      need("clients");
+      if (!UUID.test(p.clientId)) throw new Error("Bad client");
+      const title = clip(p.title, 200);
+      if (!title) throw new Error("The concern needs a title");
+      const severity = ["low", "medium", "high", "urgent"].includes(p.severity) ? p.severity : "medium";
+      if (p.ownerId && !UUID.test(p.ownerId)) throw new Error("Bad owner");
+      const { data, error } = await db
+        .from("concerns")
+        .insert({ client_id: p.clientId, title, severity, description: clip(p.description, 4000) || null, raised_by: me.id, owner_id: p.ownerId ?? null })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      await logActivity({ entity: "concern", entityId: data.id, verb: "created", summary: `Concern raised for ${p.clientName}: ${title} (via Sourci)` });
+      if (p.ownerId && p.ownerId !== me.id) await notifyUsers({ userIds: [p.ownerId], event: "concern_my_client", title: `New concern: ${p.clientName}`, body: title, link: `/concerns/${data.id}` });
+      return { ok: true, message: `Concern logged for ${p.clientName}.`, stamp: "RAISED", title, href: `/concerns/${data.id}` };
+    }
+
+    case "send_reminders": {
+      need("payments");
+      if (me.role === "member") throw new Error("Only managers can send payment reminders.");
+      const ids = (p.reminderIds ?? []).filter((x) => UUID.test(x)).slice(0, 25);
+      let sent = 0;
+      const failed: string[] = [];
+      for (const id of ids) {
+        const { data: r } = await db.from("payment_reminders").select("subject, body, status").eq("id", id).maybeSingle();
+        if (!r || r.status !== "draft") continue;
+        const res = await sendReminder(id, me.id, { subject: r.subject as string, body: r.body as string });
+        if (res.ok) sent++;
+        else failed.push(res.error ?? "failed");
+      }
+      return { ok: sent > 0, message: `${sent} reminder${sent === 1 ? "" : "s"} sent.${failed.length ? ` ${failed.length} couldn't go: ${failed[0]}` : ""}`, stamp: "SENT", title: "Payment reminders", href: "/payments" };
+    }
+
+    case "send_checkins": {
+      need("checkins");
+      const ids = (p.checkinIds ?? []).filter((x) => UUID.test(x)).slice(0, 25);
+      let sent = 0;
+      const failed: string[] = [];
+      for (const id of ids) {
+        const { data: c } = await db.from("checkins").select("subject, message, status").eq("id", id).maybeSingle();
+        if (!c || c.status !== "due") continue;
+        const res = await sendCheckinEmail(id, me.id, { subject: (c.subject as string) ?? "Checking in", message: (c.message as string) ?? "", to: null });
+        if (res.ok) sent++;
+        else failed.push(res.error ?? "failed");
+      }
+      return { ok: sent > 0, message: `${sent} check-in${sent === 1 ? "" : "s"} sent.${failed.length ? ` ${failed.length} couldn't go: ${failed[0]}` : ""}`, stamp: "SENT", title: "Check-ins", href: "/check-ins?view=waiting" };
     }
 
     case "notify_team": {

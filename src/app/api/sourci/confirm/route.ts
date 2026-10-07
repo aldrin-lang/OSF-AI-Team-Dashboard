@@ -6,9 +6,9 @@ import type { SourciProposal } from "@/lib/sourci-types";
 
 // Runs a change Sourci proposed, after the user confirmed it in the widget.
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 120; // bulk sends
 
-const KINDS = new Set(["update_lead", "create_client", "add_note", "create_task", "invoice_status", "candidate_status", "send_email", "notify_team", "bulk_update_leads"]);
+const KINDS = new Set(["update_lead", "create_client", "add_note", "create_task", "invoice_status", "candidate_status", "send_email", "notify_team", "bulk_update_leads", "bulk_update", "move_stage", "convert_lead", "create_invoice", "create_concern", "send_reminders", "send_checkins"]);
 
 export async function POST(request: Request) {
   const me = await getCurrentProfile();

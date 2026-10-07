@@ -43,7 +43,14 @@ export type SourciProposal =
   | { kind: "candidate_status"; candidateId: string; name: string; status: string }
   | { kind: "send_email"; to: string; subject: string; body: string; clientId?: string; clientName?: string }
   | { kind: "notify_team"; title: string; body?: string; audience: string; recipientIds: string[] }
-  | { kind: "bulk_update_leads"; leadIds: string[]; setterId?: string | null; setterName?: string; status?: string };
+  | { kind: "bulk_update_leads"; leadIds: string[]; setterId?: string | null; setterName?: string; status?: string }
+  | { kind: "bulk_update"; entity: string; ids: string[]; changes: { field: string; value: string | number | boolean | null; display: string }[] }
+  | { kind: "move_stage"; clientIds: string[]; stageId: string; stageName: string }
+  | { kind: "convert_lead"; leadId: string; leadName: string }
+  | { kind: "create_invoice"; clientId: string; clientName: string; number: string; amount: number; currency: string; dueOn: string; description?: string; billTo?: string }
+  | { kind: "create_concern"; clientId: string; clientName: string; title: string; severity: string; description?: string; ownerId?: string }
+  | { kind: "send_reminders"; reminderIds: string[] }
+  | { kind: "send_checkins"; checkinIds: string[] };
 
 export interface SourciConfirm {
   title: string; // e.g. "Create client profile"

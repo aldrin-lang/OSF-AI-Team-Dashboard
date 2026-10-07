@@ -1,7 +1,9 @@
 import "server-only";
 import OpenAI from "openai";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getMyAreas } from "@/lib/auth";
+import { getCurrentProfile, getMyAreas } from "@/lib/auth";
+import { getAdminSupabase } from "@/lib/supabase/server";
+import { ENTITIES, PERIODS as REC_PERIODS, resolveChanges, searchRecords, summarise, type EntityKey, type Filter } from "@/lib/server/sourci-records";
 import { OPEN_STATUSES } from "@/lib/leads-ingest";
 import { CANDIDATE_STATUS, LEAD_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney } from "@/lib/ops-core";
@@ -283,6 +285,94 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: { type: "object", properties: { group: { type: "string", enum: ["unassigned", "untouched", "open", "today", "no_answer", "contacted", "call_booked", "from_setter"] }, from_setter: { type: "string" }, service: { type: "string", enum: ["any", "ai", "va", "premium"] }, assign_to: { type: "string" }, set_status: { type: "string", enum: ["", "new", "contacted", "call_booked", "no_answer", "not_interested", "won", "lost"] } }, required: ["group", "from_setter", "service", "assign_to", "set_status"], additionalProperties: false },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "search_records",
+      description: "Find and show ANY records on screen (leads, clients, invoices, candidates, checkins, concerns, tasks) with filters, a period, sort and limit. Use this for any 'show me / which / how many / list' question that the specific summary tools don't cover. Fields per type \u2014 leads: name, email, phone, status (new|contacted|call_booked|no_answer|not_interested|won|lost), service (ai|va|premium|unknown), source, country, setter (setter name), ad_code, unassigned (true/false), received (date). clients: name, status (active=onboarding|live|paused|withdrawn|rejected|churned), service (ai|va), country, source, manager (person or \"me\"), no_manager (true), stage (stage name), start_date, created. invoices: number, status (open|paid|void), client, currency, amount, due (date), overdue (true). candidates: name, email, status (new|screened|shortlisted|interview|hired|rejected), role (AI-recommended role), applied_role, score, created. checkins: status (due|sent|replied|done|skipped), mood (good|neutral|at_risk), kind (client|va), client, due. concerns: title, status (open|in_progress|resolved), severity (low|medium|high|urgent), client, owner (person), raised. tasks: title, status (open|done), assignee (person or \"me\"), client, due, overdue (true). Use \"a|b\" in value for several enum values. Dates are YYYY-MM-DD.",
+      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] }, filters: { type: "array", items: { type: "object", properties: { field: { type: "string" }, op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] }, value: { type: "string" } }, required: ["field", "op", "value"], additionalProperties: false } }, period: { type: "string", enum: ["any", "today", "yesterday", "last_7_days", "this_week", "this_month", "last_30_days", "next_7_days"] }, sort: { type: "string" }, sort_dir: { type: "string", enum: ["asc", "desc"] } }, required: ["entity", "filters", "period", "sort", "sort_dir"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_update",
+      description: "Prepare a change to one OR many records of any type, selected with the same filters as search_records (up to 200). The user must confirm. Editable fields \u2014 leads: status, setter (setter name or \"nobody\"), note (appended), country, ad_name, ad_code. clients: status, manager (person/\"me\"/\"nobody\"), country, source, start_date, remark (appended), checkin_every_days (3-90), checkin_paused (true/false). invoices (managers): status (open|paid|void), due_on, note. candidates: status, note. checkins: status (due|done|skipped). concerns: status, severity, owner. tasks: status (open|done), assignee, due_date. Pipeline stage is NOT here: use propose_move_stage.",
+      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] }, filters: { type: "array", items: { type: "object", properties: { field: { type: "string" }, op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] }, value: { type: "string" } }, required: ["field", "op", "value"], additionalProperties: false } }, period: { type: "string", enum: ["any", "today", "yesterday", "last_7_days", "this_week", "this_month", "last_30_days", "next_7_days"] }, set: { type: "array", items: { type: "object", properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"], additionalProperties: false } } }, required: ["entity", "filters", "period", "set"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_move_stage",
+      description: "Prepare moving a client (or every client currently in from_stage) to another onboarding pipeline stage. The stage checklist rules still apply. Give client OR from_stage.",
+      parameters: { type: "object", properties: { client: { type: "string" }, from_stage: { type: "string" }, to_stage: { type: "string" } }, required: ["client", "from_stage", "to_stage"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_convert_lead",
+      description: "Prepare turning a won AI-receptionist lead into a client (creates the client at the first onboarding stage and marks the lead won).",
+      parameters: { type: "object", properties: { lead: { type: "string" } }, required: ["lead"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_create_invoice",
+      description: "Prepare a new invoice for a client. currency GBP/EUR/NZD/AUD/CAD/USD. due_date YYYY-MM-DD (default 14 days from today). number may be empty to auto-generate. bill_to optional email.",
+      parameters: { type: "object", properties: { client: { type: "string" }, amount: { type: "number" }, currency: { type: "string" }, due_date: { type: "string" }, description: { type: "string" }, number: { type: "string" }, bill_to: { type: "string" } }, required: ["client", "amount", "currency", "due_date", "description", "number", "bill_to"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_create_concern",
+      description: "Prepare logging a concern/issue for a client. severity low|medium|high|urgent. owner = team member name or empty.",
+      parameters: { type: "object", properties: { client: { type: "string" }, title: { type: "string" }, severity: { type: "string", enum: ["low", "medium", "high", "urgent"] }, description: { type: "string" }, owner: { type: "string" } }, required: ["client", "title", "severity", "description", "owner"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_send_reminders",
+      description: "Prepare sending ALL payment reminder drafts that are waiting (by email to the clients). The user must confirm.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_send_checkins",
+      description: "Prepare sending ALL check-ins that are due and have an email address. The user must confirm.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "today_briefing",
+      description: "What needs the user's attention today across every department: unassigned/untouched leads, overdue invoices, reminders and check-ins waiting, at-risk clients, candidates to review, overdue tasks, urgent concerns. Use for 'what should I focus on', 'what did I miss', 'morning briefing'.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "daily_report",
+      description: "Show the saved daily report for a date (YYYY-MM-DD, default yesterday).",
+      parameters: { type: "object", properties: { date: { type: "string" } }, required: ["date"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "log_wish",
+      description: "When the user asks for something none of your tools can do, call this to save their request for the developers, then tell them you've noted it.",
+      parameters: { type: "object", properties: { request: { type: "string" } }, required: ["request"], additionalProperties: false },
+    },
+  },
 ];
 
 /** `say` = a ready one-sentence spoken reply, so simple questions skip a second AI round. */
@@ -295,7 +385,7 @@ const NUM = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight
 const num = (n: number) => (n >= 0 && n < NUM.length ? NUM[n] : String(n));
 const firstName = (s: string | null | undefined) => (s ?? "").trim().split(/\s+/)[0] || "";
 
-async function runTool(name: string, args: Record<string, unknown>, areas: Area[], user = ""): Promise<ToolOut> {
+async function runTool(name: string, args: Record<string, unknown>, areas: Area[], user = "", meId = ""): Promise<ToolOut> {
   const hi = user ? pick([`${user}, `, "", ""]) : "";
   const db = await getServerSupabase();
   const need = (a: Area) => {
@@ -935,6 +1025,281 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       return proposeOut({ title: `Update ${plural(rows.length, "lead")}`, preview, proposal: pr });
     }
 
+    case "search_records": {
+      const entity = String(args.entity) as EntityKey;
+      const ent = ENTITIES[entity];
+      if (!ent) return { data: { error: "Unknown record type" } };
+      if (ent.area) need(ent.area);
+      const period = (REC_PERIODS as readonly string[]).includes(String(args.period)) ? String(args.period) : "any";
+      const res = await searchRecords(entity, (args.filters as Filter[]) ?? [], period, meId, {
+        sort: String(args.sort ?? "") || undefined,
+        sortDir: args.sort_dir === "asc" ? "asc" : args.sort_dir === "desc" ? "desc" : undefined,
+      });
+      const items = summarise(entity, res.rows, 15);
+      const extra = entity === "invoices" ? (() => {
+        const m: Record<string, number> = {};
+        for (const r of res.rows) m[r.currency as string] = (m[r.currency as string] ?? 0) + Number(r.amount);
+        return Object.entries(m).map(([c, v]) => formatMoney(v, c)).join(" + ");
+      })() : "";
+      const dashboard: SourciDashboard = {
+        eyebrow: `${ent.label.toUpperCase()}${res.periodLabel ? ` · ${res.periodLabel.toUpperCase()}` : ""}`,
+        title: `${res.count} ${res.count === 1 ? ent.label.replace(/s$/, "") : ent.label}`,
+        stats: [{ label: "Found", value: String(res.count) }, ...(extra ? [{ label: "Total", value: extra }] : [])],
+        list: items.length ? { title: res.count > items.length ? `First ${items.length}` : "Results", items } : undefined,
+      };
+      return {
+        data: { count: res.count, problems: res.problems, records: items.map((i) => `${i.title} (${i.detail})`) },
+        actions: res.problems.length && !res.count ? [] : [{ type: "dashboard", dashboard }],
+        say: res.problems.length
+          ? undefined
+          : res.count
+            ? `${hi}I found ${num(res.count)} ${res.count === 1 ? ent.label.replace(/s$/, "") : ent.label}${res.periodLabel ? ` for ${res.periodLabel}` : ""}. They're on screen.`
+            : `${hi}nothing matches that, I'm afraid.`,
+      };
+    }
+
+    case "propose_bulk_update": {
+      const entity = String(args.entity) as EntityKey;
+      const ent = ENTITIES[entity];
+      if (!ent) return { data: { error: "Unknown record type" } };
+      if (ent.area) need(ent.area);
+      const period = (REC_PERIODS as readonly string[]).includes(String(args.period)) ? String(args.period) : "any";
+      const filters = (args.filters as Filter[]) ?? [];
+      if (!filters.length && period === "any") return { data: { error: "Refusing to change every record: add a filter (e.g. status, name, client) or a period" } };
+      const res = await searchRecords(entity, filters, period, meId, { limit: 200 });
+      if (res.problems.length) return { data: { error: res.problems.join("; ") } };
+      if (!res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to change.` };
+      const ch = await resolveChanges(entity, (args.set as { field: string; value: string }[]) ?? [], meId);
+      if (ch.problems.length || !ch.changes.length) return { data: { error: ch.problems.join("; ") || "Say what to change" } };
+      const names = res.rows.map((r) => ent.name(r));
+      return proposeOut({
+        title: `Update ${res.rows.length} ${res.rows.length === 1 ? ent.label.replace(/s$/, "") : ent.label}`,
+        preview: [
+          { label: "Which", value: names.slice(0, 8).join(", ") + (names.length > 8 ? ` +${names.length - 8} more` : "") },
+          ...ch.changes.map((c) => ({ label: c.field.replace(/_/g, " "), value: c.display })),
+          ...(res.count > res.rows.length ? [{ label: "Note", value: `Only the first ${res.rows.length} of ${res.count} will change` }] : []),
+        ],
+        proposal: { kind: "bulk_update", entity, ids: res.rows.map((r) => r.id as string), changes: ch.changes },
+      });
+    }
+
+    case "propose_move_stage": {
+      need("clients");
+      const to = clean(args.to_stage, 60);
+      const { data: stages } = await db.from("pipeline_stages").select("id, name, pipeline").ilike("name", `%${to}%`).limit(3);
+      if (!stages?.length) return { data: { error: `No stage called "${to}"` } };
+      if (stages.length > 1) return { data: { ask_which_stage: stages.map((x) => x.name) } };
+      const stage = stages[0];
+      let clients: { id: string; name: string }[] = [];
+      const cq = clean(args.client, 80);
+      const from = clean(args.from_stage, 60);
+      if (cq) {
+        const { data } = await db.from("clients").select("id, name").or(`name.ilike.%${cq}%,company_name.ilike.%${cq}%`).limit(5);
+        if (!data?.length) return { data: { error: `No client matching "${cq}"` } };
+        if (data.length > 1) return { data: { ask_which: data.map((c) => c.name) } };
+        clients = data as { id: string; name: string }[];
+      } else if (from) {
+        const { data: fs } = await db.from("pipeline_stages").select("id, name").ilike("name", `%${from}%`).limit(2);
+        if (!fs?.length) return { data: { error: `No stage called "${from}"` } };
+        const { data } = await db.from("clients").select("id, name").eq("stage_id", fs[0].id).limit(50);
+        clients = (data ?? []) as { id: string; name: string }[];
+        if (!clients.length) return { data: { error: `No clients in ${fs[0].name}` } };
+      } else return { data: { error: "Which client, or which stage are they in now?" } };
+      return proposeOut({
+        title: `Move ${clients.length === 1 ? clients[0].name : `${clients.length} clients`} to ${stage.name}`,
+        preview: [
+          { label: "Clients", value: clients.slice(0, 8).map((c) => c.name).join(", ") + (clients.length > 8 ? ` +${clients.length - 8} more` : "") },
+          { label: "New stage", value: stage.name as string },
+          { label: "Note", value: "Checklist rules still apply; blocked moves are reported." },
+        ],
+        proposal: { kind: "move_stage", clientIds: clients.map((c) => c.id), stageId: stage.id as string, stageName: stage.name as string },
+      });
+    }
+
+    case "propose_convert_lead": {
+      need("leads");
+      need("clients");
+      const q = clean(args.lead, 60);
+      const { data } = await db.from("leads").select("id, name, service, client_id").or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).order("received_at", { ascending: false }).limit(5);
+      if (!data?.length) return { data: { error: `No lead matching "${q}"` } };
+      if (data.length > 1) return { data: { ask_which: data.map((l) => l.name) } };
+      const l = data[0];
+      if (l.client_id) return { data: { error: `${l.name} is already a client` }, say: `${l.name} is already a client.` };
+      if (l.service === "va" || l.service === "premium") return { data: { error: "VA onboarding isn't in the dashboard yet" }, say: "VA onboarding isn't in the dashboard yet, so I can't convert that one." };
+      return proposeOut({
+        title: "Convert lead to client",
+        preview: [{ label: "Lead", value: l.name || "Unnamed" }, { label: "Becomes", value: "AI receptionist client, first onboarding stage" }, { label: "Lead status", value: "Won" }],
+        proposal: { kind: "convert_lead", leadId: l.id, leadName: l.name || "Lead" },
+      });
+    }
+
+    case "propose_create_invoice": {
+      need("payments");
+      const cq = clean(args.client, 80);
+      const { data } = await db.from("clients").select("id, name, contact_email").or(`name.ilike.%${cq}%,company_name.ilike.%${cq}%`).limit(5);
+      if (!data?.length) return { data: { error: `No client matching "${cq}"` } };
+      if (data.length > 1) return { data: { ask_which: data.map((c) => c.name) } };
+      const amount = Number(args.amount);
+      if (!(amount > 0)) return { data: { error: "I need the amount" } };
+      const currency = String(args.currency || "GBP").toUpperCase();
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(String(args.due_date ?? "")) ? String(args.due_date) : addDays(dublinDate(), 14);
+      const number = clean(args.number, 60) || `INV-${dublinDate().replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const billTo = String(args.bill_to ?? "").trim();
+      return proposeOut({
+        title: "Create invoice",
+        preview: [
+          { label: "Client", value: data[0].name },
+          { label: "Amount", value: formatMoney(amount, currency) },
+          { label: "Due", value: due },
+          { label: "Number", value: number },
+          ...(args.description ? [{ label: "For", value: String(args.description) }] : []),
+          { label: "Send to", value: billTo || data[0].contact_email || "no email on file" },
+        ],
+        proposal: { kind: "create_invoice", clientId: data[0].id, clientName: data[0].name, number, amount, currency, dueOn: due, description: String(args.description ?? "") || undefined, billTo: billTo || undefined },
+      });
+    }
+
+    case "propose_create_concern": {
+      need("clients");
+      const cq = clean(args.client, 80);
+      const { data } = await db.from("clients").select("id, name").or(`name.ilike.%${cq}%,company_name.ilike.%${cq}%`).limit(5);
+      if (!data?.length) return { data: { error: `No client matching "${cq}"` } };
+      if (data.length > 1) return { data: { ask_which: data.map((c) => c.name) } };
+      let ownerId: string | undefined;
+      let ownerName = "";
+      const oq = clean(args.owner, 60);
+      if (oq) {
+        const { data: people } = await db.from("profiles").select("id, full_name, email").eq("active", true).or(`full_name.ilike.%${oq}%,email.ilike.%${oq}%`).limit(3);
+        if (people?.length === 1) {
+          ownerId = people[0].id;
+          ownerName = people[0].full_name || people[0].email;
+        }
+      }
+      const title = String(args.title ?? "").trim().slice(0, 200);
+      if (!title) return { data: { error: "What's the concern?" } };
+      return proposeOut({
+        title: "Log concern",
+        preview: [
+          { label: "Client", value: data[0].name },
+          { label: "Concern", value: title },
+          { label: "Severity", value: String(args.severity || "medium") },
+          ...(ownerName ? [{ label: "Owner", value: ownerName }] : []),
+        ],
+        proposal: { kind: "create_concern", clientId: data[0].id, clientName: data[0].name, title, severity: String(args.severity || "medium"), description: String(args.description ?? "") || undefined, ownerId },
+      });
+    }
+
+    case "propose_send_reminders": {
+      need("payments");
+      const { data } = await db.from("payment_reminders").select("id, subject, invoices(number, clients(name))").eq("status", "draft").limit(25);
+      const rows = (data ?? []) as unknown as { id: string; subject: string; invoices: { number: string; clients: { name: string } | null } | null }[];
+      if (!rows.length) return { data: { error: "No reminders waiting" }, say: `${hi}there are no payment reminders waiting, all caught up.` };
+      return proposeOut({
+        title: `Send ${rows.length} payment reminder${rows.length === 1 ? "" : "s"}`,
+        preview: [{ label: "To", value: rows.map((r) => `${r.invoices?.clients?.name ?? "Client"} (${r.invoices?.number ?? ""})`).join(", ") }],
+        proposal: { kind: "send_reminders", reminderIds: rows.map((r) => r.id) },
+      });
+    }
+
+    case "propose_send_checkins": {
+      need("checkins");
+      const { data } = await db.from("checkins").select("id, contact_email, kind, contact_name, clients(name)").eq("status", "due").not("contact_email", "is", null).limit(25);
+      const rows = (data ?? []) as unknown as { id: string; kind: string; contact_name: string | null; clients: { name: string } | null }[];
+      if (!rows.length) return { data: { error: "No check-ins to send by email" }, say: `${hi}there are no check-ins waiting with an email address.` };
+      return proposeOut({
+        title: `Send ${rows.length} check-in${rows.length === 1 ? "" : "s"}`,
+        preview: [{ label: "To", value: rows.map((r) => (r.kind === "va" ? `VA ${r.contact_name ?? ""} (${r.clients?.name ?? ""})` : r.clients?.name ?? "Client")).join(", ") }],
+        proposal: { kind: "send_checkins", checkinIds: rows.map((r) => r.id) },
+      });
+    }
+
+    case "today_briefing": {
+      const today = dublinDate();
+      const items: { title: string; detail?: string; href?: string; tone?: "alert" | "default" }[] = [];
+      const stats: SourciDashboard["stats"] = [];
+      const has = (a: Area) => areas.includes(a);
+      const tasks: Promise<void>[] = [];
+      if (has("leads"))
+        tasks.push((async () => {
+          const since = dublinDayBounds(addDays(today, -30)).start;
+          const { data } = await db.from("leads").select("setter_id, status").gte("received_at", since).in("status", [...OPEN_STATUSES]).limit(5000);
+          const un = (data ?? []).filter((l) => !l.setter_id).length;
+          const fresh = (data ?? []).filter((l) => l.status === "new").length;
+          stats.push({ label: "Unassigned leads", value: String(un), tone: un ? "alert" : "good" });
+          if (un) items.push({ title: `${un} unassigned lead${un === 1 ? "" : "s"}`, detail: "Give them a setter", href: "/leads", tone: "alert" });
+          if (fresh) items.push({ title: `${fresh} lead${fresh === 1 ? "" : "s"} not contacted yet`, href: "/leads" });
+        })());
+      if (has("payments"))
+        tasks.push((async () => {
+          const [{ data: od }, { data: dr }] = await Promise.all([
+            db.from("invoices").select("id").eq("status", "open").lt("due_on", today),
+            db.from("payment_reminders").select("id").eq("status", "draft"),
+          ]);
+          stats.push({ label: "Overdue invoices", value: String(od?.length ?? 0), tone: od?.length ? "alert" : "good" });
+          if (od?.length) items.push({ title: `${od.length} overdue invoice${od.length === 1 ? "" : "s"}`, href: "/payments?view=overdue", tone: "alert" });
+          if (dr?.length) items.push({ title: `${dr.length} payment reminder${dr.length === 1 ? "" : "s"} ready to send`, href: "/payments?view=reminders" });
+        })());
+      if (has("checkins"))
+        tasks.push((async () => {
+          const { data } = await db.from("checkins").select("status, mood").in("status", ["due", "replied"]);
+          const risk = (data ?? []).filter((c) => c.mood === "at_risk" && c.status === "replied").length;
+          const due = (data ?? []).filter((c) => c.status === "due").length;
+          stats.push({ label: "At-risk clients", value: String(risk), tone: risk ? "alert" : "good" });
+          if (risk) items.push({ title: `${risk} at-risk client${risk === 1 ? "" : "s"}`, detail: "Worth a call today", href: "/check-ins?view=attention", tone: "alert" });
+          if (due) items.push({ title: `${due} check-in${due === 1 ? "" : "s"} to send`, href: "/check-ins" });
+        })());
+      if (has("candidates"))
+        tasks.push((async () => {
+          const { data } = await db.from("candidates").select("id").in("status", ["new", "screened"]);
+          if (data?.length) items.push({ title: `${data.length} candidate${data.length === 1 ? "" : "s"} to review`, href: "/candidates" });
+        })());
+      if (has("clients"))
+        tasks.push((async () => {
+          const { data } = await db.from("concerns").select("id").neq("status", "resolved").in("severity", ["high", "urgent"]);
+          if (data?.length) items.push({ title: `${data.length} urgent concern${data.length === 1 ? "" : "s"}`, href: "/concerns", tone: "alert" });
+        })());
+      tasks.push((async () => {
+        const { data } = await db.from("tasks").select("id").eq("status", "open").eq("assignee_id", meId).lte("due_date", today);
+        if (data?.length) items.push({ title: `${data.length} of your task${data.length === 1 ? "" : "s"} due`, href: "/my-desk", tone: "alert" });
+      })());
+      await Promise.all(tasks);
+      items.sort((a, b) => (a.tone === "alert" ? 0 : 1) - (b.tone === "alert" ? 0 : 1));
+      const dashboard: SourciDashboard = { eyebrow: `TODAY · ${today}`, title: "What needs you today", stats: stats.slice(0, 4), list: { title: "To do", items } };
+      const alerts = items.filter((i) => i.tone === "alert");
+      return {
+        data: { items: items.map((i) => i.title) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: !items.length
+          ? `${hi}good news, nothing needs you right now. Enjoy the quiet.`
+          : `${hi}${num(items.length)} ${items.length === 1 ? "thing" : "things"} on your plate today${alerts.length ? `, starting with ${alerts[0].title.toLowerCase()}` : ""}. It's all on screen.`,
+      };
+    }
+
+    case "daily_report": {
+      need("reports");
+      const d = /^\d{4}-\d{2}-\d{2}$/.test(String(args.date ?? "")) ? String(args.date) : addDays(dublinDate(), -1);
+      const { data } = await db.from("daily_reports").select("summary, report_date").eq("report_date", d).maybeSingle();
+      if (!data) return { data: { error: `No report saved for ${d}` }, actions: [{ type: "navigate", href: `/reports/daily?date=${d}`, label: "Daily report" }], say: `There's no report saved for ${d} yet. I've opened the daily report page so you can build it.` };
+      const lines = String(data.summary ?? "").split("\n").map((x) => x.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
+      return {
+        data: { summary: data.summary },
+        actions: [{ type: "card", card: { eyebrow: `DAILY REPORT · ${d}`, title: lines[0] ?? "Daily report", bullets: lines.slice(1, 7) } }],
+        say: `${hi}here's the report for ${d}. ${lines[0] ?? ""}`,
+      };
+    }
+
+    case "log_wish": {
+      const req = String(args.request ?? "").trim().slice(0, 500);
+      if (req) {
+        const admin = getAdminSupabase();
+        const { data: admins } = await admin.from("profiles").select("id").eq("role", "admin").eq("active", true);
+        if (admins?.length) {
+          await admin.from("notifications").insert(admins.map((a) => ({ user_id: a.id, type: "team_reminder", title: `Sourci wishlist: ${req.slice(0, 120)}`, body: `Asked by ${user || "a team member"}. Sourci couldn't do this yet.`, link: "/notifications" })));
+        }
+      }
+      return { data: { noted: true }, say: `${hi}I can't do that one yet, but I've added it to my wishlist so it can be built.` };
+    }
+
     case "propose_team_reminder": {
       const message = String(args.message ?? "").trim().slice(0, 200);
       if (!message) return { data: { error: "The reminder is empty" } };
@@ -1156,6 +1521,9 @@ How to work:
 - "Graph for each department": show_chart department_overview.
 - CHANGES: to change anything (lead status/setter/note, new client, client note, task, invoice paid/void, candidate status, email, team reminder) call the matching propose_ tool. It does NOT change anything; it shows a confirmation card. Then ask a short yes/no question, e.g. "Want me to create it?" or "Shall I send it?". Never say it is done.
 - For several leads at once ("assign all unassigned leads to Dean", "mark all no-answer leads lost") use propose_bulk_leads; to show a group of leads use list_leads.
+- For ANY other "show me / which / how many" question use search_records with filters; for ANY other change to one or many records use propose_bulk_update. Pipeline stage moves: propose_move_stage. New invoice: propose_create_invoice. New concern: propose_create_concern. Send all waiting payment reminders: propose_send_reminders. Send all due check-ins: propose_send_checkins. Won AI lead → client: propose_convert_lead.
+- "What needs me today / what did I miss / morning briefing": today_briefing. Saved daily report: daily_report.
+- If the request truly can't be done with your tools, call log_wish, then say so. Never pretend something was done.
 - Only ONE propose_ tool per reply. If a tool returns ask_which, ask the user which one they mean.
 - You cannot delete anything, move money, or charge cards. Say so if asked.
 - Periods: default to last_7_days unless they say today, yesterday or this month.
@@ -1166,6 +1534,7 @@ The user is on page: ${path}. Today's date (Ireland) is ${dublinDate()}.`;
 
 export async function askSourci(input: { text: string; path: string; history: SourciTurn[]; userName: string }): Promise<SourciReply> {
   const areas = await getMyAreas();
+  const meId = (await getCurrentProfile())?.id ?? "";
   const actions: SourciAction[] = [];
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt(input.userName, input.path) },
@@ -1193,7 +1562,7 @@ export async function askSourci(input: { text: string; path: string; history: So
     const outs = await Promise.all(
       calls.map(async (call) => {
         try {
-          return await runTool(call.function.name, JSON.parse(call.function.arguments || "{}"), areas, input.userName);
+          return await runTool(call.function.name, JSON.parse(call.function.arguments || "{}"), areas, input.userName, meId);
         } catch (e) {
           return { data: { error: e instanceof Error ? e.message : "Tool failed" } } as ToolOut;
         }
