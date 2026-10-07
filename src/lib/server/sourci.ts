@@ -303,8 +303,8 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "propose_bulk_update",
-      description: "Prepare a change to one OR many records of any type, selected with the same filters as search_records (up to 200). The user must confirm. Editable fields \u2014 leads: status, setter (setter name or \"nobody\"), note (appended), country, ad_name, ad_code. clients: status, manager (person/\"me\"/\"nobody\"), country, source, start_date, remark (appended), checkin_every_days (3-90), checkin_paused (true/false). invoices (managers): status (open|paid|void), due_on, note. candidates: status, note. checkins: status (due|done|skipped). concerns: status, severity, owner. tasks: status (open|done), assignee, due_date. Pipeline stage is NOT here: use propose_move_stage.",
-      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] }, filters: { type: "array", items: { type: "object", properties: { field: { type: "string" }, op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] }, value: { type: "string" } }, required: ["field", "op", "value"], additionalProperties: false } }, period: { type: "string", enum: ["any", "today", "yesterday", "last_7_days", "this_week", "this_month", "last_30_days", "next_7_days"] }, set: { type: "array", items: { type: "object", properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"], additionalProperties: false } } }, required: ["entity", "filters", "period", "set"], additionalProperties: false },
+      description: "Prepare a change to one OR many records of any type, selected with the same filters as search_records (up to 200). all_records = true ONLY when the user clearly means every record of that type (\"all clients\", \"every lead\"); then filters can be empty. Otherwise false and give filters. Don't ask the user to narrow it down when they said all. The user must confirm. Editable fields \u2014 leads: status, setter (setter name or \"nobody\"), note (appended), country, ad_name, ad_code. clients: name (rename the client), company_name, contact_email, industry, closed_by, demo_call_date, portal_url, status, manager (person/\"me\"/\"nobody\"), country, source, start_date, remark (appended), checkin_every_days (3-90), checkin_paused (true/false); managers only: setup_fee, daily_rate, hiring_fee_status (not_applicable|pending|invoiced|paid). To rename ONE client filter by its current name. invoices (managers): status (open|paid|void), due_on, note. candidates: status, note. checkins: status (due|done|skipped). concerns: status, severity, owner. tasks: status (open|done), assignee, due_date. Pipeline stage is NOT here: use propose_move_stage.",
+      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] }, filters: { type: "array", items: { type: "object", properties: { field: { type: "string" }, op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] }, value: { type: "string" } }, required: ["field", "op", "value"], additionalProperties: false } }, period: { type: "string", enum: ["any", "today", "yesterday", "last_7_days", "this_week", "this_month", "last_30_days", "next_7_days"] }, all_records: { type: "boolean" }, set: { type: "array", items: { type: "object", properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"], additionalProperties: false } } }, required: ["entity", "filters", "period", "all_records", "set"], additionalProperties: false },
     },
   },
   {
@@ -1182,7 +1182,9 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       if (ent.area) need(ent.area);
       const period = (REC_PERIODS as readonly string[]).includes(String(args.period)) ? String(args.period) : "any";
       const filters = (args.filters as Filter[]) ?? [];
-      if (!filters.length && period === "any") return { data: { error: "Refusing to change every record: add a filter (e.g. status, name, client) or a period" } };
+      const everything = !filters.length && period === "any";
+      // Changing every record is fine when the user said so; the confirm card shows the full count first.
+      if (everything && args.all_records !== true) return { data: { error: "No filter given. If the user meant every record, call again with all_records true; otherwise ask which ones." } };
       const res = await searchRecords(entity, filters, period, meId, { limit: 200 });
       if (res.problems.length) return { data: { error: res.problems.join("; ") } };
       if (!res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to change.` };
@@ -1192,6 +1194,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       return proposeOut({
         title: `Update ${res.rows.length} ${res.rows.length === 1 ? ent.label.replace(/s$/, "") : ent.label}`,
         preview: [
+          ...(everything ? [{ label: "Scope", value: `ALL ${res.count} ${ent.label}` }] : []),
           { label: "Which", value: names.slice(0, 8).join(", ") + (names.length > 8 ? ` +${names.length - 8} more` : "") },
           ...ch.changes.map((c) => ({ label: c.field.replace(/_/g, " "), value: c.display })),
           ...(res.count > res.rows.length ? [{ label: "Note", value: `Only the first ${res.rows.length} of ${res.count} will change` }] : []),
@@ -1978,6 +1981,8 @@ How to work:
 - SHEETS (the team's trackers inside the CRM, like Google Sheets): sheets_overview lists them; read_sheet answers questions about one; propose_sheet_row logs a row ("log 40 calls and 3 bookings for me today in Daily KPIs"); propose_create_sheet starts a new one from a template.
 - VA STAFFING: roles_summary = open roles (client job orders). role_matches = best candidates for a role. propose_open_role when a client wants a VA. propose_shortlist to put candidates on a role. propose_hire to hire someone on a role (creates the placement). vas_summary = every placed VA across clients.
 - If the request truly can't be done with your tools, call log_wish, then say so. Never pretend something was done.
+- When the user says "all" or "every" (e.g. "make Paul the manager of all clients"), do exactly that with all_records true; don't ask them to narrow it down. The confirmation card shows the count.
+- Renaming a client or fixing its details (company name, contact email, industry…) is propose_bulk_update on clients, filtered by the client's current name.
 - Only ONE propose_ tool per reply. If a tool returns ask_which, ask the user which one they mean.
 - You cannot delete anything, move money, or charge cards. Say so if asked.
 - Periods: default to last_7_days unless they say today, yesterday or this month.

@@ -1,6 +1,6 @@
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { CANDIDATE_STATUS, CHECKIN_MOOD, CHECKIN_STATUS, CLIENT_STATUS, LEAD_STATUS } from "@/lib/labels";
+import { CANDIDATE_STATUS, CHECKIN_MOOD, CHECKIN_STATUS, CLIENT_STATUS, HIRING_FEE_STATUS, LEAD_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney, isIsoDate } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
 
@@ -28,6 +28,7 @@ interface EditDef extends FieldDef {
   managerOnly?: boolean;
   min?: number;
   max?: number;
+  decimals?: boolean; // money: keep pennies instead of rounding to whole numbers
 }
 interface EntityDef {
   table: string;
@@ -104,6 +105,16 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       created: { col: "created_at", kind: "date" },
     },
     editable: {
+      name: { col: "name", kind: "text" },
+      company_name: { col: "company_name", kind: "text" },
+      contact_email: { col: "contact_email", kind: "text" },
+      industry: { col: "industry", kind: "text" },
+      closed_by: { col: "closed_by", kind: "text" },
+      demo_call_date: { col: "demo_call_date", kind: "date" },
+      portal_url: { col: "portal_url", kind: "text" },
+      setup_fee: { col: "setup_fee", kind: "number", min: 0, max: 1_000_000, decimals: true, managerOnly: true },
+      daily_rate: { col: "daily_rate", kind: "number", min: 0, max: 100_000, decimals: true, managerOnly: true },
+      hiring_fee_status: { col: "hiring_fee_status", kind: "enum", values: keys(HIRING_FEE_STATUS), managerOnly: true },
       status: { col: "status", kind: "enum", values: keys(CLIENT_STATUS) },
       manager: { col: "manager_id", kind: "person" },
       country: { col: "country", kind: "text" },
@@ -458,7 +469,8 @@ export async function resolveChanges(entity: EntityKey, set: { field: string; va
       if (!isIsoDate(raw)) problems.push(`${s.field} needs a YYYY-MM-DD date`);
       else changes.push({ field: s.field, value: raw, display: raw });
     } else if (def.kind === "number") {
-      const n = Math.round(Number(raw));
+      const num = Number(raw.replace(/[£€$,\s]/g, ""));
+      const n = def.decimals ? Math.round(num * 100) / 100 : Math.round(num);
       if (!Number.isFinite(n) || (def.min != null && n < def.min) || (def.max != null && n > def.max)) problems.push(`${s.field} must be a number${def.min != null ? ` from ${def.min} to ${def.max}` : ""}`);
       else changes.push({ field: s.field, value: n, display: String(n) });
     } else if (def.kind === "bool") {
