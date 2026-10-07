@@ -3,12 +3,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft } from "lucide-react";
+import { loadPaletteClients } from "@/app/(app)/palette-actions";
 
 type Item = { id: string; name: string; country: string | null; stage: string | null };
 
-export function CommandPalette({ clients }: { clients: Item[] }) {
+export function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [clients, setClients] = useState<Item[]>([]);
+  const loaded = useRef(false);
+
+  // load the client list the first time the palette opens
+  useEffect(() => {
+    if (!open || loaded.current) return;
+    loaded.current = true;
+    loadPaletteClients()
+      .then(setClients)
+      .catch(() => {
+        loaded.current = false;
+      });
+  }, [open]);
   const [q, setQ] = useState("");
   const [i, setI] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);

@@ -83,43 +83,42 @@ export async function getClientsGrid(pipelines: PipelineType[] = ["ai"]): Promis
   profiles: Profile[];
 }> {
   const supabase = await getServerSupabase();
-  const [
-    { data: clientRows },
-    { data: lineRows },
-    { data: checkRows },
-    { data: concernRows },
-    stages,
-    profiles,
-  ] = await Promise.all([
-    supabase.from("clients").select("*").in("pipeline", pipelines),
-    supabase.from("client_lines").select("client_id, regulatory_bundle_status"),
-    supabase.from("checklist_items").select("client_id, status"),
-    supabase.from("concerns").select("client_id").neq("status", "resolved"),
+  // one round trip: the clients on this side with just the bits the grid rolls up
+  const [{ data: clientRows }, stages, profiles] = await Promise.all([
+    supabase
+      .from("clients")
+      .select("*, client_lines(regulatory_bundle_status), checklist_items(status), concerns(status)")
+      .in("pipeline", pipelines),
     pipelines.length === 1 ? getStages(pipelines[0]) : getStages(),
     getProfiles(),
   ]);
 
-  const clients = (clientRows as Client[]) ?? [];
+  type Joined = Client & {
+    client_lines: { regulatory_bundle_status: string }[] | null;
+    checklist_items: { status: string }[] | null;
+    concerns: { status: string }[] | null;
+  };
+  const joined = (clientRows as Joined[]) ?? [];
+  // drop the joined arrays so they aren't shipped to the browser with every row
+  const clients: Client[] = joined.map((j) => {
+    const c: Partial<Joined> = { ...j };
+    delete c.client_lines;
+    delete c.checklist_items;
+    delete c.concerns;
+    return c as Client;
+  });
   const stageById = new Map(stages.map((s) => [s.id, s]));
   const pm = new Map(profiles.map((p) => [p.id, p]));
 
   const lineAgg = new Map<string, { count: number; approved: number }>();
-  for (const l of (lineRows as { client_id: string; regulatory_bundle_status: string }[]) ?? []) {
-    const a = lineAgg.get(l.client_id) ?? { count: 0, approved: 0 };
-    a.count += 1;
-    if (l.regulatory_bundle_status === "approved") a.approved += 1;
-    lineAgg.set(l.client_id, a);
-  }
   const checkAgg = new Map<string, { done: number; total: number }>();
-  for (const c of (checkRows as { client_id: string; status: string }[]) ?? []) {
-    const a = checkAgg.get(c.client_id) ?? { done: 0, total: 0 };
-    a.total += 1;
-    if (c.status === "done") a.done += 1;
-    checkAgg.set(c.client_id, a);
-  }
   const concernAgg = new Map<string, number>();
-  for (const r of (concernRows as { client_id: string }[]) ?? []) {
-    concernAgg.set(r.client_id, (concernAgg.get(r.client_id) ?? 0) + 1);
+  for (const j of joined) {
+    const lines = j.client_lines ?? [];
+    lineAgg.set(j.id, { count: lines.length, approved: lines.filter((l) => l.regulatory_bundle_status === "approved").length });
+    const items = j.checklist_items ?? [];
+    checkAgg.set(j.id, { done: items.filter((i) => i.status === "done").length, total: items.length });
+    concernAgg.set(j.id, (j.concerns ?? []).filter((c) => c.status !== "resolved").length);
   }
 
   const now = Date.now();

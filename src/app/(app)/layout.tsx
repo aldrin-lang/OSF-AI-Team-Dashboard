@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { getMyAreas, requireProfile, hasRole } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getClientsMini } from "@/lib/data/queries";
 import { AppNav } from "@/components/app-nav";
 import { MobileNav } from "@/components/mobile-nav";
 import { RealtimeSync } from "@/components/realtime-sync";
@@ -22,13 +21,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   const areas = await getMyAreas();
   const service = await getService();
-  const [{ count }, clientsMini] = await Promise.all([
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .is("read_at", null),
-    areas.includes("clients") ? getClientsMini() : Promise.resolve([]),
-  ]);
+  const { count } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .is("read_at", null);
 
   return (
     <div className="flex min-h-screen" data-service={service}>
@@ -53,7 +49,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <Logo size={24} />
           </div>
           <div className="hidden md:block">
-            {areas.includes("clients") && <CommandPalette clients={clientsMini} />}
+            {areas.includes("clients") && <CommandPalette />}
           </div>
           <div className="ml-auto flex items-center gap-1.5 md:gap-3">
             <ThemeToggle />
