@@ -14,17 +14,22 @@ import {
   UserSearch,
   MessageCircleHeart,
   Receipt,
+  Briefcase,
+  Contact,
+  Sheet as SheetIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Area } from "@/lib/areas";
 
-const MAIN: { href: string; label: string; icon: typeof Inbox; area: Area; match?: string; exact?: boolean }[] = [
+const MAIN: { href: string; label: string; icon: typeof Inbox; area: Area; also?: Area; match?: string; exact?: boolean }[] = [
   { href: "/leads", label: "Leads", icon: Inbox, area: "leads", match: "/leads" },
   { href: "/", label: "Clients", icon: Users, area: "clients", exact: true },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, area: "clients", match: "/pipeline" },
   { href: "/concerns", label: "Concerns", icon: AlertTriangle, area: "clients", match: "/concerns" },
   { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, area: "checkins", match: "/check-ins" },
   { href: "/payments", label: "Payments", icon: Receipt, area: "payments", match: "/payments" },
+  { href: "/vas", label: "VAs", icon: Contact, area: "clients", match: "/vas" },
+  { href: "/roles", label: "Open roles", icon: Briefcase, area: "candidates", also: "clients", match: "/roles" },
   { href: "/candidates", label: "Candidates", icon: UserSearch, area: "candidates", match: "/candidates" },
   { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", match: "/reports" },
 ];
@@ -47,7 +52,7 @@ export function AppNav({ isManager, areas }: { isManager: boolean; areas: Area[]
         Operations
       </p>
       <div className="flex flex-col gap-1">
-        {MAIN.filter((item) => areas.includes(item.area)).map((item) => {
+        {MAIN.filter((item) => areas.includes(item.area) || (item.also && areas.includes(item.also))).map((item) => {
           const active = item.exact
             ? pathname === "/"
             : pathname.startsWith(item.match ?? item.href);
@@ -58,6 +63,16 @@ export function AppNav({ isManager, areas }: { isManager: boolean; areas: Area[]
             </Link>
           );
         })}
+      </div>
+
+      <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+        Workspace
+      </p>
+      <div className="flex flex-col gap-1">
+        <Link href="/sheets" className={itemClass(pathname.startsWith("/sheets"))}>
+          <SheetIcon className="h-[18px] w-[18px] shrink-0" />
+          Sheets
+        </Link>
       </div>
 
       <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Dark mode: class on <html>, set before paint by the inline script in app/layout.tsx */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ===========================================================================
    OSF AI Team Dashboard — modern light theme
    White surfaces · electric blue #2b7fff primary · orange #f2691f accent
@@ -40,20 +43,81 @@
   --color-accent-400: #ff8a3d;
   --color-accent-500: #f2691f;
   --color-accent-600: #d9540f;
+
+  /* row hover tint (tables) */
+  --color-row-hover: #eff5ff;
 }
 
 html {
   color-scheme: light;
+  --glass-from: #ffffff;
+  --glass-to: #fdfefe;
+  --glass-shadow: 0 1px 1px rgba(15, 23, 42, 0.03), 0 2px 6px -1px rgba(15, 23, 42, 0.05), 0 18px 40px -18px rgba(15, 23, 42, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --page-glow-a: rgba(43, 127, 255, 0.1);
+  --page-glow-b: rgba(242, 105, 31, 0.06);
+  --page-from: #fbfcff;
+  --page-to: #f5f7fc;
+  --dot: rgba(15, 23, 42, 0.04);
+  --scroll: rgba(15, 23, 42, 0.16);
 }
+
+/* ---------------------------------------------------------------------------
+   Dark theme — deep navy surfaces, same blue/orange brand
+   --------------------------------------------------------------------------- */
+html.dark {
+  color-scheme: dark;
+  --color-bg: #0a1020;
+  --color-surface: #111a2e;
+  --color-fill: rgba(148, 163, 184, 0.07);
+  --color-fill-strong: rgba(148, 163, 184, 0.13);
+  --color-line: rgba(148, 163, 184, 0.14);
+  --color-line-strong: rgba(148, 163, 184, 0.26);
+  --color-ink: #e6ecf7;
+  --color-ink-muted: #a3b1c9;
+  --color-ink-faint: #6d7c97;
+  --color-row-hover: #16223b;
+  --glass-from: #121c31;
+  --glass-to: #0f182b;
+  --glass-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.35), 0 18px 40px -18px rgba(0, 0, 0, 0.6);
+  --glass-highlight: rgba(148, 197, 255, 0.18);
+  --page-glow-a: rgba(43, 127, 255, 0.16);
+  --page-glow-b: rgba(242, 105, 31, 0.07);
+  --page-from: #0b1222;
+  --page-to: #0a1020;
+  --dot: rgba(148, 163, 184, 0.06);
+  --scroll: rgba(148, 163, 184, 0.22);
+}
+
+/* Light-only accent text/tints used across older pages, lifted for dark backgrounds */
+html.dark :is(.text-brand-600, .text-brand-700, .text-brand-800, .text-navy-800, .text-navy-900) { color: var(--color-brand-300); }
+html.dark :is(.text-emerald-600, .text-emerald-700) { color: #6ee7b7; }
+html.dark :is(.text-rose-600, .text-rose-700, .text-red-600) { color: #fda4af; }
+html.dark .text-accent-600 { color: var(--color-accent-400); }
+html.dark .text-violet-700 { color: #c4b5fd; }
+html.dark .text-slate-600 { color: #cbd5e1; }
+html.dark .bg-brand-50 { background-color: rgba(43, 127, 255, 0.14); }
+html.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
+html.dark .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14); }
+html.dark .bg-violet-50 { background-color: rgba(139, 92, 246, 0.16); }
+html.dark .bg-slate-100 { background-color: rgba(148, 163, 184, 0.12); }
+html.dark .bg-slate-200 { background-color: rgba(148, 163, 184, 0.25); }
+html.dark :is(.ring-brand-200, .ring-emerald-200, .ring-rose-200, .ring-violet-200, .ring-slate-200) { --tw-ring-color: rgba(148, 163, 184, 0.2); }
+html.dark :is(.border-rose-200, .border-emerald-300, .border-brand-300) { border-color: rgba(148, 163, 184, 0.25); }
+html.dark .hover\:bg-emerald-100:hover { background-color: rgba(16, 185, 129, 0.22); }
+html.dark .hover\:bg-brand-50\/40:hover { background-color: var(--color-row-hover); }
+html.dark select option { background-color: var(--color-surface); color: var(--color-ink); }
+html.dark ::placeholder { color: var(--color-ink-faint); }
 
 body {
   min-height: 100%;
   color: var(--color-ink);
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(50rem 34rem at 88% -14%, rgba(43, 127, 255, 0.1), transparent 60%),
-    radial-gradient(44rem 30rem at -10% 6%, rgba(242, 105, 31, 0.06), transparent 55%),
-    linear-gradient(180deg, #fbfcff 0%, #f5f7fc 100%);
+    radial-gradient(50rem 34rem at 88% -14%, var(--page-glow-a), transparent 60%),
+    radial-gradient(44rem 30rem at -10% 6%, var(--page-glow-b), transparent 55%),
+    linear-gradient(180deg, var(--page-from) 0%, var(--page-to) 100%);
+  transition: background-color 0.2s ease, color 0.2s ease;
   background-attachment: fixed;
 }
 
@@ -64,7 +128,7 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image: radial-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: radial-gradient(56rem 46rem at 50% 0%, #000 25%, transparent 72%);
 }
@@ -76,19 +140,16 @@ body > * {
 /* ---- depth utilities ---- */
 @utility glass {
   position: relative;
-  background-image: linear-gradient(180deg, #ffffff 0%, #fdfefe 100%);
+  background-image: linear-gradient(180deg, var(--glass-from) 0%, var(--glass-to) 100%);
   border: 1px solid var(--color-line);
-  box-shadow:
-    0 1px 1px rgba(15, 23, 42, 0.03),
-    0 2px 6px -1px rgba(15, 23, 42, 0.05),
-    0 18px 40px -18px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--glass-shadow);
   /* crisp light highlight along the top edge */
   &::after {
     content: "";
     position: absolute;
     inset: 0 16% auto 16%;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+    background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
     pointer-events: none;
   }
 }
@@ -102,10 +163,10 @@ body > * {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
+  scrollbar-color: var(--scroll) transparent;
 }
 ::-webkit-scrollbar { height: 9px; width: 9px; }
-::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.16); border-radius: 9999px; }
+::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, 0.28); }
 
 /* Sourci (voice assistant) */

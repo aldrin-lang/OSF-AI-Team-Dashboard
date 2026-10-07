@@ -114,6 +114,49 @@ export interface VaPlacement {
   checkin_every_days: number;
   checkin_paused: boolean;
   va_phone: string | null;
+  candidate_id: string | null;
+  role_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  hourly_rate: number | null;
+  rate_currency: string;
+  hours_per_week: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RoleStatus = "open" | "sourcing" | "interviewing" | "offer" | "filled" | "on_hold" | "cancelled";
+export type RoleCandidateStage = "suggested" | "shortlisted" | "interview" | "offered" | "hired" | "rejected";
+export type RolePriority = "low" | "normal" | "high" | "urgent";
+
+/** An open role (job order) a client wants filled. */
+export interface VaRole {
+  id: string;
+  client_id: string;
+  title: string;
+  headcount: number;
+  employment_type: "full_time" | "part_time" | "project";
+  hours_per_week: number | null;
+  budget: string | null;
+  start_by: string | null;
+  status: RoleStatus;
+  priority: RolePriority;
+  requirements: string | null;
+  owner_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VaRoleCandidate {
+  id: string;
+  role_id: string;
+  candidate_id: string;
+  stage: RoleCandidateStage;
+  match_score: number | null;
+  notes: string | null;
+  added_by: string | null;
   created_at: string;
   updated_at: string;
 }

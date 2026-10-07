@@ -145,7 +145,7 @@ export function ClientsGrid({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search…"
-            className="h-9 w-44 rounded-lg border border-line bg-white pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30"
+            className="h-9 w-44 rounded-lg border border-line bg-surface pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30"
           />
         </div>
         <Sel value={fStage} onChange={setFStage} placeholder="All stages">
@@ -183,7 +183,7 @@ export function ClientsGrid({
           </button>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex rounded-lg border border-line bg-white p-0.5">
+          <div className="flex rounded-lg border border-line bg-surface p-0.5">
             <span className="flex items-center gap-1 rounded-md bg-brand-500 px-2 py-1 text-xs font-medium text-white">
               <Table2 className="h-3.5 w-3.5" /> Table
             </span>
@@ -228,7 +228,7 @@ export function ClientsGrid({
       <div className="glass overflow-x-auto rounded-2xl">
         <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-sm">
           <thead>
-            <tr className="[&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-b [&>th]:border-line [&>th]:bg-white [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-left [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-ink-faint">
+            <tr className="[&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-b [&>th]:border-line [&>th]:bg-surface [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-left [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-ink-faint">
               <th className="left-0 z-30 w-8" />
               <th className="left-8 z-30 min-w-[190px] shadow-[1px_0_0_0_var(--color-line)]">Company</th>
               <th className="min-w-[130px]">Contact</th>
@@ -360,7 +360,7 @@ function Row({
   const td = "border-b border-line px-3 py-1.5 align-middle";
   return (
     <tr className="group hover:bg-brand-50/40">
-      <td className={`${td} sticky left-0 z-10 bg-white group-hover:bg-[#eff5ff] w-8 text-center`}>
+      <td className={`${td} sticky left-0 z-10 bg-surface group-hover:bg-row-hover w-8 text-center`}>
         <button
           onClick={() => onOpen(c.id)}
           className="rounded p-1 text-ink-faint hover:bg-fill hover:text-ink"
@@ -369,7 +369,7 @@ function Row({
           <ChevronRight className="h-4 w-4" />
         </button>
       </td>
-      <td className={`${td} sticky left-8 z-10 bg-white shadow-[1px_0_0_0_var(--color-line)] group-hover:bg-[#eff5ff]`}>
+      <td className={`${td} sticky left-8 z-10 bg-surface shadow-[1px_0_0_0_var(--color-line)] group-hover:bg-row-hover`}>
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 shrink-0 rounded-full ${RISK(r)}`} />
           <div className="min-w-0">
@@ -528,7 +528,7 @@ function EditableText({
             setEditing(false);
           }
         }}
-        className="w-full rounded border border-brand-400 bg-white px-1.5 py-0.5 text-sm outline-none"
+        className="w-full rounded border border-brand-400 bg-surface px-1.5 py-0.5 text-sm outline-none"
       />
     );
   }
@@ -559,7 +559,7 @@ function EditableDate({ value, onSave }: { value: string | null; onSave: (v: str
           setEditing(false);
           if ((e.target.value || "") !== (value || "")) onSave(e.target.value);
         }}
-        className="w-full rounded border border-brand-400 bg-white px-1.5 py-0.5 text-sm outline-none"
+        className="w-full rounded border border-brand-400 bg-surface px-1.5 py-0.5 text-sm outline-none"
       />
     );
   }
@@ -629,7 +629,7 @@ function Sel({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-9 rounded-lg border border-line bg-white px-2 text-sm text-ink-muted focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30"
+      className="h-9 rounded-lg border border-line bg-surface px-2 text-sm text-ink-muted focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30"
     >
       <option value="">{placeholder}</option>
       {children}
@@ -652,7 +652,7 @@ function Chip({
       className={`h-9 rounded-lg border px-3 text-xs font-medium transition-colors ${
         active
           ? "border-brand-300 bg-brand-50 text-brand-700"
-          : "border-line bg-white text-ink-muted hover:bg-fill"
+          : "border-line bg-surface text-ink-muted hover:bg-fill"
       }`}
     >
       {children}

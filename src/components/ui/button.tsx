@@ -8,8 +8,8 @@ const VARIANTS: Record<Variant, string> = {
   primary:
     "bg-gradient-to-b from-brand-400 to-brand-600 text-white shadow-[0_1px_0_0_rgba(255,255,255,0.35)_inset,0_8px_20px_-6px_rgba(43,127,255,0.5)] hover:from-brand-500 hover:to-brand-700 hover:shadow-[0_10px_26px_-6px_rgba(43,127,255,0.6)] disabled:opacity-50",
   secondary:
-    "border border-line bg-white text-ink shadow-sm hover:bg-slate-50",
-  outline: "border border-line-strong bg-transparent text-ink hover:bg-slate-50",
+    "border border-line bg-surface text-ink shadow-sm hover:bg-fill",
+  outline: "border border-line-strong bg-transparent text-ink hover:bg-fill",
   ghost: "text-ink-muted hover:bg-fill hover:text-ink",
   danger:
     "bg-gradient-to-b from-rose-400 to-rose-600 text-white shadow-[0_8px_20px_-8px_rgba(244,63,94,0.55)] hover:from-rose-500 hover:to-rose-700",

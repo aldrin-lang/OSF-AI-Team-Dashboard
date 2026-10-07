@@ -99,7 +99,7 @@ export default async function MyDeskPage() {
             href={PORTAL_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-navy-800 shadow-sm hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-navy-800 shadow-sm hover:bg-fill"
           >
             <ExternalLink className="h-3.5 w-3.5 text-brand-600" />
             Client portal

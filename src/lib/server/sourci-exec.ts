@@ -14,6 +14,9 @@ import { moveClientStage } from "@/app/(app)/clients/actions";
 import { sendReminder } from "@/lib/server/payments";
 import { sendCheckinEmail } from "@/lib/server/checkins";
 import { CURRENCIES } from "@/lib/ops-core";
+import { createSheetFrom } from "@/lib/server/sheets";
+import { fitScore, hireCandidate } from "@/lib/server/staffing";
+import type { Candidate } from "@/lib/types";
 
 /**
  * Runs a change Sourci proposed, AFTER the user pressed/said "yes".
@@ -423,6 +426,89 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         else failed.push(res.error ?? "failed");
       }
       return { ok: sent > 0, message: `${sent} check-in${sent === 1 ? "" : "s"} sent.${failed.length ? ` ${failed.length} couldn't go: ${failed[0]}` : ""}`, stamp: "SENT", title: "Check-ins", href: "/check-ins?view=waiting" };
+    }
+
+    case "add_sheet_row": {
+      if (!UUID.test(p.sheetId)) throw new Error("Bad sheet id");
+      const { data: cols } = await db.from("sheet_columns").select("id").eq("sheet_id", p.sheetId);
+      const valid = new Set((cols ?? []).map((c) => c.id as string));
+      const cells = Object.fromEntries(
+        Object.entries(p.cells ?? {})
+          .filter(([k, v]) => valid.has(k) && (v === null || ["string", "number", "boolean"].includes(typeof v)))
+          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 5000) : v]),
+      );
+      if (!Object.keys(cells).length) throw new Error("Nothing to add");
+      const { data: last } = await db.from("sheet_rows").select("position").eq("sheet_id", p.sheetId).order("position", { ascending: false }).limit(1).maybeSingle();
+      const { error } = await db.from("sheet_rows").insert({ sheet_id: p.sheetId, cells, position: ((last?.position as number) ?? 0) + 1, created_by: me.id });
+      if (error) throw new Error(error.message.includes("row-level security") ? "You don't have access to that sheet." : error.message);
+      return { ok: true, message: `Logged in ${p.sheetName}.`, stamp: "ADDED", title: p.sheetName, href: `/sheets/${p.sheetId}` };
+    }
+
+    case "create_sheet": {
+      const id = await createSheetFrom(clip(p.template, 40), clip(p.name, 120), me.id, { visibility: p.visibility === "everyone" ? "everyone" : "private" });
+      return { ok: true, message: `Your ${clip(p.name, 120)} sheet is ready.`, stamp: "CREATED", title: clip(p.name, 120), href: `/sheets/${id}` };
+    }
+
+    case "create_role": {
+      need("candidates");
+      if (!UUID.test(p.clientId)) throw new Error("Bad client id");
+      const title = clip(p.title, 120);
+      if (!title) throw new Error("The role needs a title");
+      if (p.startBy && !isIsoDate(p.startBy)) throw new Error("Bad start date");
+      const { data, error } = await db
+        .from("va_roles")
+        .insert({
+          client_id: p.clientId,
+          title,
+          headcount: Math.max(1, Math.min(50, Math.round(Number(p.headcount) || 1))),
+          employment_type: ["full_time", "part_time", "project"].includes(p.employmentType) ? p.employmentType : "full_time",
+          start_by: p.startBy ?? null,
+          priority: ["low", "normal", "high", "urgent"].includes(p.priority) ? p.priority : "normal",
+          requirements: clip(p.requirements, 4000) || null,
+          owner_id: me.id,
+          created_by: me.id,
+        })
+        .select("id")
+        .single();
+      if (error || !data) throw new Error(error?.message ?? "Couldn't open the role");
+      return { ok: true, message: `Role opened for ${p.clientName}. I can find matches whenever you're ready.`, stamp: "CREATED", title: `${title} · ${p.clientName}`, href: `/roles/${data.id}` };
+    }
+
+    case "shortlist": {
+      need("candidates");
+      if (!UUID.test(p.roleId)) throw new Error("Bad role id");
+      const ids = (p.candidateIds ?? []).filter((x) => UUID.test(x)).slice(0, 10);
+      const { data: role } = await db.from("va_roles").select("title, status").eq("id", p.roleId).single();
+      if (!role) throw new Error("Role not found");
+      const { data: cands } = await db.from("candidates").select("*").in("id", ids);
+      const list = (cands as Candidate[]) ?? [];
+      if (!list.length) throw new Error("No candidates found");
+      const { error } = await db.from("va_role_candidates").upsert(
+        list.map((c) => ({ role_id: p.roleId, candidate_id: c.id, stage: "shortlisted", match_score: fitScore(c, role.title), added_by: me.id })),
+        { onConflict: "role_id,candidate_id" },
+      );
+      if (error) throw new Error(error.message);
+      await db.from("candidates").update({ status: "shortlisted" }).in("id", list.filter((c) => c.status === "new" || c.status === "screened").map((c) => c.id));
+      if (role.status === "open") await db.from("va_roles").update({ status: "sourcing" }).eq("id", p.roleId);
+      return { ok: true, message: `${list.length === 1 ? list[0].full_name.split(" ")[0] + " is" : `${list.length} candidates are`} on the shortlist.`, stamp: "UPDATED", title: `Shortlist · ${role.title}`, href: `/roles/${p.roleId}` };
+    }
+
+    case "hire": {
+      need("candidates");
+      if (!UUID.test(p.roleCandidateId) || !UUID.test(p.roleId)) throw new Error("Bad id");
+      if (p.startDate && !isIsoDate(p.startDate)) throw new Error("Bad start date");
+      const r = await hireCandidate(
+        {
+          roleCandidateId: p.roleCandidateId,
+          startDate: p.startDate ?? null,
+          hourlyRate: typeof p.hourlyRate === "number" && p.hourlyRate >= 0 ? p.hourlyRate : null,
+          currency: ["USD", "GBP", "EUR", "PHP", "AUD", "NZD", "CAD"].includes(p.currency) ? p.currency : "USD",
+          hoursPerWeek: null,
+        },
+        me,
+      );
+      if (!r.ok) throw new Error(r.message);
+      return { ok: true, message: r.message, stamp: "HIRED", title: `${p.name} · ${p.clientName}`, href: "/vas" };
     }
 
     case "notify_team": {

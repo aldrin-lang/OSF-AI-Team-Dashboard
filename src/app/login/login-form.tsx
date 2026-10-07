@@ -26,7 +26,7 @@ export function LoginForm({ next }: { next: string }) {
           autoComplete="email"
           required
           autoFocus
-          className="h-10 bg-white/80 transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(43,127,255,0.12)]"
+          className="h-10 bg-surface/80 transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(43,127,255,0.12)]"
         />
       </div>
       <div>
@@ -42,7 +42,7 @@ export function LoginForm({ next }: { next: string }) {
           type="password"
           autoComplete="current-password"
           required
-          className="h-10 bg-white/80 transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(43,127,255,0.12)]"
+          className="h-10 bg-surface/80 transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(43,127,255,0.12)]"
         />
       </div>
       <AnimatePresence>

@@ -86,7 +86,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
       />
 
       {msg && (
-        <div className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink-muted">{msg}</div>
+        <div className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-ink-muted">{msg}</div>
       )}
 
       <div className="grid grid-cols-3 gap-3 text-center">

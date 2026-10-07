@@ -57,7 +57,7 @@ export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 }
 
 const fieldBase =
-  "w-full rounded-xl border border-line bg-white text-sm text-ink shadow-[0_1px_2px_rgba(15,23,42,0.04)_inset] placeholder:text-ink-faint transition-colors focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30 disabled:bg-slate-50 disabled:text-ink-faint";
+  "w-full rounded-xl border border-line bg-surface text-sm text-ink shadow-[0_1px_2px_rgba(15,23,42,0.04)_inset] placeholder:text-ink-faint transition-colors focus-visible:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30 disabled:bg-fill disabled:text-ink-faint";
 
 export const Input = React.forwardRef<
   HTMLInputElement,
@@ -96,7 +96,7 @@ export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLab
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-line-strong bg-slate-50/60 px-4 py-6 text-center text-sm text-ink-faint">
+    <div className="rounded-xl border border-dashed border-line-strong bg-fill px-4 py-6 text-center text-sm text-ink-faint">
       {children}
     </div>
   );

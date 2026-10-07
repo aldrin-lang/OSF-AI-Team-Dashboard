@@ -50,7 +50,12 @@ export type SourciProposal =
   | { kind: "create_invoice"; clientId: string; clientName: string; number: string; amount: number; currency: string; dueOn: string; description?: string; billTo?: string }
   | { kind: "create_concern"; clientId: string; clientName: string; title: string; severity: string; description?: string; ownerId?: string }
   | { kind: "send_reminders"; reminderIds: string[] }
-  | { kind: "send_checkins"; checkinIds: string[] };
+  | { kind: "send_checkins"; checkinIds: string[] }
+  | { kind: "add_sheet_row"; sheetId: string; sheetName: string; cells: Record<string, string | number | boolean | null> }
+  | { kind: "create_sheet"; template: string; name: string; visibility: "private" | "everyone" }
+  | { kind: "create_role"; clientId: string; clientName: string; title: string; headcount: number; employmentType: "full_time" | "part_time" | "project"; startBy?: string; priority: "low" | "normal" | "high" | "urgent"; requirements?: string }
+  | { kind: "shortlist"; roleId: string; roleTitle: string; candidateIds: string[]; names: string[] }
+  | { kind: "hire"; roleId: string; roleCandidateId: string; name: string; clientName: string; startDate?: string; hourlyRate?: number; currency: string };
 
 export interface SourciConfirm {
   title: string; // e.g. "Create client profile"

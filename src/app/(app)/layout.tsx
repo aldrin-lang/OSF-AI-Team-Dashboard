@@ -10,6 +10,7 @@ import { MotionProvider } from "@/components/motion-provider";
 import { Logo, LogoWordmark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { Sourci } from "@/components/sourci";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -29,7 +30,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen">
       <RealtimeSync />
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-gradient-to-b from-slate-50 to-white pb-4 backdrop-blur-xl md:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/70 pb-4 backdrop-blur-xl md:flex">
         <div className="relative flex h-16 items-center border-b border-line px-5">
           <LogoWordmark />
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
@@ -49,7 +50,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <div className="hidden md:block">
             {areas.includes("clients") && <CommandPalette clients={clientsMini} />}
           </div>
-          <div className="ml-auto flex items-center gap-3 md:gap-4">
+          <div className="ml-auto flex items-center gap-1.5 md:gap-3">
+            <ThemeToggle />
             <Link
               href="/notifications"
               className="relative rounded-lg p-2 text-ink-muted hover:bg-fill-strong hover:text-ink"

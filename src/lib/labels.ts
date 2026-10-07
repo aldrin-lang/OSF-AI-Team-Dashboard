@@ -11,6 +11,9 @@ import type {
   LeadService,
   LeadStatus,
   PlacementStatus,
+  RoleStatus,
+  RoleCandidateStage,
+  RolePriority,
   RbStatus,
 } from "@/lib/types";
 
@@ -128,4 +131,36 @@ export const CHECKIN_MOOD: Record<CheckinMood, { label: string; tone: Tone }> = 
   good: { label: "Happy", tone: "green" },
   neutral: { label: "Neutral", tone: "neutral" },
   at_risk: { label: "At risk", tone: "red" },
+};
+
+export const ROLE_STATUS: Record<RoleStatus, { label: string; tone: Tone }> = {
+  open: { label: "Open", tone: "blue" },
+  sourcing: { label: "Sourcing", tone: "purple" },
+  interviewing: { label: "Interviewing", tone: "amber" },
+  offer: { label: "Offer out", tone: "amber" },
+  filled: { label: "Filled", tone: "green" },
+  on_hold: { label: "On hold", tone: "neutral" },
+  cancelled: { label: "Cancelled", tone: "red" },
+};
+
+export const ROLE_STAGE: Record<RoleCandidateStage, { label: string; tone: Tone }> = {
+  suggested: { label: "Suggested", tone: "neutral" },
+  shortlisted: { label: "Shortlisted", tone: "blue" },
+  interview: { label: "Interview", tone: "purple" },
+  offered: { label: "Offered", tone: "amber" },
+  hired: { label: "Hired", tone: "green" },
+  rejected: { label: "Rejected", tone: "red" },
+};
+
+export const ROLE_PRIORITY: Record<RolePriority, { label: string; tone: Tone }> = {
+  low: { label: "Low", tone: "neutral" },
+  normal: { label: "Normal", tone: "blue" },
+  high: { label: "High", tone: "amber" },
+  urgent: { label: "Urgent", tone: "red" },
+};
+
+export const EMPLOYMENT_TYPE: Record<"full_time" | "part_time" | "project", string> = {
+  full_time: "Full time",
+  part_time: "Part time",
+  project: "Project",
 };

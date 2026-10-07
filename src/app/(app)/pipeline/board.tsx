@@ -203,7 +203,7 @@ function CardChip({
   const over = slaDays != null && d != null && d > slaDays;
   return (
     <div
-      className={`group cursor-pointer rounded-xl border bg-white p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all ${
+      className={`group cursor-pointer rounded-xl border bg-surface p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all ${
         dragging
           ? "rotate-1 border-brand-300 shadow-[0_18px_36px_-14px_rgba(15,23,42,0.35),0_0_0_1px_rgba(43,127,255,0.25)]"
           : "border-line hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_8px_20px_-8px_rgba(15,23,42,0.18)]"

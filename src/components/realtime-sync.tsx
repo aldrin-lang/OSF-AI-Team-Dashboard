@@ -22,6 +22,10 @@ const TABLES = [
   "invoices",
   "payment_reminders",
   "setters",
+  "sheets",
+  "va_roles",
+  "va_role_candidates",
+  "va_placements",
 ];
 
 /**
@@ -86,7 +90,7 @@ export function RealtimeSync() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-3 left-3 z-40 flex items-center gap-1.5 rounded-full border border-line bg-white/90 px-2.5 py-1 text-[11px] font-medium text-ink-muted shadow-sm backdrop-blur"
+      className="pointer-events-none fixed bottom-3 left-3 z-40 flex items-center gap-1.5 rounded-full border border-line bg-surface/90 px-2.5 py-1 text-[11px] font-medium text-ink-muted shadow-sm backdrop-blur"
       title={live ? "Live — changes sync across the team" : "Reconnecting…"}
     >
       <span

@@ -8,6 +8,9 @@ import { OPEN_STATUSES } from "@/lib/leads-ingest";
 import { CANDIDATE_STATUS, LEAD_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
+import { SHEET_TEMPLATES, formatCell, parseCell, type SheetColumn, type CellValue } from "@/lib/sheets";
+import { clientNames, matchCandidates } from "@/lib/server/staffing";
+import { ROLE_STATUS } from "@/lib/labels";
 import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashboard, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
 
 /**
@@ -43,6 +46,9 @@ const PAGES: Record<string, { href: string; label: string; area: Area | null }> 
   reports: { href: "/reports", label: "Reports", area: "reports" },
   daily_report: { href: "/reports/daily", label: "Daily report", area: "reports" },
   my_desk: { href: "/my-desk", label: "My desk", area: null },
+  sheets: { href: "/sheets", label: "Sheets", area: null },
+  open_roles: { href: "/roles", label: "Open roles", area: "candidates" },
+  vas: { href: "/vas", label: "VAs", area: "clients" },
   admin: { href: "/admin", label: "Admin", area: null },
 };
 
@@ -363,6 +369,117 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       name: "daily_report",
       description: "Show the saved daily report for a date (YYYY-MM-DD, default yesterday).",
       parameters: { type: "object", properties: { date: { type: "string" } }, required: ["date"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "sheets_overview",
+      description: "List the team sheets (trackers) this user can open, newest first.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_sheet",
+      description: "Read one sheet by name: its columns, totals and the latest rows. Use for questions like 'how many calls did we log today in Daily KPIs'.",
+      parameters: { type: "object", properties: { sheet: { type: "string" } }, required: ["sheet"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_sheet_row",
+      description: "Prepare a new row in a sheet. values = list of {column, value} using the sheet's column names (dates YYYY-MM-DD, person = team member name or 'me', checkbox = yes/no). Call read_sheet first if you don't know the columns. The user must confirm.",
+      parameters: {
+        type: "object",
+        properties: {
+          sheet: { type: "string" },
+          values: { type: "array", items: { type: "object", properties: { column: { type: "string" }, value: { type: "string" } }, required: ["column", "value"], additionalProperties: false } },
+        },
+        required: ["sheet", "values"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_create_sheet",
+      description: "Prepare a new sheet from a template. shared = true to share with the whole team. The user must confirm.",
+      parameters: {
+        type: "object",
+        properties: { name: { type: "string" }, template: { type: "string", enum: SHEET_TEMPLATES.map((t) => t.key) }, shared: { type: "boolean" } },
+        required: ["name", "template", "shared"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "roles_summary",
+      description: "Open roles (VA job orders from clients): what's open, urgent, late, and how many candidates are in play. Puts a dashboard on screen.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "role_matches",
+      description: "Best-fit candidates for one open role (by client name and/or role title).",
+      parameters: { type: "object", properties: { role: { type: "string" } }, required: ["role"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "vas_summary",
+      description: "The roster of placed VAs across clients: how many active, hours, tenure, who's at risk. Optional client filter (empty = all).",
+      parameters: { type: "object", properties: { client: { type: "string" } }, required: ["client"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_open_role",
+      description: "Prepare a new open role for a client (they want to hire a VA). Use empty strings / 1 for unknowns. start_by = YYYY-MM-DD or empty. The user must confirm.",
+      parameters: {
+        type: "object",
+        properties: {
+          client: { type: "string" },
+          title: { type: "string" },
+          headcount: { type: "integer" },
+          employment_type: { type: "string", enum: ["full_time", "part_time", "project"] },
+          start_by: { type: "string" },
+          priority: { type: "string", enum: ["low", "normal", "high", "urgent"] },
+          requirements: { type: "string" },
+        },
+        required: ["client", "title", "headcount", "employment_type", "start_by", "priority", "requirements"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_shortlist",
+      description: "Prepare to shortlist candidates for an open role. candidates = names separated by commas, or 'top 3' style to take the best matches. The user must confirm.",
+      parameters: { type: "object", properties: { role: { type: "string" }, candidates: { type: "string" } }, required: ["role", "candidates"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_hire",
+      description: "Prepare to hire a candidate who is on an open role: creates the VA placement on the client. start_date YYYY-MM-DD or empty; hourly_rate 0 if unknown; currency like USD. The user must confirm.",
+      parameters: {
+        type: "object",
+        properties: { role: { type: "string" }, candidate: { type: "string" }, start_date: { type: "string" }, hourly_rate: { type: "number" }, currency: { type: "string" } },
+        required: ["role", "candidate", "start_date", "hourly_rate", "currency"],
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -1213,6 +1330,301 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       });
     }
 
+    case "sheets_overview": {
+      const { data } = await db.from("sheets").select("id, name, emoji, visibility, updated_at").eq("archived", false).order("updated_at", { ascending: false }).limit(30);
+      const list = data ?? [];
+      const dashboard: SourciDashboard = {
+        eyebrow: "SHEETS",
+        title: "Team sheets",
+        stats: [
+          { label: "Sheets", value: String(list.length) },
+          { label: "Shared with team", value: String(list.filter((x) => x.visibility !== "private").length) },
+        ],
+        list: list.length ? { title: "Recently edited", items: list.slice(0, 8).map((x) => ({ title: `${x.emoji ?? ""} ${x.name}`.trim(), href: `/sheets/${x.id}` })) } : undefined,
+        link: { href: "/sheets", label: "Open Sheets" },
+      };
+      return {
+        data: { sheets: list.map((x) => x.name) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: list.length ? `${hi}you've got ${plural(list.length, "sheet")}. The latest is ${list[0].name}.` : `${hi}no sheets yet. Want me to start one, like a Daily KPIs tracker?`,
+      };
+    }
+
+    case "read_sheet": {
+      const sheet = await findSheet(db, clean(args.sheet, 80));
+      if ("error" in sheet) return { data: sheet };
+      if ("ask" in sheet) return { data: { ask_which: sheet.ask } };
+      const [{ data: cols }, { data: rows }, people] = await Promise.all([
+        db.from("sheet_columns").select("*").eq("sheet_id", sheet.id).order("position"),
+        db.from("sheet_rows").select("cells, updated_at").eq("sheet_id", sheet.id).order("position", { ascending: false }).limit(500),
+        teamNames(),
+      ]);
+      const columns = (cols as SheetColumn[]) ?? [];
+      const all = (rows ?? []).filter((r) => Object.keys((r.cells ?? {}) as object).length);
+      const asText = (cells: Record<string, CellValue>) =>
+        Object.fromEntries(columns.map((c) => [c.name, formatCell(c, cells[c.id], people)]).filter(([, v]) => v));
+      const totals = columns
+        .filter((c) => c.type === "number" || c.type === "money")
+        .map((c) => ({ label: c.name, value: formatCell(c, all.reduce((s2, r) => s2 + (Number((r.cells as Record<string, CellValue>)[c.id]) || 0), 0), people) }));
+      const dashboard: SourciDashboard = {
+        eyebrow: "SHEET",
+        title: sheet.name,
+        stats: [{ label: "Rows", value: String(all.length) }, ...totals.slice(0, 3)],
+        list: all.length
+          ? {
+              title: "Latest rows",
+              items: all.slice(0, 6).map((r) => {
+                const t = Object.values(asText(r.cells as Record<string, CellValue>));
+                return { title: String(t[0] ?? "Row"), detail: t.slice(1, 4).join(" · ") || undefined };
+              }),
+            }
+          : undefined,
+        link: { href: `/sheets/${sheet.id}`, label: "Open the sheet" },
+      };
+      return {
+        data: { sheet: sheet.name, columns: columns.map((c) => ({ name: c.name, type: c.type, choices: c.options?.choices })), row_count: all.length, totals, latest_rows: all.slice(0, 30).map((r) => asText(r.cells as Record<string, CellValue>)) },
+        actions: [{ type: "dashboard", dashboard }],
+      };
+    }
+
+    case "propose_sheet_row": {
+      const sheet = await findSheet(db, clean(args.sheet, 80));
+      if ("error" in sheet) return { data: sheet };
+      if ("ask" in sheet) return { data: { ask_which: sheet.ask } };
+      const { data: cols } = await db.from("sheet_columns").select("*").eq("sheet_id", sheet.id).order("position");
+      const columns = (cols as SheetColumn[]) ?? [];
+      const values = Array.isArray(args.values) ? (args.values as { column?: unknown; value?: unknown }[]).slice(0, 40) : [];
+      const cells: Record<string, CellValue> = {};
+      const preview: { label: string; value: string }[] = [];
+      const unknown: string[] = [];
+      const people = await teamNames();
+      for (const v of values) {
+        const name = String(v.column ?? "").trim().toLowerCase();
+        const col = columns.find((c) => c.name.toLowerCase() === name) ?? columns.find((c) => c.name.toLowerCase().includes(name) && name.length > 2);
+        if (!col) {
+          unknown.push(String(v.column));
+          continue;
+        }
+        const raw = String(v.value ?? "").trim();
+        let val: CellValue;
+        if (col.type === "person") {
+          if (/^(me|myself|i)$/i.test(raw)) val = meId || null;
+          else val = [...people].find(([, n]) => n.toLowerCase().includes(raw.toLowerCase()) && raw.length > 1)?.[0] ?? null;
+        } else if (col.type === "date" && /^today$/i.test(raw)) val = dublinDate();
+        else val = parseCell(col.type, raw);
+        if (val === null || val === "") continue;
+        cells[col.id] = val;
+        preview.push({ label: col.name, value: formatCell(col, val, people) });
+      }
+      if (!preview.length) return { data: { error: "Nothing to add", columns: columns.map((c) => c.name), unknown_columns: unknown } };
+      return proposeOut({
+        title: `New row in ${sheet.name}`,
+        preview: unknown.length ? [...preview, { label: "Skipped", value: `No column called ${unknown.join(", ")}` }] : preview,
+        proposal: { kind: "add_sheet_row", sheetId: sheet.id, sheetName: sheet.name, cells },
+      });
+    }
+
+    case "propose_create_sheet": {
+      const tpl = SHEET_TEMPLATES.find((t) => t.key === args.template) ?? SHEET_TEMPLATES[SHEET_TEMPLATES.length - 1];
+      const name = String(args.name ?? "").trim().slice(0, 120) || tpl.name;
+      return proposeOut({
+        title: "New sheet",
+        preview: [
+          { label: "Name", value: name },
+          { label: "Template", value: `${tpl.emoji} ${tpl.name}` },
+          { label: "Columns", value: tpl.columns.map((c) => c.name).join(", ") },
+          { label: "Shared", value: args.shared ? "Whole team" : "Only you (share later)" },
+        ],
+        proposal: { kind: "create_sheet", template: tpl.key, name, visibility: args.shared ? "everyone" : "private" },
+      });
+    }
+
+    case "roles_summary": {
+      if (!areas.includes("candidates") && !areas.includes("clients")) need("candidates");
+      const { data } = await db.from("va_roles").select("*").in("status", ["open", "sourcing", "interviewing", "offer"]).limit(300);
+      const roles = data ?? [];
+      const names = await clientNames(roles.map((r) => r.client_id as string));
+      const today = dublinDate();
+      const late = roles.filter((r) => r.start_by && r.start_by < today);
+      const urgent = roles.filter((r) => r.priority === "urgent" || r.priority === "high");
+      const { data: rc } = areas.includes("candidates") && roles.length
+        ? await db.from("va_role_candidates").select("role_id, stage").in("role_id", roles.map((r) => r.id))
+        : { data: [] as { role_id: string; stage: string }[] };
+      const inPlay = (id: string) => (rc ?? []).filter((x) => x.role_id === id && ["shortlisted", "interview", "offered"].includes(x.stage)).length;
+      const seats = roles.reduce((n, r) => n + (r.headcount as number), 0);
+      const empty = roles.filter((r) => inPlay(r.id as string) === 0);
+      const dashboard: SourciDashboard = {
+        eyebrow: "OPEN ROLES",
+        title: "What we're hiring for",
+        stats: [
+          { label: "Active roles", value: String(roles.length) },
+          { label: "Seats to fill", value: String(seats) },
+          { label: "Past start date", value: String(late.length), tone: late.length ? "alert" : "default" },
+          { label: "No candidates yet", value: String(empty.length), tone: empty.length ? "alert" : "default" },
+        ],
+        list: roles.length
+          ? {
+              title: "Roles",
+              items: roles.slice(0, 8).map((r) => ({
+                title: `${r.title} · ${names.get(r.client_id as string) ?? "Client"}`,
+                detail: `${ROLE_STATUS[r.status as keyof typeof ROLE_STATUS]?.label ?? r.status} · ${inPlay(r.id as string)} in play${r.start_by ? ` · start by ${r.start_by}` : ""}`,
+                href: `/roles/${r.id}`,
+                tone: late.includes(r) || r.priority === "urgent" ? ("alert" as const) : undefined,
+              })),
+            }
+          : undefined,
+        link: { href: "/roles", label: "Open roles" },
+      };
+      return {
+        data: { active_roles: roles.length, seats, late: late.map((r) => `${r.title} for ${names.get(r.client_id as string)}`), urgent: urgent.length, roles_without_candidates: empty.map((r) => `${r.title} for ${names.get(r.client_id as string)}`) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: roles.length
+          ? `${hi}${plural(roles.length, "open role")}, ${plural(seats, "seat")} to fill.${empty.length ? ` ${num(empty.length)} still ${empty.length === 1 ? "has" : "have"} no candidates. Want me to find matches?` : late.length ? ` ${num(late.length)} ${late.length === 1 ? "is" : "are"} past the start date.` : ""}`
+          : `${hi}no open roles right now. When a client asks for a VA, tell me and I'll open one.`,
+      };
+    }
+
+    case "role_matches": {
+      need("candidates");
+      const role = await findRole(db, clean(args.role, 120));
+      if ("error" in role) return { data: role };
+      if ("ask" in role) return { data: { ask_which: role.ask } };
+      const matches = await matchCandidates(role, 8);
+      const dashboard: SourciDashboard = {
+        eyebrow: `BEST MATCHES · ${role.title.toUpperCase()}`,
+        title: role.clientName,
+        stats: [{ label: "Strong matches", value: String(matches.filter((m) => m.fit >= 70).length) }, { label: "Possible", value: String(matches.length) }],
+        list: matches.length ? { title: "Candidates", items: matches.map((m) => ({ title: `${m.candidate.full_name} · ${m.fit}% fit`, detail: [m.candidate.ai_recommended_role, m.candidate.hourly_rate, m.candidate.availability].filter(Boolean).join(" · ") || undefined, href: `/candidates/${m.candidate.id}` })) } : undefined,
+        link: { href: `/roles/${role.id}`, label: "Open the role" },
+      };
+      return {
+        data: { role: role.title, client: role.clientName, matches: matches.map((m) => ({ name: m.candidate.full_name, fit: m.fit, role: m.candidate.ai_recommended_role })) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: matches.length
+          ? `${hi}best fit for ${role.title} is ${firstName(matches[0].candidate.full_name)} at ${matches[0].fit} percent${matches[1] ? `, then ${firstName(matches[1].candidate.full_name)}` : ""}. Shall I shortlist them?`
+          : `${hi}no strong matches in the pool for ${role.title} yet.`,
+      };
+    }
+
+    case "vas_summary": {
+      need("clients");
+      const q = clean(args.client, 80);
+      let query = db.from("va_placements").select("id, va_name, role, client_id, start_date, hours_per_week, placement_status, clients(name)").eq("placement_status", "active").limit(1000);
+      if (q) {
+        const { data: cl } = await db.from("clients").select("id").ilike("name", `%${q}%`).limit(10);
+        query = query.in("client_id", (cl ?? []).map((c) => c.id));
+      }
+      const [{ data }, { data: moods }] = await Promise.all([
+        query,
+        db.from("checkins").select("placement_id, mood, due_on").eq("kind", "va").not("mood", "is", null).order("due_on", { ascending: false }).limit(2000),
+      ]);
+      const vas = (data ?? []) as unknown as { id: string; va_name: string | null; role: string | null; client_id: string; start_date: string | null; hours_per_week: number | null; clients: { name: string } | null }[];
+      const last = new Map<string, string>();
+      for (const m of moods ?? []) if (m.placement_id && !last.has(m.placement_id)) last.set(m.placement_id, m.mood as string);
+      const atRisk = vas.filter((v) => last.get(v.id) === "at_risk");
+      const dashboard: SourciDashboard = {
+        eyebrow: q ? `VAS · ${q.toUpperCase()}` : "VA ROSTER",
+        title: "Placed VAs",
+        stats: [
+          { label: "Active VAs", value: String(vas.length) },
+          { label: "Clients", value: String(new Set(vas.map((v) => v.client_id)).size) },
+          { label: "Hours / week", value: String(vas.reduce((n, v) => n + (v.hours_per_week ?? 0), 0) || "—") },
+          { label: "At risk", value: String(atRisk.length), tone: atRisk.length ? "alert" : "default" },
+        ],
+        list: vas.length ? { title: atRisk.length ? "At risk first" : "VAs", items: [...atRisk, ...vas.filter((v) => !atRisk.includes(v))].slice(0, 8).map((v) => ({ title: `${v.va_name ?? "VA"} · ${v.clients?.name ?? ""}`, detail: [v.role, v.start_date ? `since ${v.start_date}` : null].filter(Boolean).join(" · ") || undefined, href: `/clients/${v.client_id}`, tone: atRisk.includes(v) ? ("alert" as const) : undefined })) } : undefined,
+        link: { href: "/vas", label: "Open VAs" },
+      };
+      return {
+        data: { active: vas.length, at_risk: atRisk.map((v) => `${v.va_name} (${v.clients?.name})`), vas: vas.slice(0, 40).map((v) => ({ name: v.va_name, client: v.clients?.name, role: v.role, since: v.start_date })) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: vas.length
+          ? `${hi}${plural(vas.length, "VA")} working${q ? ` for ${q}` : ""} right now.${atRisk.length ? ` ${firstName(atRisk[0].va_name)} looks at risk from the last check-in.` : " Nobody flagged at risk."}`
+          : `${hi}no active VAs${q ? ` for ${q}` : ""} on file yet.`,
+      };
+    }
+
+    case "propose_open_role": {
+      need("candidates");
+      const q = clean(args.client, 80);
+      const { data: found } = await getAdminSupabase().from("clients").select("id, name").ilike("name", `%${q}%`).limit(5);
+      if (!found?.length) return { data: { error: `No client matching "${q}". Create the client first.` } };
+      const exact = found.find((c) => c.name.toLowerCase() === q.toLowerCase());
+      if (!exact && found.length > 1) return { data: { ask_which: found.map((c) => c.name) } };
+      const client = exact ?? found[0];
+      const title = String(args.title ?? "").trim().slice(0, 120);
+      if (!title) return { data: { error: "What role do they need?" } };
+      const headcount = Math.max(1, Math.min(50, Math.round(Number(args.headcount) || 1)));
+      const emp = (["full_time", "part_time", "project"] as const).find((x) => x === args.employment_type) ?? "full_time";
+      const pr = (["low", "normal", "high", "urgent"] as const).find((x) => x === args.priority) ?? "normal";
+      const startBy = /^\d{4}-\d{2}-\d{2}$/.test(String(args.start_by)) ? String(args.start_by) : undefined;
+      const req = String(args.requirements ?? "").trim().slice(0, 4000) || undefined;
+      return proposeOut({
+        title: "Open role",
+        preview: [
+          { label: "Client", value: client.name },
+          { label: "Role", value: `${headcount > 1 ? `${headcount} × ` : ""}${title}` },
+          { label: "Type", value: emp.replace("_", " ") },
+          ...(startBy ? [{ label: "Start by", value: startBy }] : []),
+          ...(pr !== "normal" ? [{ label: "Priority", value: pr }] : []),
+          ...(req ? [{ label: "Needs", value: req }] : []),
+        ],
+        proposal: { kind: "create_role", clientId: client.id, clientName: client.name, title, headcount, employmentType: emp, startBy, priority: pr, requirements: req },
+      });
+    }
+
+    case "propose_shortlist": {
+      need("candidates");
+      const role = await findRole(db, clean(args.role, 120));
+      if ("error" in role) return { data: role };
+      if ("ask" in role) return { data: { ask_which: role.ask } };
+      const raw = String(args.candidates ?? "").trim();
+      const top = raw.match(/^(?:top|best)\s*(\d+)?/i);
+      let picked: { id: string; name: string }[] = [];
+      if (top || !raw) {
+        const m = await matchCandidates(role, Math.min(10, Number(top?.[1]) || 3));
+        picked = m.map((x) => ({ id: x.candidate.id, name: x.candidate.full_name }));
+      } else {
+        for (const n of raw.split(/,| and /).map((x) => clean(x, 60)).filter(Boolean).slice(0, 10)) {
+          const { data: c } = await db.from("candidates").select("id, full_name").ilike("full_name", `%${n}%`).limit(3);
+          if (c?.length === 1) picked.push({ id: c[0].id, name: c[0].full_name });
+          else if (c && c.length > 1) return { data: { ask_which: c.map((x) => x.full_name) } };
+          else return { data: { error: `No candidate called ${n}` } };
+        }
+      }
+      if (!picked.length) return { data: { error: "No candidates to shortlist" } };
+      return proposeOut({
+        title: `Shortlist for ${role.title}`,
+        preview: [{ label: "Role", value: `${role.title} · ${role.clientName}` }, { label: "Candidates", value: picked.map((p) => p.name).join(", ") }],
+        proposal: { kind: "shortlist", roleId: role.id, roleTitle: role.title, candidateIds: picked.map((p) => p.id), names: picked.map((p) => p.name) },
+      });
+    }
+
+    case "propose_hire": {
+      need("candidates");
+      const role = await findRole(db, clean(args.role, 120));
+      if ("error" in role) return { data: role };
+      if ("ask" in role) return { data: { ask_which: role.ask } };
+      const n = clean(args.candidate, 60);
+      const { data: rcs } = await db.from("va_role_candidates").select("id, candidates(full_name)").eq("role_id", role.id).neq("stage", "hired");
+      const list = ((rcs ?? []) as unknown as { id: string; candidates: { full_name: string } | null }[]).filter((r) => (r.candidates?.full_name ?? "").toLowerCase().includes(n.toLowerCase()));
+      if (!list.length) return { data: { error: `${n} isn't on the ${role.title} role yet. Shortlist them first.` } };
+      if (list.length > 1) return { data: { ask_which: list.map((r) => r.candidates?.full_name) } };
+      const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(args.start_date)) ? String(args.start_date) : undefined;
+      const rate = Number(args.hourly_rate) > 0 ? Math.round(Number(args.hourly_rate) * 100) / 100 : undefined;
+      const currency = ["USD", "GBP", "EUR", "PHP", "AUD", "NZD", "CAD"].includes(String(args.currency).toUpperCase()) ? String(args.currency).toUpperCase() : "USD";
+      const name = list[0].candidates?.full_name ?? n;
+      return proposeOut({
+        title: `Hire ${name}`,
+        preview: [
+          { label: "Role", value: `${role.title} · ${role.clientName}` },
+          ...(startDate ? [{ label: "Starts", value: startDate }] : []),
+          ...(rate ? [{ label: "Rate", value: `${currency} ${rate.toFixed(2)}/h` }] : []),
+          { label: "What happens", value: "Creates the VA placement, marks them hired, starts VA check-ins" },
+        ],
+        proposal: { kind: "hire", roleId: role.id, roleCandidateId: list[0].id, name, clientName: role.clientName, startDate, hourlyRate: rate, currency },
+      });
+    }
+
     case "today_briefing": {
       const today = dublinDate();
       const items: { title: string; detail?: string; href?: string; tone?: "alert" | "default" }[] = [];
@@ -1370,6 +1782,41 @@ async function leadsInGroup(db: Db, group: string, service: string, setterId: st
   return (data ?? []) as LeadRow[];
 }
 
+async function findSheet(db: Db, q: string): Promise<{ id: string; name: string } | { error: string } | { ask: string[] }> {
+  if (!q) return { error: "Which sheet?" };
+  const { data } = await db.from("sheets").select("id, name").eq("archived", false).ilike("name", `%${q}%`).limit(6);
+  if (!data?.length) return { error: `No sheet called "${q}"` };
+  const exact = data.find((x) => x.name.toLowerCase() === q.toLowerCase());
+  if (exact) return exact;
+  return data.length === 1 ? data[0] : { ask: data.map((x) => x.name) };
+}
+
+/** Find an active role by "Title", "Client" or "Title for Client". */
+async function findRole(db: Db, q: string): Promise<{ id: string; title: string; client_id: string; clientName: string } | { error: string } | { ask: string[] }> {
+  const { data } = await db.from("va_roles").select("id, title, client_id").not("status", "in", "(filled,cancelled)").limit(300);
+  const roles = data ?? [];
+  if (!roles.length) return { error: "There are no open roles." };
+  const names = await clientNames(roles.map((r) => r.client_id as string));
+  const words = q.toLowerCase().split(/\s+(?:for|at|with)\s+|\s*[-,·]\s*/).filter(Boolean);
+  const scored = roles
+    .map((r) => {
+      const t = `${r.title} ${names.get(r.client_id) ?? ""}`.toLowerCase();
+      return { r, hit: words.filter((w) => t.includes(w)).length };
+    })
+    .filter((x) => x.hit > 0)
+    .sort((a, b) => b.hit - a.hit);
+  if (!scored.length) return { error: `No open role matching "${q}"` };
+  const best = scored.filter((x) => x.hit === scored[0].hit);
+  if (best.length > 1) return { ask: best.map((x) => `${x.r.title} for ${names.get(x.r.client_id)}`) };
+  const r = best[0].r;
+  return { id: r.id, title: r.title, client_id: r.client_id, clientName: names.get(r.client_id) ?? "the client" };
+}
+
+async function teamNames(): Promise<Map<string, string>> {
+  const { data } = await getAdminSupabase().from("profiles").select("id, full_name, email").eq("active", true);
+  return new Map((data ?? []).map((p) => [p.id as string, (p.full_name as string) || (p.email as string)]));
+}
+
 async function findSetter(db: Db, name: string): Promise<{ id: string; name: string } | { error: string } | { ask: string[] }> {
   const { data } = await db.from("setters").select("id, name").ilike("name", `%${name}%`).limit(3);
   if (!data?.length) return { error: `No setter called "${name}"` };
@@ -1401,6 +1848,11 @@ function proposeOut(confirm: SourciConfirm): ToolOut {
     send_email: "Want me to send it?",
     notify_team: "Shall I send it?",
     bulk_update_leads: "Shall I go ahead?",
+    add_sheet_row: "Shall I add it?",
+    create_sheet: "Want me to create it?",
+    create_role: "Shall I open it?",
+    shortlist: "Shall I add them?",
+    hire: "Shall I confirm the hire?",
   };
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
@@ -1523,6 +1975,8 @@ How to work:
 - For several leads at once ("assign all unassigned leads to Dean", "mark all no-answer leads lost") use propose_bulk_leads; to show a group of leads use list_leads.
 - For ANY other "show me / which / how many" question use search_records with filters; for ANY other change to one or many records use propose_bulk_update. Pipeline stage moves: propose_move_stage. New invoice: propose_create_invoice. New concern: propose_create_concern. Send all waiting payment reminders: propose_send_reminders. Send all due check-ins: propose_send_checkins. Won AI lead → client: propose_convert_lead.
 - "What needs me today / what did I miss / morning briefing": today_briefing. Saved daily report: daily_report.
+- SHEETS (the team's trackers inside the CRM, like Google Sheets): sheets_overview lists them; read_sheet answers questions about one; propose_sheet_row logs a row ("log 40 calls and 3 bookings for me today in Daily KPIs"); propose_create_sheet starts a new one from a template.
+- VA STAFFING: roles_summary = open roles (client job orders). role_matches = best candidates for a role. propose_open_role when a client wants a VA. propose_shortlist to put candidates on a role. propose_hire to hire someone on a role (creates the placement). vas_summary = every placed VA across clients.
 - If the request truly can't be done with your tools, call log_wish, then say so. Never pretend something was done.
 - Only ONE propose_ tool per reply. If a tool returns ask_which, ask the user which one they mean.
 - You cannot delete anything, move money, or charge cards. Say so if asked.
