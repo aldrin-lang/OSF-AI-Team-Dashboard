@@ -12,11 +12,13 @@ import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashbo
  * Sourci — the dashboard voice assistant. Reads data, opens pages, draws charts
  * and cards, and PROPOSES changes; a change only happens after the user confirms
  * (see sourci-exec.ts + /api/sourci/confirm).
- * Brain: OpenAI (OPENAI_API_KEY, model OPENAI_MODEL default gpt-5-mini).
+ * Brain: OpenAI (OPENAI_API_KEY, model OPENAI_MODEL default gpt-5-mini, effort OPENAI_REASONING default low).
  * Every data read goes through the signed-in user's Supabase client, so RLS and
  * department access apply exactly as in the UI.
  */
 export const SOURCI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
+/** How hard the model thinks: minimal (fastest) | low | medium | high. Set OPENAI_REASONING in Vercel. */
+const REASONING = (["minimal", "low", "medium", "high"] as const).find((x) => x === process.env.OPENAI_REASONING) ?? "low";
 export const sourciConfigured = () => Boolean(process.env.OPENAI_API_KEY);
 
 let client: OpenAI | null = null;
@@ -1176,7 +1178,7 @@ export async function askSourci(input: { text: string; path: string; history: So
       model: SOURCI_MODEL,
       messages,
       tools: TOOLS,
-      reasoning_effort: "minimal",
+      reasoning_effort: REASONING,
     });
     const msg = res.choices[0]?.message;
     if (!msg) break;
