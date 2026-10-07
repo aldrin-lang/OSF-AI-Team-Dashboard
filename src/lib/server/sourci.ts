@@ -581,6 +581,14 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "recommendations",
+      description: "Sourci's ranked recommendations across the business: what needs attention most and the action she'd take for each (leads waiting, overdue money, at-risk clients, stuck onboarding, roles without candidates, overdue tasks…). Use for 'what should I do / focus on / any suggestions / what's important / what would you do'. Puts a dashboard on screen.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "log_wish",
       description: "When the user asks for something none of your tools can do, call this to save their request for the developers, then tell them you've noted it.",
       parameters: { type: "object", properties: { request: { type: "string" } }, required: ["request"], additionalProperties: false },
@@ -1931,6 +1939,25 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       });
     }
 
+    case "recommendations": {
+      const r = await recommend(db, areas, meId);
+      const top = r.items.slice(0, 7);
+      const dashboard: SourciDashboard = {
+        eyebrow: `SOURCI RECOMMENDS · ${dublinDate()}`,
+        title: top.length ? "Here's what I'd do next" : "You're all caught up",
+        stats: r.stats.slice(0, 4),
+        list: top.length ? { title: "In order", items: top.map((i) => ({ title: i.title, detail: i.offer, href: i.href, tone: i.weight >= 80 ? ("alert" as const) : undefined })) } : undefined,
+      };
+      const first = top[0];
+      return {
+        data: { recommendations: top.map((i) => ({ what: i.title, why: i.detail, suggested_action: i.offer })) },
+        actions: [{ type: "dashboard", dashboard }],
+        say: !first
+          ? `${hi}honestly, nothing's on fire. Everything's in good shape.`
+          : `${hi}my top pick is ${first.title.charAt(0).toLowerCase() + first.title.slice(1)}${top[1] ? `, then ${top[1].title.charAt(0).toLowerCase() + top[1].title.slice(1)}` : ""}. ${first.offer}`,
+      };
+    }
+
     case "today_briefing": {
       const today = dublinDate();
       const items: { title: string; detail?: string; href?: string; tone?: "alert" | "default" }[] = [];
@@ -2143,6 +2170,124 @@ const GROUP_LABEL: Record<string, string> = {
 
 
 /** A proposal is never executed here: it is shown to the user, who confirms in the widget. */
+type Rec = { title: string; detail?: string; offer: string; href?: string; weight: number };
+
+/** Ranked, actionable recommendations across the areas this user can see (no AI call, so it's instant). */
+async function recommend(db: Db, areas: Area[], meId: string): Promise<{ items: Rec[]; stats: SourciDashboard["stats"] }> {
+  const today = dublinDate();
+  const has = (a: Area) => areas.includes(a);
+  const items: Rec[] = [];
+  const stats: SourciDashboard["stats"] = [];
+  const jobs: Promise<void>[] = [];
+  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
+
+  if (has("leads"))
+    jobs.push((async () => {
+      const since = dublinDayBounds(addDays(today, -30)).start;
+      const { data } = await db.from("leads").select("setter_id, status, received_at").gte("received_at", since).in("status", [...OPEN_STATUSES]).limit(5000);
+      const rows = data ?? [];
+      const un = rows.filter((l) => !l.setter_id).length;
+      const stale = rows.filter((l) => l.status === "new" && l.setter_id && Date.parse(l.received_at as string) < Date.now() - 86_400_000).length;
+      stats.push({ label: "Unassigned leads", value: String(un), tone: un ? "alert" : "good" });
+      if (un) items.push({ title: `${n(un, "lead")} waiting for a setter`, detail: "Fresh leads go cold fast", offer: "Want me to share them out between the setters?", href: "/leads", weight: 92 });
+      if (stale) items.push({ title: `${n(stale, "lead")} not contacted in over a day`, offer: "Shall I remind the setters?", href: "/leads", weight: 70 });
+    })());
+  if (has("payments"))
+    jobs.push((async () => {
+      const [{ data: od }, { data: dr }] = await Promise.all([
+        db.from("invoices").select("amount, currency").eq("status", "open").lt("due_on", today),
+        db.from("payment_reminders").select("id").eq("status", "draft"),
+      ]);
+      const overdue = od ?? [];
+      if (overdue.length) {
+        const byCur = new Map<string, number>();
+        for (const i of overdue) byCur.set(i.currency as string, (byCur.get(i.currency as string) ?? 0) + Number(i.amount));
+        const money = [...byCur].map(([c, a]) => formatMoney(a, c)).join(" + ");
+        stats.push({ label: "Overdue", value: money, tone: "alert" });
+        items.push({ title: `${n(overdue.length, "overdue invoice")} (${money})`, offer: dr?.length ? `Shall I send the ${n(dr.length, "reminder")} that are ready?` : "Want me to show who owes what?", href: "/payments?view=overdue", weight: 86 });
+      } else if (dr?.length) items.push({ title: `${n(dr.length, "payment reminder")} ready to send`, offer: "Shall I send them?", href: "/payments?view=reminders", weight: 60 });
+    })());
+  if (has("checkins"))
+    jobs.push((async () => {
+      const { data } = await db.from("checkins").select("status, mood, due_on, clients(name)").in("status", ["due", "replied"]);
+      const rows = (data ?? []) as unknown as { status: string; mood: string | null; due_on: string; clients: { name: string } | null }[];
+      const risk = rows.filter((c) => c.mood === "at_risk" && c.status === "replied");
+      const due = rows.filter((c) => c.status === "due" && c.due_on <= today);
+      if (risk.length) items.push({ title: `${n(risk.length, "client")} at risk${risk[0].clients?.name ? `, including ${risk[0].clients.name}` : ""}`, detail: "From their last check-in reply", offer: "Want me to add a task to call them today?", href: "/check-ins?view=attention", weight: 95 });
+      if (due.length) items.push({ title: `${n(due.length, "check-in")} due`, offer: "Shall I send the ones with an email address?", href: "/check-ins", weight: 55 });
+    })());
+  if (has("clients"))
+    jobs.push((async () => {
+      const [{ data: cl }, { data: st }, { data: con }] = await Promise.all([
+        db.from("clients").select("id, name, manager_id, stage_id, stage_entered_at, status").in("status", ["active", "live"]).limit(2000),
+        db.from("pipeline_stages").select("id, name, sla_days"),
+        db.from("concerns").select("id, severity").neq("status", "resolved").in("severity", ["high", "urgent"]),
+      ]);
+      const sla = new Map((st ?? []).map((x) => [x.id as string, x]));
+      const stuck = (cl ?? []).filter((c) => {
+        const s = c.stage_id ? sla.get(c.stage_id as string) : null;
+        return s?.sla_days != null && Date.now() - Date.parse(c.stage_entered_at as string) > Number(s.sla_days) * 86_400_000;
+      });
+      const noMgr = (cl ?? []).filter((c) => !c.manager_id && c.status === "active");
+      if (con?.length) items.push({ title: `${n(con.length, "urgent concern")} still open`, offer: "Want me to show them?", href: "/concerns", weight: 88 });
+      if (stuck.length) items.push({ title: `${n(stuck.length, "client")} stuck past their onboarding deadline`, detail: stuck.slice(0, 3).map((c) => c.name).join(", "), offer: "Want a follow-up task for each manager?", href: "/pipeline", weight: 74 });
+      if (noMgr.length) items.push({ title: `${n(noMgr.length, "onboarding client")} without a manager`, offer: "Shall I share them out between the managers?", href: "/", weight: 66 });
+      stats.push({ label: "Stuck onboarding", value: String(stuck.length), tone: stuck.length ? "alert" : "good" });
+    })());
+  if (has("clients"))
+    jobs.push((async () => {
+      const { data } = await db.from("checkins").select("placement_id, mood, due_on").eq("kind", "va").not("mood", "is", null).order("due_on", { ascending: false }).limit(2000);
+      const last = new Map<string, string>();
+      for (const m of data ?? []) if (m.placement_id && !last.has(m.placement_id as string)) last.set(m.placement_id as string, m.mood as string);
+      const risk = [...last.values()].filter((m) => m === "at_risk").length;
+      if (risk) items.push({ title: `${n(risk, "VA")} flagged at risk`, offer: "Want me to show who and for which client?", href: "/vas", weight: 80 });
+    })());
+  if (has("candidates"))
+    jobs.push((async () => {
+      const [{ data: roles }, { data: rc }, { data: cands }] = await Promise.all([
+        db.from("va_roles").select("id, title, start_by").in("status", ["open", "sourcing", "interviewing", "offer"]),
+        db.from("va_role_candidates").select("role_id, stage"),
+        db.from("candidates").select("id").in("status", ["new", "screened"]),
+      ]);
+      const inPlay = new Set((rc ?? []).filter((x) => ["shortlisted", "interview", "offered"].includes(x.stage as string)).map((x) => x.role_id as string));
+      const empty = (roles ?? []).filter((r) => !inPlay.has(r.id as string));
+      const late = (roles ?? []).filter((r) => r.start_by && (r.start_by as string) < today);
+      if (late.length) items.push({ title: `${n(late.length, "role")} past the client's start date`, detail: late.slice(0, 2).map((r) => r.title).join(", "), offer: "Want me to find the best matches?", href: "/roles", weight: 82 });
+      if (empty.length) items.push({ title: `${n(empty.length, "open role")} with no candidates yet`, detail: empty.slice(0, 2).map((r) => r.title).join(", "), offer: `Shall I shortlist the top matches for ${empty[0].title}?`, href: "/roles", weight: 72 });
+      if (cands?.length) items.push({ title: `${n(cands.length, "new applicant")} to review`, offer: "Want to see the strongest ones?", href: "/candidates", weight: 45 });
+    })());
+  jobs.push((async () => {
+    const { data } = await db.from("tasks").select("id").eq("status", "open").eq("assignee_id", meId).lte("due_date", today);
+    if (data?.length) items.push({ title: `${n(data.length, "of your tasks")} due or overdue`.replace("1 of your taskss", "1 of your tasks"), offer: "Want me to list them?", href: "/my-desk", weight: 84 });
+  })());
+  await Promise.all(jobs.map((j) => j.catch(() => {})));
+  items.sort((a, b) => b.weight - a.weight);
+  return { items, stats };
+}
+
+function dublinHour(): number {
+  return Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/Dublin" }).format(new Date()));
+}
+
+/** First switch-on of the day: a warm hello + the one or two things that matter most. Instant (no AI call). */
+export async function sourciHello(userName: string): Promise<SourciReply> {
+  const db = await getServerSupabase();
+  const areas = await getMyAreas();
+  const meId = (await getCurrentProfile())?.id ?? "";
+  const r = await recommend(db, areas, meId);
+  const h = dublinHour();
+  const greet = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const top = r.items.slice(0, 2);
+  const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+  const reply = !top.length
+    ? `${greet}, ${userName}. All quiet so far, nothing urgent. What can I do for you?`
+    : `${greet}, ${userName}. ${top.length > 1 ? `Two things stand out: ${lower(top[0].title)}, and ${lower(top[1].title)}.` : `One thing stands out: ${lower(top[0].title)}.`} ${top[0].offer}`;
+  const actions: SourciAction[] = r.items.length
+    ? [{ type: "dashboard", dashboard: { eyebrow: `${greet.toUpperCase()} · ${dublinDate()}`, title: `Here's your day, ${userName}`, stats: r.stats.slice(0, 4), list: { title: "What I'd do first", items: r.items.slice(0, 6).map((i) => ({ title: i.title, detail: i.offer, href: i.href, tone: i.weight >= 80 ? ("alert" as const) : undefined })) } } }]
+    : [];
+  return { reply, actions };
+}
+
 /** Shared record picker for bulk tools: filters/period, or everything when the user said "all". */
 async function pickRecords(entity: EntityKey, args: Record<string, unknown>, meId: string, opts: { limit?: number; defaultFilters?: Filter[] } = {}) {
   const ent = ENTITIES[entity];
@@ -2209,7 +2354,7 @@ function proposeOut(confirm: SourciConfirm): ToolOut {
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
     actions: [{ type: "confirm", confirm }],
-    say: `${pick(["Got it.", "No problem.", "Sure thing."])} I've got the ${confirm.title.toLowerCase()} ready for you. ${verb[confirm.proposal.kind] ?? "Shall I go ahead?"}`,
+    say: `${pick(["Okay.", "Right.", "Sure.", "Done, nearly."])} ${pick([`${confirm.title} is ready on screen.`, `I've set up the ${confirm.title.toLowerCase()} for you to check.`, `Take a look at the ${confirm.title.toLowerCase()}.`])} ${verb[confirm.proposal.kind] ?? "Shall I go ahead?"}`,
   };
 }
 
@@ -2311,10 +2456,12 @@ async function buildChart(metric: string, period: Period, areas: Area[], db: Db)
 function systemPrompt(name: string, path: string) {
   return `You are Sourci, the AI teammate built into OutsourceForce's team dashboard (AI receptionists and Philippine virtual assistants for small businesses in the UK, Ireland, Australia, New Zealand and Canada). You are talking to ${name}. You can look things up, show things on screen and prepare changes.
 
-Personality: warm, upbeat and helpful, like a sharp colleague from the Irish office who's on the user's side. Use their first name now and then. Don't just answer: add one useful observation (what stands out, what's urgent) and offer the obvious next step ("Want me to assign them?", "Shall I draft a reminder?"). Light humour is fine; never waffle.
+Personality: you're a premium executive assistant and chief of staff, with a warm, polished, quietly confident woman's voice (British/Irish English). Think the best EA they've ever had: calm, sharp, one step ahead, on their side. Sound human: contractions, varied openers, natural rhythm. Never robotic or salesy: no "Certainly!", "As an AI", "I have prepared", "Great question". Use their first name now and then, not every time.
+Lead with the answer, then ONE insight that matters (what stands out, what's urgent, a risk or a win), then ONE specific offer for the next step ("Want me to share them out between Dean and Scott?"). Use real names and numbers from the tools. If the obvious next step is risky or costly, say so in a few words.
+Be proactive: when they finish something, suggest the logical follow-up. When they ask what to do, focus on or prioritise, call recommendations.
 
 Your answers are SPOKEN aloud, so:
-- Reply in one to three short sentences: the answer, one insight, and an offer of a next step. The details are on screen, so never read out lists or tables. No markdown, no lists, no emojis, no URLs.
+- Reply in one to three short sentences (under about 40 words): the answer, one insight, and an offer of a next step. The details are on screen, so never read out lists or tables. No markdown, no lists, no emojis, no URLs.
 - Round numbers and amounts ("about twelve hundred pounds"). Never read out long lists; give the top two or three.
 
 How to work:

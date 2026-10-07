@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Keyboard, Send, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, Check, Keyboard, Send, Volume2, VolumeX, X } from "lucide-react";
+import { audioCtx, chime, femaleVoice, levelOf, micMeter, playMp3 } from "@/components/sourci-audio";
+import { DEFAULT_VOICE, SOURCI_VOICES, isSourciVoice, type SourciVoice } from "@/lib/sourci-voices";
 import { cn } from "@/lib/utils";
 import type {
   SourciAction,
@@ -95,6 +97,20 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const [status, setStatus] = useState<Status>("ready");
   const [, setHeard] = useState(demo?.heard ?? "");
   const [on, setOn] = useState(false); // always-on mode: listens until you switch it off
+  const [voice, setVoice] = useState<SourciVoice>(() => {
+    try {
+      const v = typeof window !== "undefined" ? localStorage.getItem("sourci-voice") : null;
+      return isSourciVoice(v) ? v : DEFAULT_VOICE;
+    } catch {
+      return DEFAULT_VOICE;
+    }
+  });
+  const [voiceMenu, setVoiceMenu] = useState(false);
+  // live level meters that make the orb move with the voice (hers or yours)
+  const outAnRef = useRef<AnalyserNode | null>(null);
+  const micRef = useRef<{ analyser: AnalyserNode; stop: () => void } | null>(null);
+  const statusRef = useRef<Status>("ready");
+  const orbRef = useRef<HTMLSpanElement | null>(null);
   const [reply, setReply] = useState(demo?.reply ?? "");
   const [error, setError] = useState("");
   const [chart, setChart] = useState<SourciChart | null>(demo?.chart ?? null);
@@ -194,11 +210,12 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   );
 
   const speak = useCallback(
-    async (text: string) => {
+    async (text: string, opts: { voiceOverride?: SourciVoice } = {}) => {
       if (muted || !text) return afterSpeak();
       const id = ++speakIdRef.current;
       const finished = () => {
         if (id !== speakIdRef.current) return; // cut off: whoever interrupted takes over
+        outAnRef.current = null;
         stopBarge();
         afterSpeak();
       };
@@ -207,19 +224,19 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         const res = await fetch("/api/sourci/speak", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, voice: opts.voiceOverride ?? voice }),
         });
+        if (id !== speakIdRef.current) return;
         if (res.status === 200) {
-          const url = URL.createObjectURL(await res.blob());
-          const a = new Audio(url);
-          audioRef.current = a;
-          a.onended = () => {
-            URL.revokeObjectURL(url);
-            finished();
-          };
-          if (id !== speakIdRef.current) return;
-          await a.play();
+          const p = await playMp3(res); // starts on the first streamed chunk
+          if (id !== speakIdRef.current) {
+            p.audio.pause();
+            return;
+          }
+          audioRef.current = p.audio;
+          outAnRef.current = p.analyser;
           startBarge(text);
+          void p.done.then(finished);
           return;
         }
       } catch {
@@ -229,14 +246,57 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       const synth = window.speechSynthesis;
       if (!synth) return finished();
       const u = new SpeechSynthesisUtterance(text);
-      const voice = synth.getVoices().find((v) => /en-(IE|GB)/i.test(v.lang));
-      if (voice) u.voice = voice;
-      u.rate = 1.05;
+      const v = femaleVoice();
+      if (v) u.voice = v;
+      u.rate = 1.03;
+      u.pitch = 1.05;
       u.onend = finished;
       synth.speak(u);
       startBarge(text);
     },
-    [afterSpeak, muted, startBarge, stopBarge],
+    [afterSpeak, muted, startBarge, stopBarge, voice],
+  );
+
+  // keep the browser's voice list warm (it loads async) and track status for the meter loop
+  useEffect(() => {
+    window.speechSynthesis?.getVoices();
+  }, []);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // The orb breathes with whoever is talking: her voice while speaking, yours while listening.
+  useEffect(() => {
+    let raf = 0;
+    let smooth = 0;
+    const tick = () => {
+      const st = statusRef.current;
+      const an = st === "speaking" ? outAnRef.current : st === "listening" ? (micRef.current?.analyser ?? null) : null;
+      const target = levelOf(an);
+      smooth += (target - smooth) * 0.35;
+      const el = orbRef.current;
+      if (el) {
+        el.style.transform = `scale(${(1 + smooth * 0.28).toFixed(3)})`;
+        el.style.filter = smooth > 0.02 ? `brightness(${(1 + smooth * 0.5).toFixed(2)}) drop-shadow(0 0 ${Math.round(6 + smooth * 26)}px rgba(34,211,238,0.85))` : "";
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const chooseVoice = useCallback(
+    (v: SourciVoice) => {
+      setVoice(v);
+      setVoiceMenu(false);
+      try {
+        localStorage.setItem("sourci-voice", v);
+      } catch {}
+      audioCtx();
+      stopSpeaking();
+      void speak(`Hi, I'm Sourci. This is how I'll sound from now on.`, { voiceOverride: v });
+    },
+    [speak, stopSpeaking],
   );
 
   const remember = (role: SourciTurn["role"], content: string) => {
@@ -259,6 +319,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         remember("assistant", r.ok ? `Done: ${r.message}` : r.message);
         if (r.ok) {
           setLastUndo(proposal.kind === "restore" ? null : (r.undo ?? null));
+          chime("done");
           setDone({ type: "done", stamp: r.stamp ?? "DONE", title: r.title ?? title, detail: r.message, href: r.href, undo: r.undo });
           setPanelOpen(true);
           router.refresh();
@@ -306,12 +367,13 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       if (!q) return;
       stopSpeaking();
       stopBarge();
-      setHeard(q);
+      const hello = q === "__hello__";
+      if (!hello) setHeard(q);
       setError("");
-      if (/^\s*(undo( that| it| the last( one| change)?)?|put (it|them) back|revert( that| it)?)[.!]*\s*$/i.test(q)) return undo();
+      if (!hello && /^\s*(undo( that| it| the last( one| change)?)?|put (it|them) back|revert( that| it)?)[.!]*\s*$/i.test(q)) return undo();
       // A spoken yes/no answers the pending confirmation directly.
-      if (pending && YES.test(q)) return void confirm();
-      if (pending && NO.test(q)) return cancel();
+      if (!hello && pending && YES.test(q)) return void confirm();
+      if (!hello && pending && NO.test(q)) return cancel();
       if (/^\s*(that'?s all|that is all|stop listening|turn off|switch off|go to sleep|bye|goodbye|good night)\b/i.test(q) && q.split(/\s+/).length <= 6) {
         convoRef.current = false;
         setOn(false);
@@ -340,7 +402,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
           setStatus("ready");
           return;
         }
-        remember("user", q);
+        if (!hello) remember("user", q);
         remember("assistant", data.reply);
         let nav: string | null = null;
         let shown = false;
@@ -453,6 +515,8 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const close = useCallback(() => {
     convoRef.current = false;
     setOn(false);
+    micRef.current?.stop();
+    micRef.current = null;
     const r = recRef.current;
     recRef.current = null;
     try {
@@ -474,18 +538,37 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
    * it listens to you straight away.
    */
   const toggle = useCallback(() => {
+    audioCtx(); // unlock audio on this click
     if (status === "speaking" && convoRef.current) {
       stopSpeaking();
       stopBarge();
       setTimeout(() => listenRef.current?.(), 120);
       return;
     }
-    if (convoRef.current) return close();
+    if (convoRef.current) {
+      chime("off");
+      micRef.current?.stop();
+      micRef.current = null;
+      return close();
+    }
     convoRef.current = true;
     setOn(true);
     lastActivity.current = Date.now();
+    chime("on");
+    void micMeter().then((m) => {
+      if (convoRef.current) micRef.current = m;
+      else m?.stop();
+    });
     if (status === "working") reqRef.current++;
-    listen();
+    // First switch-on of the day: a short personal hello with what matters most.
+    let greet = false;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      greet = localStorage.getItem("sourci-hello") !== today;
+      if (greet) localStorage.setItem("sourci-hello", today);
+    } catch {}
+    if (greet) void askRef.current?.("__hello__");
+    else listen();
   }, [close, listen, status, stopBarge, stopSpeaking]);
 
   useEffect(() => {
@@ -609,6 +692,37 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
               Show details
             </button>
           )}
+          <div className="relative">
+            <button
+              onClick={() => setVoiceMenu((v) => !v)}
+              className="rounded-full bg-[#05090f]/80 p-2 text-slate-400 opacity-60 ring-1 ring-white/10 transition hover:opacity-100"
+              aria-label="Choose Sourci's voice"
+              title={`Voice: ${voice}`}
+            >
+              <AudioLines className="h-4 w-4" />
+            </button>
+            {voiceMenu && (
+              <div
+                className="sourci-anim absolute bottom-11 right-0 w-56 rounded-xl border border-cyan-300/20 bg-[#05090f]/95 p-1.5 text-slate-200 shadow-xl backdrop-blur"
+                style={{ animation: "sourci-in .15s ease-out" }}
+              >
+                <p className="px-2 pb-1 pt-0.5 font-mono text-[10px] tracking-[0.18em] text-cyan-300/80">VOICE</p>
+                {SOURCI_VOICES.map((v) => (
+                  <button
+                    key={v.name}
+                    onClick={() => chooseVoice(v.name)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-slate-100">{v.name}</span>
+                      <span className="block text-[11px] text-slate-500">{v.blurb}</span>
+                    </span>
+                    {voice === v.name && <Check className="h-3.5 w-3.5 text-cyan-300" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => {
               setMuted((m) => !m);
@@ -631,7 +745,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
           >
             <Keyboard className="h-4 w-4" />
           </button>
-          <OrbButton status={status} on={on} onClick={toggle} />
+          <OrbButton status={status} on={on} onClick={toggle} orbRef={orbRef} />
         </div>
       </div>
     </>
@@ -639,7 +753,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 }
 
 /** The corner orb. Calm when idle; glows and pulses while listening; spinning ring while working; ripples while speaking. */
-function OrbButton({ status, on, onClick }: { status: Status; on: boolean; onClick: () => void }) {
+function OrbButton({ status, on, onClick, orbRef }: { status: Status; on: boolean; onClick: () => void; orbRef?: React.Ref<HTMLSpanElement> }) {
   const label = !on
     ? "Switch Sourci on (⌥S)"
     : { ready: "Sourci is on. Click to switch off", listening: "Listening. Click to switch off", working: "Working. Click to switch off", speaking: "Click to interrupt" }[status];
@@ -659,7 +773,9 @@ function OrbButton({ status, on, onClick }: { status: Status; on: boolean; onCli
       )}
       {status === "listening" && <span className="absolute -inset-2 rounded-full bg-cyan-400/25 blur-md" />}
       {on && <span className="absolute -right-0.5 -top-0.5 z-10 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-[#05090f]" title="Always on" />}
-      <Orb size={status === "listening" ? 56 : 48} pulse={status === "listening"} glow={status !== "ready"} />
+      <span ref={orbRef} className="inline-flex transition-[filter] duration-75 will-change-transform">
+        <Orb size={status === "listening" ? 56 : 48} pulse={status === "listening" && !on} glow={status !== "ready" || on} />
+      </span>
     </button>
   );
 }

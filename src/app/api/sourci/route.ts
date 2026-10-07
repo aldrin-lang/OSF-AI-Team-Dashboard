@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile, hasRole } from "@/lib/auth";
-import { askSourci, sourciConfigured } from "@/lib/server/sourci";
+import { askSourci, sourciConfigured, sourciHello } from "@/lib/server/sourci";
 import type { SourciTurn } from "@/lib/sourci-types";
 
 // Sourci voice assistant. Signed-in admins only (Aldrin + boss for now).
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     : [];
 
   try {
+    if (text === "__hello__") return NextResponse.json(await sourciHello((me.full_name || me.email).split(" ")[0]));
     const r = await askSourci({ text, path, history, userName: (me.full_name || me.email).split(" ")[0] });
     return NextResponse.json(r);
   } catch (e) {
