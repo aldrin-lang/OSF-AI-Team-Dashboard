@@ -22,7 +22,10 @@ import { StageMover } from "./stage-mover";
 import { Checklist } from "./checklist";
 import { Feed } from "./feed";
 import { ClientEmails } from "./emails";
-import { EditClientPanel, LinesEditor } from "./editors";
+import { EditClientPanel, LinesEditor, PlacementsEditor } from "./editors";
+import { PLACEMENT_STATUS, ROLE_STATUS } from "@/lib/labels";
+import { getServerSupabase } from "@/lib/supabase/server";
+import type { VaRole } from "@/lib/types";
 import { TaskAdder } from "./task-adder";
 import { TaskCheckbox } from "@/app/(app)/_components/task-checkbox";
 
@@ -32,12 +35,16 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
   const detail = await getClientDetail(id);
   if (!detail) notFound();
 
-  const { client, lines, checklist, tasks, concerns, stage, emails, templates } = detail;
-  const [profiles, stages, gates, feed] = await Promise.all([
+  const { client, lines, placements, checklist, tasks, concerns, stage, emails, templates } = detail;
+  const isVa = client.pipeline === "va";
+  const [profiles, stages, gates, feed, roles] = await Promise.all([
     getProfiles(),
-    getStages("ai"),
+    getStages(client.pipeline),
     getStageGates(),
     getClientFeed(id),
+    isVa
+      ? getServerSupabase().then((db) => db.from("va_roles").select("*").eq("client_id", id).order("created_at", { ascending: false }).then((r) => (r.data as VaRole[]) ?? []))
+      : Promise.resolve([] as VaRole[]),
   ]);
   const pm = profileMap(profiles);
   const peopleNames = Object.fromEntries(profiles.map((p) => [p.id, p.full_name || p.email]));
@@ -109,7 +116,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Build checklist</CardTitle>
+              <CardTitle>{isVa ? "Onboarding checklist" : "Build checklist"}</CardTitle>
             </CardHeader>
             <CardBody className="p-0">
               <Checklist
@@ -126,6 +133,37 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
             </CardBody>
           </Card>
 
+          {isVa ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>VAs &amp; open roles</CardTitle>
+              <Link href="/roles" className="text-xs font-medium text-brand-600 hover:underline">All roles →</Link>
+            </CardHeader>
+            <CardBody className="space-y-4">
+              {roles.filter((r) => !["filled", "cancelled"].includes(r.status)).map((r) => (
+                <Link key={r.id} href={`/roles/${r.id}`} className="flex items-center justify-between rounded-md border border-line p-3 hover:border-line-strong">
+                  <span className="text-sm font-medium text-ink">Hiring: {r.headcount > 1 ? `${r.headcount} × ` : ""}{r.title}</span>
+                  <Badge tone={ROLE_STATUS[r.status].tone}>{ROLE_STATUS[r.status].label}</Badge>
+                </Link>
+              ))}
+              {placements.length === 0 && roles.length === 0 && (
+                <p className="text-sm text-ink-faint">No VAs placed yet. Open a role for this client, or add a placement below.</p>
+              )}
+              {placements.map((p) => (
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">{p.va_name || "Unnamed VA"}</p>
+                    <p className="text-xs text-ink-faint">
+                      {[p.role, p.employment_type, p.start_date ? `since ${formatDate(p.start_date)}` : null, p.hourly_rate != null ? `${p.rate_currency} ${Number(p.hourly_rate).toFixed(2)}/h` : null].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <Badge tone={PLACEMENT_STATUS[p.placement_status].tone}>{PLACEMENT_STATUS[p.placement_status].label}</Badge>
+                </div>
+              ))}
+              <PlacementsEditor clientId={id} placements={placements} />
+            </CardBody>
+          </Card>
+          ) : (
           <Card>
               <CardHeader>
                 <CardTitle>Phone lines &amp; systems</CardTitle>
@@ -177,6 +215,7 @@ export default async function ClientDetailPage(props: PageProps<"/clients/[id]">
                 <LinesEditor clientId={id} lines={lines} />
               </CardBody>
           </Card>
+          )}
 
           <Card>
             <CardHeader>

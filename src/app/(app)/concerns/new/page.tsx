@@ -1,3 +1,5 @@
+import { getService } from "@/lib/server/service";
+import { pipelinesFor } from "@/lib/service";
 import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -18,7 +20,7 @@ export default async function NewConcernPage(props: PageProps<"/concerns/new">) 
 
   const supabase = await getServerSupabase();
   const [{ data: clients }, profiles, types] = await Promise.all([
-    supabase.from("clients").select("id, name").eq("pipeline", "ai").order("name"),
+    supabase.from("clients").select("id, name").in("pipeline", pipelinesFor(await getService())).order("name"),
     getProfiles(),
     getOptions("concern_type"),
   ]);

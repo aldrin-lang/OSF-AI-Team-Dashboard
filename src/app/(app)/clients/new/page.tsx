@@ -8,8 +8,10 @@ import { createClient } from "../actions";
 
 export const metadata = { title: "New client · OSF AI Team Dashboard" };
 
-export default async function NewClientPage() {
+export default async function NewClientPage(props: PageProps<"/clients/new">) {
   await requireArea("clients");
+  const sp = await props.searchParams;
+  const pipeline = sp.service === "ai" ? "ai" : "va";
   const [profiles, sources, countries] = await Promise.all([
     getProfiles(),
     getOptions("source"),
@@ -20,7 +22,7 @@ export default async function NewClientPage() {
     <div className="mx-auto max-w-xl">
       <PageHeader
         title="New client"
-        subtitle="AI receptionist onboarding"
+        subtitle={pipeline === "va" ? "VA outsourcing client" : "AI receptionist onboarding"}
         actions={
           <Link href="/" className="text-sm text-ink-muted hover:text-ink">
             Cancel
@@ -30,7 +32,13 @@ export default async function NewClientPage() {
       <Card>
         <CardBody>
           <form action={createClient} className="space-y-4">
-            <input type="hidden" name="pipeline" value="ai" />
+            <div>
+              <Label htmlFor="pipeline">Service *</Label>
+              <Select id="pipeline" name="pipeline" defaultValue={pipeline}>
+                <option value="va">VA Outsourcing</option>
+                <option value="ai">AI Receptionist</option>
+              </Select>
+            </div>
             <div>
               <Label htmlFor="company_name">Company name *</Label>
               <Input id="company_name" name="company_name" required autoFocus placeholder="e.g. M&D Building & Construction" />

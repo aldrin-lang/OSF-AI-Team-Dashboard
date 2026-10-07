@@ -15,7 +15,8 @@ function evaluate(
 ): GateCheck {
   const target = stages.find((s) => s.id === targetStageId);
   if (!target) return { allowed: true, blockedBy: [] };
-  const stagePos = new Map(stages.map((s) => [s.id, s.position]));
+  // only gates from the target's own pipeline (VA rules never block AI clients and vice versa)
+  const stagePos = new Map(stages.filter((s) => s.pipeline === target.pipeline).map((s) => [s.id, s.position]));
   const itemsByKey = new Map(checklist.map((c) => [c.key, c]));
 
   const blockedBy: string[] = [];

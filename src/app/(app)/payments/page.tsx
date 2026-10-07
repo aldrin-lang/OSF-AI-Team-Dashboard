@@ -1,3 +1,5 @@
+import { getService } from "@/lib/server/service";
+import { pipelinesFor } from "@/lib/service";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireArea, hasRole } from "@/lib/auth";
@@ -35,15 +37,17 @@ export default async function PaymentsPage(props: PageProps<"/payments">) {
   const msg = flashFrom(sp);
   const today = dublinDate();
   const supabase = await getServerSupabase();
+  const pipes = pipelinesFor(await getService());
 
   const [{ data: invRows }, { data: drafts }, { data: clientRows }] = await Promise.all([
-    supabase.from("invoices").select("*, clients(name, contact_email)").order("due_on", { ascending: true }).limit(2000),
+    supabase.from("invoices").select("*, clients!inner(name, contact_email, pipeline)").in("clients.pipeline", pipes).order("due_on", { ascending: true }).limit(2000),
     supabase.from("payment_reminders").select("*").eq("status", "draft").order("created_at"),
-    supabase.from("clients").select("id, name, contact_email").not("status", "in", "(withdrawn,rejected)").order("name"),
+    supabase.from("clients").select("id, name, contact_email").in("pipeline", pipes).not("status", "in", "(withdrawn,rejected)").order("name"),
   ]);
   const invoices = (invRows as Inv[]) ?? [];
-  const reminders = (drafts as PaymentReminder[]) ?? [];
   const byId = new Map(invoices.map((i) => [i.id, i]));
+  // only reminders for invoices on this side of the business
+  const reminders = ((drafts as PaymentReminder[]) ?? []).filter((r) => byId.has(r.invoice_id));
   const health = (i: Inv) => invoiceHealth(i.status, i.due_on, today);
 
   const open = invoices.filter((i) => i.status === "open");

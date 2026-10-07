@@ -15,7 +15,7 @@ async function loadContext(clientId: string) {
   const [{ data: client }, { data: lines }, stages] = await Promise.all([
     supabase.from("clients").select("*").eq("id", clientId).single(),
     supabase.from("client_lines").select("*").eq("client_id", clientId).order("created_at"),
-    getStages("ai"),
+    getStages(),
   ]);
   const c = client as Client;
   let manager: Profile | null = null;

@@ -2,13 +2,16 @@ import { requireArea, hasRole } from "@/lib/auth";
 import { getClientsGrid, getOptions } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { ClientsGrid } from "./clients/clients-grid";
+import { getService } from "@/lib/server/service";
+import { SERVICE_INFO, pipelinesFor } from "@/lib/service";
 
 export const metadata = { title: "Clients · OSF AI Team Dashboard" };
 
 export default async function ClientsHome() {
   const me = await requireArea("clients");
+  const service = await getService();
   const [{ rows, stages, profiles }, sources, countries] = await Promise.all([
-    getClientsGrid(),
+    getClientsGrid(pipelinesFor(service)),
     getOptions("source"),
     getOptions("country"),
   ]);
@@ -20,7 +23,7 @@ export default async function ClientsHome() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Clients"
+        title={service === "all" ? "Clients" : `Clients · ${SERVICE_INFO[service].label}`}
         subtitle={`${active.length} active · ${rows.filter((r) => r.client.status === "live").length} live · ${rows.filter((r) => r.overSla).length} past SLA`}
       />
       <ClientsGrid
@@ -31,6 +34,7 @@ export default async function ClientsHome() {
         countries={countries}
         myId={me.id}
         canEditFees={hasRole(me, "manager")}
+        service={service}
       />
     </div>
   );

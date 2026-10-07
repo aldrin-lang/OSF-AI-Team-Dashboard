@@ -209,10 +209,8 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             <p className="text-sm text-ink-muted">
               When this lead is won, set the status to Won. The Client Success team turns it into a client.
             </p>
-          ) : lead.service === "va" || lead.service === "premium" ? (
-            <p className="text-sm text-ink-muted">
-              VA onboarding isn&apos;t in the dashboard yet. Set the status to Won and hand over through the VA process.
-            </p>
+          ) : lead.service === "unknown" ? (
+            <p className="text-sm text-ink-muted">Set whether this lead is AI or VA first, then you can convert it.</p>
           ) : (
             <form action={convertLead} className="flex flex-wrap items-center gap-3">
               <input type="hidden" name="id" value={lead.id} />
@@ -220,7 +218,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 Convert to client
               </Button>
               <p className="text-xs text-ink-faint">
-                Creates an AI receptionist client at the first onboarding stage and marks this lead Won.
+                Creates {lead.service === "ai" ? "an AI receptionist" : "a VA outsourcing"} client at the first stage of its pipeline and marks this lead Won.
               </p>
             </form>
           )}

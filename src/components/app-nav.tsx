@@ -20,18 +20,24 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Area } from "@/lib/areas";
+import type { Service } from "@/lib/service";
+import { ServiceSwitch } from "@/components/service-switch";
 
-const MAIN: { href: string; label: string; icon: typeof Inbox; area: Area; also?: Area; match?: string; exact?: boolean }[] = [
-  { href: "/leads", label: "Leads", icon: Inbox, area: "leads", match: "/leads" },
-  { href: "/", label: "Clients", icon: Users, area: "clients", exact: true },
-  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, area: "clients", match: "/pipeline" },
-  { href: "/concerns", label: "Concerns", icon: AlertTriangle, area: "clients", match: "/concerns" },
-  { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, area: "checkins", match: "/check-ins" },
-  { href: "/payments", label: "Payments", icon: Receipt, area: "payments", match: "/payments" },
-  { href: "/vas", label: "VAs", icon: Contact, area: "clients", match: "/vas" },
-  { href: "/roles", label: "Open roles", icon: Briefcase, area: "candidates", also: "clients", match: "/roles" },
-  { href: "/candidates", label: "Candidates", icon: UserSearch, area: "candidates", match: "/candidates" },
-  { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", match: "/reports" },
+type Side = Service;
+const BOTH: Side[] = ["va", "ai", "all"];
+const VA: Side[] = ["va", "all"];
+// VA outsourcing is the core (full menu); AI receptionist is the side (just the essentials).
+const MAIN: { href: string; label: string; icon: typeof Inbox; area: Area; also?: Area; match?: string; exact?: boolean; sides: Side[] }[] = [
+  { href: "/leads", label: "Leads", icon: Inbox, area: "leads", match: "/leads", sides: BOTH },
+  { href: "/", label: "Clients", icon: Users, area: "clients", exact: true, sides: BOTH },
+  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, area: "clients", match: "/pipeline", sides: BOTH },
+  { href: "/roles", label: "Open roles", icon: Briefcase, area: "candidates", also: "clients", match: "/roles", sides: VA },
+  { href: "/candidates", label: "Candidates", icon: UserSearch, area: "candidates", match: "/candidates", sides: VA },
+  { href: "/vas", label: "VAs", icon: Contact, area: "clients", match: "/vas", sides: VA },
+  { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, area: "checkins", match: "/check-ins", sides: VA },
+  { href: "/payments", label: "Payments", icon: Receipt, area: "payments", match: "/payments", sides: BOTH },
+  { href: "/concerns", label: "Concerns", icon: AlertTriangle, area: "clients", match: "/concerns", sides: VA },
+  { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", match: "/reports", sides: VA },
 ];
 
 function itemClass(active: boolean) {
@@ -43,16 +49,17 @@ function itemClass(active: boolean) {
   );
 }
 
-export function AppNav({ isManager, areas }: { isManager: boolean; areas: Area[] }) {
+export function AppNav({ isManager, areas, service }: { isManager: boolean; areas: Area[]; service: Service }) {
   const pathname = usePathname();
 
   return (
     <nav className="flex flex-1 flex-col px-3 collapsed:px-2.5">
+      <ServiceSwitch service={service} />
       <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint collapsed:hidden">
         Operations
       </p>
       <div className="flex flex-col gap-1">
-        {MAIN.filter((item) => areas.includes(item.area) || (item.also && areas.includes(item.also))).map((item) => {
+        {MAIN.filter((item) => item.sides.includes(service) && (areas.includes(item.area) || (item.also && areas.includes(item.also)))).map((item) => {
           const active = item.exact
             ? pathname === "/"
             : pathname.startsWith(item.match ?? item.href);

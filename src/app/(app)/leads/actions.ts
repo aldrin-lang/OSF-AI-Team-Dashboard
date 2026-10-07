@@ -181,9 +181,9 @@ export async function convertLead(formData: FormData) {
   if (!lead) throw new Error("Lead not found");
   if (lead.client_id) redirect(`/clients/${lead.client_id}`);
 
-  // The dashboard only runs the AI receptionist onboarding pipeline (VA stages were removed).
-  if (lead.service === "va" || lead.service === "premium") throw new Error("VA onboarding isn't in the dashboard yet");
-  const pipeline: PipelineType = "ai";
+  // VA and Premium VA leads start the VA pipeline; AI leads the AI receptionist onboarding.
+  if (lead.service === "unknown") throw new Error("Set whether this lead is AI or VA first, then convert it.");
+  const pipeline: PipelineType = lead.service === "va" || lead.service === "premium" ? "va" : "ai";
   const { data: firstStage } = await supabase
     .from("pipeline_stages")
     .select("id")

@@ -71,6 +71,10 @@ Migration `20261007000001_departments.sql`. Each person belongs to one or more d
 - Alerts follow departments: payment reminders → Accounts, candidate recommendations → Recruitment, at-risk check-ins → Check-ins people + the client's manager, daily report → anyone with Reports (admins by default).
 - Someone with no department sees a "not added to a department yet" page.
 
+## Service switch: VA first, AI on the side
+The dashboard is VA-outsourcing first; AI receptionist is the smaller side. A switch under the logo (**VA · AI · All**, cookie `osf-service`, default VA) filters every page: Leads (service va/premium or ai; unknown shows on both), Clients, Pipeline (one board per pipeline), Concerns, Check-ins, Payments (invoices via the client's pipeline), Reports, My desk, and Sourci (prompt + recommendations). VA side = full menu and a violet accent; AI side = Leads, Clients, Pipeline, Payments. View filter only (no access change). Code: `src/lib/service.ts`, `src/lib/server/service.ts` (`getService`, `scopeClientIds`), `src/components/service-switch.tsx`, `[data-service="va"]` in globals.css.
+- VA client pipeline restored by migration `20261009000001_va_pipeline.sql` (stages Sale closed → Interview scheduled → VA matched → Start scheduled → Active/Inactive, VA checklist, gate on "VA matched"). Gates only apply within their own pipeline; moving a client into the other pipeline's stage is refused. VA/Premium leads convert into VA clients. VA client pages show open roles + placements instead of phone lines.
+
 ## Sheets (team trackers inside the CRM)
 Migration `20261008000001_sheets_and_staffing.sql`. **Sheets** in the menu (everyone). Like a shared Google Sheet: pick a template (Daily KPIs, Experiments, Content calendar, Ad spend & leads, VA hours log, Blank), then edit in place.
 - Column types: text, number, money (per-column currency), date, dropdown (coloured choices), checkbox, person (team member), link. Footer shows sums/averages, % ticked, top dropdown values.

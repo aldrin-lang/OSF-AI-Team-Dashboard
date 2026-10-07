@@ -12,6 +12,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { Sourci } from "@/components/sourci";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarToggle } from "@/components/sidebar-toggle";
+import { getService } from "@/lib/server/service";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const supabase = await getServerSupabase();
 
   const areas = await getMyAreas();
+  const service = await getService();
   const [{ count }, clientsMini] = await Promise.all([
     supabase
       .from("notifications")
@@ -29,7 +31,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   ]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" data-service={service}>
       <RealtimeSync />
       <aside className="side-rail sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/70 backdrop-blur-xl transition-[width] duration-200 collapsed:w-[72px] md:flex">
         <div className="relative flex h-16 items-center justify-between gap-2 border-b border-line pl-5 pr-3 collapsed:flex-col collapsed:justify-center collapsed:gap-0 collapsed:px-0">
@@ -39,7 +41,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-12 pt-4">
-          <AppNav isManager={hasRole(profile, "manager")} areas={areas} />
+          <AppNav isManager={hasRole(profile, "manager")} areas={areas} service={service} />
         </div>
       </aside>
 
@@ -47,7 +49,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-line bg-bg/85 px-4 backdrop-blur-xl md:px-8">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-1 md:hidden">
-            <MobileNav isManager={hasRole(profile, "manager")} areas={areas} />
+            <MobileNav isManager={hasRole(profile, "manager")} areas={areas} service={service} />
             <Logo size={24} />
           </div>
           <div className="hidden md:block">

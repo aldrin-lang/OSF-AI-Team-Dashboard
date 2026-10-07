@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile, hasRole } from "@/lib/auth";
 import { askSourci, sourciConfigured, sourciHello } from "@/lib/server/sourci";
+import { getService } from "@/lib/server/service";
 import type { SourciTurn } from "@/lib/sourci-types";
 
 // Sourci voice assistant. Signed-in admins only (Aldrin + boss for now).
@@ -31,14 +32,15 @@ export async function POST(request: Request) {
     : [];
 
   try {
-    if (text === "__hello__") return NextResponse.json(await sourciHello((me.full_name || me.email).split(" ")[0]));
+    const service = await getService();
+    if (text === "__hello__") return NextResponse.json(await sourciHello((me.full_name || me.email).split(" ")[0], service));
     const memory = Array.isArray(body.memory)
       ? (body.memory as unknown[]).filter((m): m is string => typeof m === "string").map((m) => m.slice(0, 200)).slice(0, 30)
       : [];
     const alternatives = Array.isArray(body.alternatives)
       ? (body.alternatives as unknown[]).filter((a): a is string => typeof a === "string" && a.trim().length > 0).map((a) => a.slice(0, 300)).slice(0, 3)
       : [];
-    const r = await askSourci({ text, path, history, memory, alternatives, userName: (me.full_name || me.email).split(" ")[0] });
+    const r = await askSourci({ text, path, history, memory, alternatives, service, userName: (me.full_name || me.email).split(" ")[0] });
     return NextResponse.json(r);
   } catch (e) {
     console.error("[sourci]", e);

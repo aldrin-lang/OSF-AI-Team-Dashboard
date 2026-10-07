@@ -1,3 +1,5 @@
+import { getService } from "@/lib/server/service";
+import { pipelinesFor } from "@/lib/service";
 import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -12,9 +14,10 @@ export const metadata = { title: "Reports · OSF AI Team Dashboard" };
 export default async function ReportsPage() {
   await requireArea("reports");
   const supabase = await getServerSupabase();
+  const pipes = pipelinesFor(await getService());
   const [{ data: clientRows }, stages, profiles] = await Promise.all([
-    supabase.from("clients").select("*").eq("pipeline", "ai"),
-    getStages("ai"),
+    supabase.from("clients").select("*").in("pipeline", pipes),
+    getStages().then((all) => all.filter((st) => pipes.includes(st.pipeline))),
     getProfiles(),
   ]);
   const clients = (clientRows as Client[]) ?? [];

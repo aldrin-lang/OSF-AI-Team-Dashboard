@@ -77,7 +77,7 @@ export interface GridRow {
   openConcerns: number;
 }
 
-export async function getClientsGrid(): Promise<{
+export async function getClientsGrid(pipelines: PipelineType[] = ["ai"]): Promise<{
   rows: GridRow[];
   stages: PipelineStage[];
   profiles: Profile[];
@@ -91,11 +91,11 @@ export async function getClientsGrid(): Promise<{
     stages,
     profiles,
   ] = await Promise.all([
-    supabase.from("clients").select("*").eq("pipeline", "ai"),
+    supabase.from("clients").select("*").in("pipeline", pipelines),
     supabase.from("client_lines").select("client_id, regulatory_bundle_status"),
     supabase.from("checklist_items").select("client_id, status"),
     supabase.from("concerns").select("client_id").neq("status", "resolved"),
-    getStages("ai"),
+    pipelines.length === 1 ? getStages(pipelines[0]) : getStages(),
     getProfiles(),
   ]);
 
@@ -246,9 +246,8 @@ export async function getClientsMini(): Promise<
     supabase
       .from("clients")
       .select("id, name, company_name, country, stage_id")
-      .eq("pipeline", "ai")
       .order("name"),
-    getStages("ai"),
+    getStages(),
   ]);
   const stageName = new Map(stages.map((s) => [s.id, s.name]));
   return (

@@ -29,7 +29,7 @@ export async function createClient(formData: FormData) {
   await requireActor();
   const supabase = await getServerSupabase();
 
-  const pipeline = (s(formData, "pipeline") ?? "ai") as PipelineType;
+  const pipeline: PipelineType = s(formData, "pipeline") === "va" ? "va" : "ai";
   const name = s(formData, "name");
   if (!name) throw new Error("Client name is required");
 
@@ -172,11 +172,13 @@ export async function moveClientStage(input: {
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, stage_id, manager_id")
+    .select("id, name, stage_id, manager_id, pipeline")
     .eq("id", input.clientId)
     .single();
   if (!client) return { ok: false, error: "Client not found" };
   if (client.stage_id === input.toStageId) return { ok: true };
+  const { data: target } = await supabase.from("pipeline_stages").select("pipeline").eq("id", input.toStageId).maybeSingle();
+  if (!target || target.pipeline !== client.pipeline) return { ok: false, error: "That stage belongs to the other service's pipeline" };
 
   const gate = await checkStageGate(input.clientId, input.toStageId);
   if (!gate.allowed) {

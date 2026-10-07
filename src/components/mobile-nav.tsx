@@ -6,8 +6,9 @@ import { Menu, X } from "lucide-react";
 import { AppNav } from "@/components/app-nav";
 import { LogoWordmark } from "@/components/logo";
 import type { Area } from "@/lib/areas";
+import type { Service } from "@/lib/service";
 
-export function MobileNav({ isManager, areas }: { isManager: boolean; areas: Area[] }) {
+export function MobileNav({ isManager, areas, service }: { isManager: boolean; areas: Area[]; service: Service }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -51,7 +52,7 @@ export function MobileNav({ isManager, areas }: { isManager: boolean; areas: Are
               </button>
             </div>
             <div className="flex-1 overflow-y-auto py-4">
-              <AppNav isManager={isManager} areas={areas} />
+              <AppNav isManager={isManager} areas={areas} service={service} />
             </div>
           </div>
         </div>

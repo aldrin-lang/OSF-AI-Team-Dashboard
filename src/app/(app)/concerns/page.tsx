@@ -1,3 +1,4 @@
+import { scopeClientIds } from "@/lib/server/service";
 import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -23,6 +24,8 @@ export default async function ConcernsPage(props: PageProps<"/concerns">) {
     if (statusFilter === "open") q = q.neq("status", "resolved");
     else q = q.eq("status", statusFilter);
   }
+  const scope = await scopeClientIds();
+  if (scope) q = q.in("client_id", scope);
   const [{ data }, profiles] = await Promise.all([q, getProfiles()]);
   const concerns = (data as Concern[]) ?? [];
   const pm = profileMap(profiles);

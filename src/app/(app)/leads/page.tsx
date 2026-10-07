@@ -1,3 +1,5 @@
+import { getService } from "@/lib/server/service";
+import { leadServicesFor } from "@/lib/service";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireArea, hasRole } from "@/lib/auth";
@@ -30,6 +32,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
   const msg = one("msg").slice(0, 300);
 
   const supabase = await getServerSupabase();
+  const sideServices = leadServicesFor(await getService());
 
   let q = supabase.from("leads").select("*").order("received_at", { ascending: false }).limit(300);
   if (view === "history") q = q.eq("historical", true);
@@ -38,6 +41,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
     if (view === "open") q = q.in("status", [...OPEN_STATUSES]);
   }
   if (service !== "all") q = q.eq("service", service);
+  if (sideServices) q = q.in("service", sideServices);
   if (setterFilter === "unassigned") q = q.is("setter_id", null);
   else if (setterFilter !== "all") q = q.eq("setter_id", setterFilter);
   if (term) q = q.or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
@@ -51,6 +55,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
       .select("setter_id, status")
       .eq("historical", false)
       .in("status", [...OPEN_STATUSES])
+      .in("service", sideServices ?? ["ai", "va", "premium", "unknown"])
       .limit(5000),
   ]);
 

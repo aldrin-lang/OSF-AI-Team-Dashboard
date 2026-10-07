@@ -91,6 +91,22 @@ html.dark {
   --scroll: rgba(148, 163, 184, 0.22);
 }
 
+/* VA Outsourcing side: violet accent so it's obvious which business you're in */
+[data-service="va"] {
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-row-hover: #f6f3ff;
+}
+html.dark [data-service="va"] {
+  --color-row-hover: #1b1836;
+}
+
 /* Light-only accent text/tints used across older pages, lifted for dark backgrounds */
 html.dark :is(.text-brand-600, .text-brand-700, .text-brand-800, .text-navy-800, .text-navy-900) { color: var(--color-brand-300); }
 html.dark :is(.text-emerald-600, .text-emerald-700) { color: #6ee7b7; }

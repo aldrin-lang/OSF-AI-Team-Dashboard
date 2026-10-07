@@ -31,7 +31,9 @@ export function ClientsGrid({
   countries,
   myId,
   canEditFees,
+  service = "all",
 }: {
+  service?: "va" | "ai" | "all";
   rows: GridRow[];
   stages: PipelineStage[];
   managers: Opt[];
@@ -195,7 +197,7 @@ export function ClientsGrid({
             </Link>
           </div>
           <Link
-            href="/clients/new"
+            href={service === "all" ? "/clients/new" : `/clients/new?service=${service}`}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-b from-brand-400 to-brand-600 px-3 text-sm font-medium text-white shadow-[0_8px_20px_-6px_rgba(43,127,255,0.5)] hover:from-brand-500 hover:to-brand-700"
           >
             <Plus className="h-4 w-4" /> New client
@@ -236,8 +238,8 @@ export function ClientsGrid({
               <th className="min-w-[72px]">In&nbsp;stage</th>
               <th className="min-w-[130px]">Manager</th>
               <th className="min-w-[120px]">Status</th>
-              <th className="min-w-[64px]">RB</th>
-              <th className="min-w-[74px]">Build</th>
+              {service !== "va" && <th className="min-w-[64px]" title="AI phone lines: regulatory bundles approved">RB</th>}
+              <th className="min-w-[74px]">Checklist</th>
               <th className="min-w-[80px]">Concerns</th>
               <th className="min-w-[120px]">Country</th>
               <th className="min-w-[110px]">Source</th>
@@ -254,6 +256,7 @@ export function ClientsGrid({
                 label={g.label}
                 rows={g.rows}
                 grouped={group}
+                service={service}
                 stages={stages}
                 managers={managers}
                 sources={sources}
@@ -265,7 +268,7 @@ export function ClientsGrid({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={16} className="px-4 py-10 text-center text-sm text-ink-faint">
+                <td colSpan={service === "va" ? 15 : 16} className="px-4 py-10 text-center text-sm text-ink-faint">
                   No clients match.
                 </td>
               </tr>
@@ -283,6 +286,7 @@ function GroupBlock({
   label,
   rows,
   grouped,
+  service,
   stages,
   managers,
   sources,
@@ -294,7 +298,8 @@ function GroupBlock({
   label: string;
   rows: GridRow[];
   grouped: boolean;
-  stages: Opt[];
+  service: "va" | "ai" | "all";
+  stages: PipelineStage[];
   managers: Opt[];
   sources: string[];
   countries: string[];
@@ -307,7 +312,7 @@ function GroupBlock({
       {grouped && (
         <tr>
           <td
-            colSpan={16}
+            colSpan={service === "va" ? 15 : 16}
             className="sticky left-0 border-b border-line bg-fill px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted"
           >
             {label} · {rows.length}
@@ -318,6 +323,7 @@ function GroupBlock({
         <Row
           key={r.client.id}
           r={r}
+          service={service}
           stages={stages}
           managers={managers}
           sources={sources}
@@ -339,6 +345,7 @@ const RISK = (r: GridRow) => {
 
 function Row({
   r,
+  service,
   stages,
   managers,
   sources,
@@ -348,7 +355,8 @@ function Row({
   save,
 }: {
   r: GridRow;
-  stages: Opt[];
+  service: "va" | "ai" | "all";
+  stages: PipelineStage[];
   managers: Opt[];
   sources: string[];
   countries: string[];
@@ -375,6 +383,11 @@ function Row({
           <div className="min-w-0">
             <EditableText value={c.company_name || c.name} onSave={(v) => save(c.id, "company_name", v, c.company_name)} bold />
           </div>
+          {service === "all" && (
+            <span className={`shrink-0 rounded px-1 text-[10px] font-semibold ${c.pipeline === "va" ? "bg-violet-500/15 text-violet-700 dark:text-violet-300" : "bg-brand-500/15 text-brand-700 dark:text-brand-300"}`}>
+              {c.pipeline === "va" ? "VA" : "AI"}
+            </span>
+          )}
         </div>
       </td>
       <td className={td}>
@@ -384,7 +397,7 @@ function Row({
         <CellSelect
           value={c.stage_id ?? ""}
           onChange={(v) => save(c.id, "stage_id", v, c.stage_id)}
-          options={stages.map((s) => ({ value: s.id, label: s.name }))}
+          options={stages.filter((s) => s.pipeline === c.pipeline).map((s) => ({ value: s.id, label: s.name }))}
         />
       </td>
       <td className={`${td} tabular-nums ${r.overSla ? "font-semibold text-rose-600" : "text-ink-muted"}`}>
@@ -405,19 +418,21 @@ function Row({
           tone={CLIENT_STATUS[c.status].tone}
         />
       </td>
+      {service !== "va" && (
       <td className={td}>
-        {r.lineCount === 0 ? (
-          <span className="text-ink-faint">—</span>
-        ) : (
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
-              r.rbApproved === r.lineCount ? "bg-emerald-50 text-emerald-700" : "bg-accent-500/10 text-accent-600"
-            }`}
-          >
-            {r.rbApproved}/{r.lineCount}
-          </span>
-        )}
-      </td>
+          {r.lineCount === 0 ? (
+            <span className="text-ink-faint">—</span>
+          ) : (
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                r.rbApproved === r.lineCount ? "bg-emerald-50 text-emerald-700" : "bg-accent-500/10 text-accent-600"
+              }`}
+            >
+              {r.rbApproved}/{r.lineCount}
+            </span>
+          )}
+        </td>
+      )}
       <td className={`${td} text-xs text-ink-muted`}>
         {r.checklistTotal ? `${r.checklistDone}/${r.checklistTotal}` : "—"}
       </td>

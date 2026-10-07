@@ -39,7 +39,7 @@ export async function getClientQuick(id: string): Promise<ClientQuick | null> {
     { data: activity },
     { count: openConcerns },
     profiles,
-    allStages,
+    everyStage,
     gates,
   ] = await Promise.all([
     supabase.from("client_lines").select("*").eq("client_id", id).order("created_at"),
@@ -57,12 +57,14 @@ export async function getClientQuick(id: string): Promise<ClientQuick | null> {
       .eq("client_id", id)
       .neq("status", "resolved"),
     getProfiles(),
-    getStages("ai"),
+    getStages(),
     getStageGates(),
   ]);
 
   const cl = (checklist as ChecklistItem[]) ?? [];
   const ln = (lines as ClientLine[]) ?? [];
+  // only the stages of this client's own pipeline (VA or AI)
+  const allStages = everyStage.filter((st) => st.pipeline === (client as Client).pipeline);
   const gateMap = checkAllStageGates(allStages, gates, cl);
   const stage = allStages.find((s) => s.id === (client as Client).stage_id) ?? null;
 

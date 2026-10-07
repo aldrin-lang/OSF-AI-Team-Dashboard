@@ -1,3 +1,5 @@
+import { getService } from "@/lib/server/service";
+import { pipelinesFor } from "@/lib/service";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireArea, hasRole } from "@/lib/auth";
@@ -34,18 +36,21 @@ export default async function CheckinsPage(props: PageProps<"/check-ins">) {
   const view: View = v in VIEWS ? (v as View) : "send";
   const msg = flashFrom(sp);
   const supabase = await getServerSupabase();
+  const pipes = pipelinesFor(await getService());
 
   const [{ data: openRows }, { data: doneRows }] = await Promise.all([
     supabase
       .from("checkins")
-      .select("*, clients(name, pipeline)")
+      .select("*, clients!inner(name, pipeline)")
+      .in("clients.pipeline", pipes)
       .in("status", ["due", "sent", "replied"])
       .order("due_on", { ascending: true })
       .limit(500),
     view === "done"
       ? supabase
           .from("checkins")
-          .select("*, clients(name, pipeline)")
+          .select("*, clients!inner(name, pipeline)")
+          .in("clients.pipeline", pipes)
           .in("status", ["done", "skipped"])
           .order("updated_at", { ascending: false })
           .limit(100)
@@ -276,10 +281,11 @@ function ReplyForm({ id, view }: { id: string; view: string }) {
 
 async function Schedule() {
   const supabase = await getServerSupabase();
+  const pipes = pipelinesFor(await getService());
   const today = dublinDate();
   const [{ data: clientRows }, { data: placementRows }, { data: last }] = await Promise.all([
-    supabase.from("clients").select("*").in("status", ["active", "live"]).order("name"),
-    supabase.from("va_placements").select("*").eq("placement_status", "active"),
+    supabase.from("clients").select("*").in("status", ["active", "live"]).in("pipeline", pipes).order("name"),
+    supabase.from("va_placements").select("*, clients!inner(pipeline)").eq("placement_status", "active").in("clients.pipeline", pipes),
     supabase.from("checkins").select("kind, client_id, placement_id, due_on").order("due_on", { ascending: false }).limit(5000),
   ]);
   const clients = (clientRows as Client[]) ?? [];

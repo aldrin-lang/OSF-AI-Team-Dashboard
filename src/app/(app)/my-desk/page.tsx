@@ -1,3 +1,5 @@
+import { getService } from "@/lib/server/service";
+import { pipelinesFor } from "@/lib/service";
 import * as React from "react";
 import Link from "next/link";
 import { Users, ListChecks, Clock, AlertTriangle, Rocket, ExternalLink } from "lucide-react";
@@ -28,6 +30,7 @@ function pctDelta(current: number, previous: number): number | null {
 export default async function MyDeskPage() {
   const profile = await requireProfile();
   const supabase = await getServerSupabase();
+  const pipes = pipelinesFor(await getService());
 
   const [
     { data: allClients },
@@ -37,20 +40,20 @@ export default async function MyDeskPage() {
     stages,
     profiles,
   ] = await Promise.all([
-    supabase.from("clients").select("*").eq("pipeline", "ai"),
+    supabase.from("clients").select("*").in("pipeline", pipes),
     supabase
       .from("tasks")
       .select("*")
       .eq("assignee_id", profile.id)
       .eq("status", "open")
       .order("due_date", { ascending: true, nullsFirst: false }),
-    supabase.from("concerns").select("*").neq("status", "resolved").order("severity", { ascending: false }),
+    supabase.from("concerns").select("*, clients!inner(pipeline)").in("clients.pipeline", pipes).neq("status", "resolved").order("severity", { ascending: false }),
     supabase
       .from("activity_log")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(12),
-    getStages("ai"),
+    getStages().then((all) => all.filter((st) => pipes.includes(st.pipeline))),
     getProfiles(),
   ]);
 

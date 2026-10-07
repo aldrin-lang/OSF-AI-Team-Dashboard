@@ -550,23 +550,24 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       const { data: lead } = await db.from("leads").select("*").eq("id", p.leadId).maybeSingle();
       if (!lead) throw new Error("Lead not found");
       if (lead.client_id) return { ok: true, message: `${lead.name} is already a client.`, stamp: "ALREADY", title: lead.name as string, href: `/clients/${lead.client_id}` };
-      if (lead.service === "va" || lead.service === "premium") throw new Error("VA onboarding isn't in the dashboard yet");
-      const { data: firstStage } = await db.from("pipeline_stages").select("id").eq("pipeline", "ai").order("position").limit(1).maybeSingle();
+      if (lead.service === "unknown") throw new Error(`Set whether ${lead.name} is AI or VA first`);
+      const pipe = lead.service === "va" || lead.service === "premium" ? "va" : "ai";
+      const { data: firstStage } = await db.from("pipeline_stages").select("id").eq("pipeline", pipe).order("position").limit(1).maybeSingle();
       let closedBy: string | null = null;
       if (lead.setter_id) closedBy = ((await db.from("setters").select("name").eq("id", lead.setter_id).maybeSingle()).data?.name as string) ?? null;
       const name = (lead.name as string) || (lead.email as string) || "New client";
       const { data: client, error } = await db
         .from("clients")
-        .insert({ pipeline: "ai", name, contact_email: lead.email, source: lead.source, country: lead.country, closed_by: closedBy, stage_id: firstStage?.id ?? null })
+        .insert({ pipeline: pipe, name, contact_email: lead.email, source: lead.source, country: lead.country, closed_by: closedBy, stage_id: firstStage?.id ?? null })
         .select("id")
         .single();
       if (error) throw new Error(error.message);
-      const { data: templates } = await db.from("checklist_templates").select("key, label, position").eq("pipeline", "ai").order("position");
+      const { data: templates } = await db.from("checklist_templates").select("key, label, position").eq("pipeline", pipe).order("position");
       if (templates?.length) await db.from("checklist_items").insert(templates.map((t) => ({ client_id: client.id, key: t.key, label: t.label, position: t.position })));
       await db.from("leads").update({ client_id: client.id, status: "won" }).eq("id", p.leadId);
-      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "converted", summary: "Converted to an AI receptionist client (via Sourci)", actor_id: me.id });
+      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "converted", summary: `Converted to ${pipe === "va" ? "a VA outsourcing" : "an AI receptionist"} client (via Sourci)`, actor_id: me.id });
       await logActivity({ entity: "client", entityId: client.id, verb: "created", summary: `Created ${name} from a lead (via Sourci)` });
-      return { ok: true, message: `${name} is now a client, at the first onboarding stage.`, stamp: "CONVERTED", title: name, href: `/clients/${client.id}` };
+      return { ok: true, message: `${name} is now a ${pipe === "va" ? "VA" : "AI receptionist"} client, at the first stage.`, stamp: "CONVERTED", title: name, href: `/clients/${client.id}` };
     }
 
     case "create_invoice": {
