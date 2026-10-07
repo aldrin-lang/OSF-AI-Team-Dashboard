@@ -30,18 +30,18 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen">
       <RealtimeSync />
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/70 pb-4 backdrop-blur-xl md:flex">
+      <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/70 backdrop-blur-xl md:flex">
         <div className="relative flex h-16 items-center border-b border-line px-5">
           <LogoWordmark />
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
-        <div className="pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-12 pt-4">
           <AppNav isManager={hasRole(profile, "manager")} areas={areas} />
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/60 px-4 backdrop-blur-xl md:px-8">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-line bg-bg/85 px-4 backdrop-blur-xl md:px-8">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-1 md:hidden">
             <MobileNav isManager={hasRole(profile, "manager")} areas={areas} />
