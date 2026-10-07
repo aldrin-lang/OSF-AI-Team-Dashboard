@@ -2,6 +2,8 @@
 
 /* Dark mode: class on <html>, set before paint by the inline script in app/layout.tsx */
 @custom-variant dark (&:where(.dark, .dark *));
+/* Collapsed sidebar (icon rail): only inside the desktop sidebar, not the mobile drawer */
+@custom-variant collapsed (&:where([data-sidebar="collapsed"] .side-rail, [data-sidebar="collapsed"] .side-rail *));
 
 /* ===========================================================================
    OSF AI Team Dashboard — modern light theme

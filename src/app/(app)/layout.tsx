@@ -11,6 +11,7 @@ import { Logo, LogoWordmark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { Sourci } from "@/components/sourci";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarToggle } from "@/components/sidebar-toggle";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -30,9 +31,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen">
       <RealtimeSync />
-      <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/70 backdrop-blur-xl md:flex">
-        <div className="relative flex h-16 items-center border-b border-line px-5">
-          <LogoWordmark />
+      <aside className="side-rail sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/70 backdrop-blur-xl transition-[width] duration-200 collapsed:w-[72px] md:flex">
+        <div className="relative flex h-16 items-center justify-between gap-2 border-b border-line pl-5 pr-3 collapsed:flex-col collapsed:justify-center collapsed:gap-0 collapsed:px-0">
+          <LogoWordmark className="collapsed:hidden" />
+          <Logo size={24} className="hidden collapsed:block" />
+          <SidebarToggle />
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-12 pt-4">
