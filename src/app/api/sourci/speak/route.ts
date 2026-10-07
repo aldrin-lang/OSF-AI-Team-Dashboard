@@ -1,5 +1,6 @@
 import { getCurrentProfile, hasRole } from "@/lib/auth";
 import { DEFAULT_VOICE, isSourciVoice, type SourciVoice } from "@/lib/sourci-voices";
+import { normaliseForSpeech } from "@/lib/speech-text";
 
 // Text-to-speech for Sourci via ElevenLabs, streamed so she starts talking
 // straight away. Returns 204 when ElevenLabs isn't configured (or is out of
@@ -39,7 +40,7 @@ async function voiceId(key: string, name: SourciVoice): Promise<string> {
 
 /** Spoken text only: no markdown, emojis or URLs. */
 function forSpeech(t: string): string {
-  return t
+  return normaliseForSpeech(t)
     .replace(/https?:\/\/\S+/g, "")
     .replace(/[*_`#>]+/g, "")
     .replace(/\p{Extended_Pictographic}/gu, "")
