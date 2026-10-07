@@ -5,7 +5,7 @@ import { addDays, dublinDate, dublinDayBounds, formatMoney, isIsoDate } from "@/
 import type { Area } from "@/lib/areas";
 
 /**
- * Sourci's general record engine: one search and one bulk change for every
+ * Donna's general record engine: one search and one bulk change for every
  * kind of record, so new questions don't each need a hand-built tool.
  * All reads/writes use the signed-in user's Supabase client (RLS applies).
  */

@@ -1,4 +1,4 @@
-/** Sourci's voices (ElevenLabs default voices, usable on the free plan). Shared by the picker and the server. */
+/** Donna's voices (ElevenLabs default voices, usable on the free plan). Shared by the picker and the server. */
 export const SOURCI_VOICES = [
   { name: "Lily", blurb: "Warm, velvety British" },
   { name: "Sarah", blurb: "Confident, reassuring" },

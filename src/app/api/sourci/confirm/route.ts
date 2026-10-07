@@ -4,7 +4,7 @@ import { getCurrentProfile, hasRole } from "@/lib/auth";
 import { executeProposal } from "@/lib/server/sourci-exec";
 import type { SourciProposal } from "@/lib/sourci-types";
 
-// Runs a change Sourci proposed, after the user confirmed it in the widget.
+// Runs a change Donna proposed, after the user confirmed it in the widget.
 export const dynamic = "force-dynamic";
 export const maxDuration = 120; // bulk sends
 
@@ -13,7 +13,7 @@ const KINDS = new Set(["update_lead", "create_client", "add_note", "create_task"
 export async function POST(request: Request) {
   const me = await getCurrentProfile();
   if (!me || !me.active) return NextResponse.json({ ok: false, message: "Please sign in" }, { status: 401 });
-  if (!hasRole(me, "admin")) return NextResponse.json({ ok: false, message: "Sourci is only switched on for admins" }, { status: 403 });
+  if (!hasRole(me, "admin")) return NextResponse.json({ ok: false, message: "Donna is only switched on for admins" }, { status: 403 });
 
   let proposal: SourciProposal;
   try {

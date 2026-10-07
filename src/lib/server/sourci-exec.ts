@@ -21,7 +21,7 @@ import { fitScore, hireCandidate } from "@/lib/server/staffing";
 import type { Candidate } from "@/lib/types";
 
 /**
- * Runs a change Sourci proposed, AFTER the user pressed/said "yes".
+ * Runs a change Donna proposed, AFTER the user pressed/said "yes".
  * Everything is re-validated here and written with the user's own Supabase
  * client, so it can never do more than the user could do in the UI.
  */
@@ -71,7 +71,7 @@ async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[]
     // side effects that keep the record consistent, same as the buttons do
     if (entity === "leads" && c.field === "setter") {
       patch.assigned_at = v ? new Date().toISOString() : null;
-      patch.assigned_by = `Sourci (${me.full_name || me.email})`;
+      patch.assigned_by = `Donna (${me.full_name || me.email})`;
     }
     if (entity === "concerns" && c.field === "status") patch.resolved_at = v === "resolved" ? new Date().toISOString() : null;
     if (entity === "invoices" && c.field === "status") patch.paid_on = v === "paid" ? dublinDate() : null;
@@ -108,7 +108,7 @@ async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[]
   }
 
   // timeline / notifications
-  const summary = `Sourci: ${said.join(", ")}`;
+  const summary = `Donna: ${said.join(", ")}`;
   if (ent.logAs === "lead" && changed.length) {
     for (const part of chunks(changed, 200)) await db.from("lead_events").insert(part.map((id) => ({ lead_id: id, kind: "note", summary, actor_id: me.id })));
   } else if (ent.logAs === "client" || ent.logAs === "concern") {
@@ -125,13 +125,13 @@ async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[]
     const setterChange = changes.find((c) => c.field === "setter" && c.value);
     if (setterChange) {
       const { data: setter } = await db.from("setters").select("profile_id").eq("id", setterChange.value as string).maybeSingle();
-      if (setter?.profile_id) await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${changed.length} lead${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/leads" });
+      if (setter?.profile_id) await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${changed.length} lead${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Donna`, link: "/leads" });
     }
   }
   const personField = { tasks: "assignee", concerns: "owner", clients: "manager", roles: "recruiter" }[entity as string];
   if (personField) {
     const a = changes.find((c) => c.field === personField && c.value && c.value !== me.id);
-    if (a) await notifyUsers({ userIds: [a.value as string], event: "assigned_to_me", title: `${changed.length} ${changed.length === 1 ? ent.label.replace(/s$/, "") : ent.label} now yours`, body: `By ${me.full_name || me.email} via Sourci`, link: entity === "tasks" ? "/my-desk" : entity === "roles" ? "/roles" : "/" });
+    if (a) await notifyUsers({ userIds: [a.value as string], event: "assigned_to_me", title: `${changed.length} ${changed.length === 1 ? ent.label.replace(/s$/, "") : ent.label} now yours`, body: `By ${me.full_name || me.email} via Donna`, link: entity === "tasks" ? "/my-desk" : entity === "roles" ? "/roles" : "/" });
   }
   return { changed, said, before: before.filter((b) => changed.includes(b.id)) };
 }
@@ -181,7 +181,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         if (p.setterId !== before.setter_id) {
           patch.setter_id = p.setterId;
           patch.assigned_at = p.setterId ? new Date().toISOString() : null;
-          patch.assigned_by = `Sourci (${me.full_name || me.email})`;
+          patch.assigned_by = `Donna (${me.full_name || me.email})`;
           events.push(`Setter → ${p.setterName ?? "Unassigned"}`);
         }
       }
@@ -193,7 +193,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (!Object.keys(patch).length) return { ok: true, message: "Nothing needed changing.", stamp: "NO CHANGE", title: before.name as string };
       const { error } = await db.from("leads").update(patch).eq("id", p.leadId);
       if (error) throw new Error(error.message);
-      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "note", summary: `Sourci: ${events.join(", ")}`, actor_id: me.id });
+      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "note", summary: `Donna: ${events.join(", ")}`, actor_id: me.id });
       return { ok: true, message: `Done. ${before.name || "The lead"} is updated.`, stamp: "UPDATED", title: before.name as string, href: `/leads/${p.leadId}` };
     }
 
@@ -209,7 +209,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         p.contactName ? `Contact: ${clip(p.contactName, 120)}` : null,
         p.phone ? `Phone: ${clip(p.phone, 40)}` : null,
         p.needs ? `Needs: ${clip(p.needs, 1000)}` : null,
-        "Created by Sourci",
+        "Created by Donna",
       ]
         .filter(Boolean)
         .join("\n");
@@ -231,7 +231,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (templates?.length) {
         await db.from("checklist_items").insert(templates.map((t) => ({ client_id: client.id, key: t.key, label: t.label, position: t.position })));
       }
-      await logActivity({ entity: "client", entityId: client.id, verb: "created", summary: `Created ${name} (via Sourci)` });
+      await logActivity({ entity: "client", entityId: client.id, verb: "created", summary: `Created ${name} (via Donna)` });
       return { ok: true, message: `Profile's created for ${name}.`, stamp: "CREATED", title: name, href: `/clients/${client.id}` };
     }
 
@@ -285,7 +285,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         .single();
       if (error) throw new Error(error.message);
       await db.from("payment_reminders").update({ status: "skipped" }).eq("invoice_id", p.invoiceId).eq("status", "draft");
-      await logActivity({ entity: "client", entityId: inv.client_id as string, verb: "updated", summary: `Invoice ${inv.number} marked ${p.status} (via Sourci)` });
+      await logActivity({ entity: "client", entityId: inv.client_id as string, verb: "updated", summary: `Invoice ${inv.number} marked ${p.status} (via Donna)` });
       return { ok: true, message: `Invoice ${inv.number} is marked ${p.status}.`, stamp: p.status === "paid" ? "PAID" : "VOID", title: `Invoice ${inv.number}`, href: `/payments/${p.invoiceId}` };
     }
 
@@ -332,7 +332,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         if (p.setterId !== null && !UUID.test(p.setterId)) throw new Error("Bad setter id");
         patch.setter_id = p.setterId;
         patch.assigned_at = p.setterId ? new Date().toISOString() : null;
-        patch.assigned_by = `Sourci (${me.full_name || me.email})`;
+        patch.assigned_by = `Donna (${me.full_name || me.email})`;
         parts.push(`Setter → ${p.setterName ?? "Unassigned"}`);
       }
       if (p.status) {
@@ -345,12 +345,12 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (error) throw new Error(error.message);
       const n = changed?.length ?? 0;
       if (n) {
-        await db.from("lead_events").insert((changed ?? []).map((l) => ({ lead_id: l.id, kind: "note", summary: `Sourci: ${parts.join(", ")}`, actor_id: me.id })));
+        await db.from("lead_events").insert((changed ?? []).map((l) => ({ lead_id: l.id, kind: "note", summary: `Donna: ${parts.join(", ")}`, actor_id: me.id })));
       }
       if (p.setterId) {
         const { data: setter } = await db.from("setters").select("profile_id").eq("id", p.setterId).maybeSingle();
         if (setter?.profile_id) {
-          await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${n} lead${n === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/leads" });
+          await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${n} lead${n === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Donna`, link: "/leads" });
         }
       }
       return { ok: true, message: `Done. ${n} lead${n === 1 ? "" : "s"} updated${p.setterName ? `, now with ${p.setterName}` : ""}.`, stamp: "UPDATED", title: `${n} leads`, href: "/leads" };
@@ -430,7 +430,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       const per = new Map<string, number>();
       for (const r of rows) if (r.assignee_id !== me.id) per.set(r.assignee_id, (per.get(r.assignee_id) ?? 0) + 1);
       for (const [uid, k] of per) {
-        await notifyUsers({ userIds: [uid], event: "assigned_to_me", title: `${k} new task${k === 1 ? "" : "s"} for you`, body: `${rows[0].title}${k > 1 ? " and more" : ""} · from ${me.full_name || me.email} via Sourci`, link: "/my-desk" });
+        await notifyUsers({ userIds: [uid], event: "assigned_to_me", title: `${k} new task${k === 1 ? "" : "s"} for you`, body: `${rows[0].title}${k > 1 ? " and more" : ""} · from ${me.full_name || me.email} via Donna`, link: "/my-desk" });
       }
       return { ok: true, message: `${rows.length} task${rows.length === 1 ? "" : "s"} added${per.size ? ` and ${per.size} ${per.size === 1 ? "person" : "people"} notified` : ""}.`, stamp: "ADDED", title: `${rows.length} tasks`, href: "/my-desk" };
     }
@@ -488,7 +488,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         }
         made++;
         total += amount;
-        await logActivity({ entity: "client", entityId: it.clientId, verb: "updated", summary: `Invoice ${number} added (via Sourci)` }).catch(() => {});
+        await logActivity({ entity: "client", entityId: it.clientId, verb: "updated", summary: `Invoice ${number} added (via Donna)` }).catch(() => {});
       }
       return { ok: made > 0, message: `${made} invoice${made === 1 ? "" : "s"} added, ${formatMoney(total, p.currency)} in total, due ${p.dueOn}.${failed.length ? ` ${failed.length} skipped (${failed.slice(0, 2).join("; ")}).` : ""}`, stamp: "CREATED", title: `${made} invoices`, href: "/payments" };
     }
@@ -565,8 +565,8 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       const { data: templates } = await db.from("checklist_templates").select("key, label, position").eq("pipeline", pipe).order("position");
       if (templates?.length) await db.from("checklist_items").insert(templates.map((t) => ({ client_id: client.id, key: t.key, label: t.label, position: t.position })));
       await db.from("leads").update({ client_id: client.id, status: "won" }).eq("id", p.leadId);
-      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "converted", summary: `Converted to ${pipe === "va" ? "a VA outsourcing" : "an AI receptionist"} client (via Sourci)`, actor_id: me.id });
-      await logActivity({ entity: "client", entityId: client.id, verb: "created", summary: `Created ${name} from a lead (via Sourci)` });
+      await db.from("lead_events").insert({ lead_id: p.leadId, kind: "converted", summary: `Converted to ${pipe === "va" ? "a VA outsourcing" : "an AI receptionist"} client (via Donna)`, actor_id: me.id });
+      await logActivity({ entity: "client", entityId: client.id, verb: "created", summary: `Created ${name} from a lead (via Donna)` });
       return { ok: true, message: `${name} is now a ${pipe === "va" ? "VA" : "AI receptionist"} client, at the first stage.`, stamp: "CONVERTED", title: name, href: `/clients/${client.id}` };
     }
 
@@ -589,7 +589,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         .select("id")
         .single();
       if (error) throw new Error(error.code === "23505" ? `Invoice ${number} already exists` : error.message);
-      await logActivity({ entity: "client", entityId: p.clientId, verb: "updated", summary: `Invoice ${number} added (via Sourci)` });
+      await logActivity({ entity: "client", entityId: p.clientId, verb: "updated", summary: `Invoice ${number} added (via Donna)` });
       return { ok: true, message: `Invoice ${number} added for ${p.clientName}. Reminders will go out automatically from three days before it's due.`, stamp: "CREATED", title: `Invoice ${number}`, href: `/payments/${data.id}` };
     }
 
@@ -606,7 +606,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         .select("id")
         .single();
       if (error) throw new Error(error.message);
-      await logActivity({ entity: "concern", entityId: data.id, verb: "created", summary: `Concern raised for ${p.clientName}: ${title} (via Sourci)` });
+      await logActivity({ entity: "concern", entityId: data.id, verb: "created", summary: `Concern raised for ${p.clientName}: ${title} (via Donna)` });
       if (p.ownerId && p.ownerId !== me.id) await notifyUsers({ userIds: [p.ownerId], event: "concern_my_client", title: `New concern: ${p.clientName}`, body: title, link: `/concerns/${data.id}` });
       return { ok: true, message: `Concern logged for ${p.clientName}.`, stamp: "RAISED", title, href: `/concerns/${data.id}` };
     }
@@ -733,7 +733,7 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (!title) throw new Error("The reminder is empty");
       const ids = (p.recipientIds ?? []).filter((x) => UUID.test(x)).slice(0, 200);
       if (!ids.length) throw new Error("Nobody to notify");
-      await notifyUsers({ userIds: ids, event: "team_reminder", title, body: clip(p.body, 1000) || `Sent by Sourci for ${me.full_name || me.email}`, link: "/notifications" });
+      await notifyUsers({ userIds: ids, event: "team_reminder", title, body: clip(p.body, 1000) || `Sent by Donna for ${me.full_name || me.email}`, link: "/notifications" });
       return { ok: true, message: `Done. ${ids.length} ${ids.length === 1 ? "person has" : "people have"} been reminded.`, stamp: "NOTIFIED", title };
     }
   }

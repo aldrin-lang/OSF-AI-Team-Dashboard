@@ -2,7 +2,7 @@ import { getCurrentProfile, hasRole } from "@/lib/auth";
 import { DEFAULT_VOICE, isSourciVoice, type SourciVoice } from "@/lib/sourci-voices";
 import { normaliseForSpeech } from "@/lib/speech-text";
 
-// Text-to-speech for Sourci via ElevenLabs, streamed so she starts talking
+// Text-to-speech for Donna via ElevenLabs, streamed so she starts talking
 // straight away. Returns 204 when ElevenLabs isn't configured (or is out of
 // credit) and the widget falls back to the browser's built-in voice.
 export const dynamic = "force-dynamic";
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
   if (!res.ok || !res.body) {
     // 401 bad key, 402/429 out of credit or busy: the widget uses the browser voice instead
     console.error("[sourci speak] ElevenLabs", res.status);
-    return new Response(null, { status: 204, headers: { "X-Sourci-Voice": `fallback-${res.status}` } });
+    return new Response(null, { status: 204, headers: { "X-Donna-Voice": `fallback-${res.status}` } });
   }
   return new Response(res.body, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" } });
 }

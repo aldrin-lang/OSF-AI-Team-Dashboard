@@ -1,4 +1,4 @@
-/** Shared between the Sourci API routes and the Sourci widget. */
+/** Shared between the Donna API routes and the Donna widget. */
 export interface SourciChart {
   title: string;
   subtitle?: string;
@@ -33,7 +33,7 @@ export interface SourciDashboard {
   link?: { href: string; label: string };
 }
 
-/** A change Sourci wants to make. Executed only after the user confirms. */
+/** A change Donna wants to make. Executed only after the user confirms. */
 export type SourciProposal =
   | { kind: "update_lead"; leadId: string; leadName: string; status?: string; setterId?: string | null; setterName?: string; note?: string }
   | { kind: "create_client"; pipeline: "ai" | "va"; name: string; contactName?: string; contactEmail?: string; phone?: string; country?: string; source?: string; needs?: string }

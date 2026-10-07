@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Sourci's sound: streamed ElevenLabs playback, a level meter so the orb moves
+ * Donna's sound: streamed ElevenLabs playback, a level meter so the orb moves
  * with the voice, soft chimes, and the best female browser voice as a fallback.
  */
 

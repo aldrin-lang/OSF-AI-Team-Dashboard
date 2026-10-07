@@ -21,7 +21,7 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - `src/lib/server/{candidates,checkins,payments,daily-report}.ts` — server logic; pages in `src/app/(app)/{candidates,check-ins,payments,reports/daily}`.
 - `src/app/api/webhooks/candidate/route.ts` — PIT form webhook (fails closed).
 - `src/lib/areas.ts` + `getMyAreas`/`requireArea` (`src/lib/auth.ts`) + `requireActorArea` (`src/lib/server/rbac.ts`) — department access. Every new page/table must pick an area (RLS uses `public.has_area()`).
-- `src/lib/server/sourci.ts` (tools/prompt) + `sourci-exec.ts` (confirmed changes) + `src/components/sourci.tsx` + `src/app/api/sourci/` — Sourci voice assistant. Changes only via propose → user confirms → executeProposal.
+- `src/lib/server/sourci.ts` (tools/prompt) + `sourci-exec.ts` (confirmed changes) + `src/components/sourci.tsx` + `src/app/api/sourci/` — Donna, the voice assistant (files/routes still named `sourci`). Changes only via propose → user confirms → executeProposal.
 - `src/lib/sheets.ts` + `src/app/(app)/sheets/` — Sheets (team trackers; RLS `sheet_access()`/`can_view_sheet()`, cell edits via `set_sheet_cell()`). `src/lib/server/staffing.ts` + `src/app/(app)/{roles,vas}/` — open roles, matching, hire → placement.
 - Theme: tokens in `globals.css` (`html.dark` overrides). Use `bg-surface`/`text-ink`/`border-line`, not `bg-white`/slate, so dark mode works.
 - `supabase/migrations/` — schema, RLS, `allocate_lead`. `supabase/demo_ops_*.sql` — demo data add/remove (not migrations).

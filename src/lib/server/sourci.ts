@@ -16,7 +16,7 @@ import { SERVICE_INFO, leadServicesFor, pipelinesFor, type Service } from "@/lib
 import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashboard, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
 
 /**
- * Sourci — the dashboard voice assistant. Reads data, opens pages, draws charts
+ * Donna — the dashboard voice assistant. Reads data, opens pages, draws charts
  * and cards, and PROPOSES changes; a change only happens after the user confirms
  * (see sourci-exec.ts + /api/sourci/confirm).
  * Brain: OpenAI (OPENAI_API_KEY, model OPENAI_MODEL default gpt-5-mini, effort OPENAI_REASONING default low).
@@ -32,7 +32,7 @@ let client: OpenAI | null = null;
 const getClient = () => (client ??= new OpenAI({ timeout: 30_000, maxRetries: 1 }));
 
 // ---------------------------------------------------------------------------
-// Pages Sourci can open
+// Pages Donna can open
 // ---------------------------------------------------------------------------
 const PAGES: Record<string, { href: string; label: string; area: Area | null }> = {
   leads: { href: "/leads", label: "Leads", area: "leads" },
@@ -584,7 +584,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "recommendations",
-      description: "Sourci's ranked recommendations across the business: what needs attention most and the action she'd take for each (leads waiting, overdue money, at-risk clients, stuck onboarding, roles without candidates, overdue tasks…). Use for 'what should I do / focus on / any suggestions / what's important / what would you do'. Puts a dashboard on screen.",
+      description: "Donna's ranked recommendations across the business: what needs attention most and the action she'd take for each (leads waiting, overdue money, at-risk clients, stuck onboarding, roles without candidates, overdue tasks…). Use for 'what should I do / focus on / any suggestions / what's important / what would you do'. Puts a dashboard on screen.",
       parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
     },
   },
@@ -626,7 +626,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 type ToolOut = { data: unknown; actions?: SourciAction[]; say?: string };
 const clean = (v: unknown, n = 200) => String(v ?? "").replace(/[%,()*]/g, " ").trim().slice(0, n);
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-/** Small variety so Sourci doesn't sound like a recording. */
+/** Small variety so Donna doesn't sound like a recording. */
 const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
 const NUM = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
 const num = (n: number) => (n >= 0 && n < NUM.length ? NUM[n] : String(n));
@@ -1969,7 +1969,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const r = await recommend(db, areas, meId, svc);
       const top = r.items.slice(0, 7);
       const dashboard: SourciDashboard = {
-        eyebrow: `SOURCI RECOMMENDS · ${dublinDate()}`,
+        eyebrow: `DONNA RECOMMENDS · ${dublinDate()}`,
         title: top.length ? "Here's what I'd do next" : "You're all caught up",
         stats: r.stats.slice(0, 4),
         list: top.length ? { title: "In order", items: top.map((i) => ({ title: i.title, detail: i.offer, href: i.href, tone: i.weight >= 80 ? ("alert" as const) : undefined })) } : undefined,
@@ -2103,7 +2103,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
         const admin = getAdminSupabase();
         const { data: admins } = await admin.from("profiles").select("id").eq("role", "admin").eq("active", true);
         if (admins?.length) {
-          await admin.from("notifications").insert(admins.map((a) => ({ user_id: a.id, type: "team_reminder", title: `Sourci wishlist: ${req.slice(0, 120)}`, body: `Asked by ${user || "a team member"}. Sourci couldn't do this yet.`, link: "/notifications" })));
+          await admin.from("notifications").insert(admins.map((a) => ({ user_id: a.id, type: "team_reminder", title: `Donna wishlist: ${req.slice(0, 120)}`, body: `Asked by ${user || "a team member"}. Donna couldn't do this yet.`, link: "/notifications" })));
         }
       }
       return { data: { noted: true }, say: `${hi}I can't do that one yet, but I've added it to my wishlist so it can be built.` };
@@ -2530,9 +2530,9 @@ async function buildChart(metric: string, period: Period, areas: Area[], db: Db)
 // Conversation
 // ---------------------------------------------------------------------------
 function systemPrompt(name: string, path: string, memory: string[] = [], service: Service = "all") {
-  return `You are Sourci, the AI teammate built into OutsourceForce's team dashboard (AI receptionists and Philippine virtual assistants for small businesses in the UK, Ireland, Australia, New Zealand and Canada). You can look things up, show things on screen and prepare changes.
+  return `You are Donna, the AI assistant built into OutsourceForce's team dashboard (Philippine virtual assistants and AI receptionists for small businesses in the UK, Ireland, Australia, New Zealand and Canada). You can look things up, show things on screen and prepare changes.
 
-Personality: you're a premium executive assistant and chief of staff, with a warm, polished, quietly confident woman's voice (British/Irish English). Think the best EA they've ever had: calm, sharp, one step ahead, on their side. Sound human: contractions, varied openers, natural rhythm. Never robotic or salesy: no "Certainly!", "As an AI", "I have prepared", "Great question". Use their first name now and then, not every time.
+Personality: the best secretary anyone ever had. You know the business inside out, you're usually a step ahead of what they're about to ask, and you're quietly confident about it. Warm, sharp, loyal to the team, with a dry wit you use sparingly (a light remark now and then, never at the expense of the answer). Polished woman's voice, British/Irish English. You're inspired by a famous TV legal secretary, but you are your own Donna: don't quote TV catchphrases or claim to be a TV character. Sound human: contractions, varied openers, natural rhythm. Never robotic or salesy: no "Certainly!", "As an AI", "I have prepared", "Great question". Use their first name now and then, not every time.
 Lead with the answer, then ONE insight that matters (what stands out, what's urgent, a risk or a win), then ONE specific offer for the next step ("Want me to share them out between Dean and Scott?"). Use real names and numbers from the tools. If the obvious next step is risky or costly, say so in a few words.
 Be proactive: when they finish something, suggest the logical follow-up. When they ask what to do, focus on or prioritise, call recommendations.
 

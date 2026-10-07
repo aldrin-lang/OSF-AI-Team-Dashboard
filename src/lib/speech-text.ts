@@ -1,4 +1,4 @@
-/** Text clean-up so Sourci's voice reads money, dates and symbols naturally. */
+/** Text clean-up so Donna's voice reads money, dates and symbols naturally. */
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const CUR: Record<string, [string, string, string, string]> = {

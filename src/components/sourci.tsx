@@ -62,11 +62,11 @@ const IDLE_OFF_MS = 10 * 60_000;
 
 // Barge-in: words that mean "stop, let me talk" even on their own.
 const CUT_IN = new Set(["stop", "wait", "sorry", "hold", "hang", "no", "actually", "cancel", "pause", "hey"]);
-const ONLY_CUT_IN = /^\s*(stop|wait|sorry|hold on|hang on|no|actually|cancel|pause|hey( sourci)?)[.!,]*\s*$/i;
+const ONLY_CUT_IN = /^\s*(stop|wait|sorry|hold on|hang on|no|actually|cancel|pause|hey( donna| sourci)?)[.!,]*\s*$/i;
 const words = (t: string) => t.toLowerCase().match(/[a-z0-9']+/g) ?? [];
 /**
- * Is this the user talking over Sourci, or the mic hearing Sourci's own voice?
- * Echo is mostly words Sourci is saying; the user says new words.
+ * Is this the user talking over Donna, or the mic hearing Donna's own voice?
+ * Echo is mostly words Donna is saying; the user says new words.
  */
 function isUserSpeech(heard: string, said: Set<string>): boolean {
   const w = words(heard);
@@ -77,7 +77,7 @@ function isUserSpeech(heard: string, said: Set<string>): boolean {
 }
 
 /**
- * Sourci: the team's AI, built into the CRM. A glowing orb in the corner:
+ * Donna: the team's AI, built into the CRM. A glowing orb in the corner:
  * click (or ⌥S) to talk, click again to stop. Short answers show in a bubble;
  * charts, briefs and confirmations open a side panel. Esc closes.
  */
@@ -128,7 +128,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const [typed, setTyped] = useState("");
   const [muted, setMuted] = useState(false);
   const history = useRef<SourciTurn[]>([]);
-  // Things you've asked Sourci to remember (per browser, max 30) + recent conversation (survives a reload)
+  // Things you've asked Donna to remember (per browser, max 30) + recent conversation (survives a reload)
   const memoryRef = useRef<string[]>([]);
   useEffect(() => {
     try {
@@ -137,12 +137,12 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     } catch {}
   }, []);
   const recRef = useRef<Rec | null>(null);
-  const bargeRef = useRef<Rec | null>(null); // listens while Sourci speaks, so you can cut in
+  const bargeRef = useRef<Rec | null>(null); // listens while Donna speaks, so you can cut in
   const speakIdRef = useRef(0); // ignores "finished speaking" from a voice we already cut off
   const reqRef = useRef(0); // ignores answers to a question we already replaced
   const askRef = useRef<((t: string, alts?: string[]) => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  // Always-on: once switched on, Sourci keeps listening (between answers, while
+  // Always-on: once switched on, Donna keeps listening (between answers, while
   // dashboards are open, through silence) until you switch it off.
   const convoRef = useRef(false);
   const lastActivity = useRef(0);
@@ -186,7 +186,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     } catch {}
   }, []);
 
-  /** While Sourci talks, keep an ear open: if you start talking, it stops and listens to you. */
+  /** While Donna talks, keep an ear open: if you start talking, it stops and listens to you. */
   const startBarge = useCallback(
     (spoken: string) => {
       const Ctor = recCtor();
@@ -209,7 +209,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
             }
           }
           if (from < 0) return;
-          stopSpeaking(); // cut Sourci off mid-sentence
+          stopSpeaking(); // cut Donna off mid-sentence
           setStatus("listening");
         }
         let t = "";
@@ -327,7 +327,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       } catch {}
       audioCtx();
       stopSpeaking();
-      void speak(`Hi, I'm Sourci. This is how I'll sound from now on.`, { voiceOverride: v });
+      void speak(`Hi, I'm Donna. This is how I'll sound from now on.`, { voiceOverride: v });
       warmAcks(v);
     },
     [speak, stopSpeaking],
@@ -365,7 +365,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         }
         void speak(r.message);
       } catch {
-        setError("Couldn't reach Sourci.");
+        setError("Couldn't reach Donna.");
         setStatus("ready");
       }
     },
@@ -424,7 +424,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         setReply("Talk soon.");
         return void speak("Talk soon.");
       }
-      if (/^\s*(thanks|thank you|cheers|nice one|perfect|great)[.!]*\s*(sourci)?[.!]*\s*$/i.test(q)) {
+      if (/^\s*(thanks|thank you|cheers|nice one|perfect|great)[.!]*\s*(donna|sourci)?[.!]*\s*$/i.test(q)) {
         setReply("Anytime.");
         return void speak("Anytime."); // stays on, listening for the next thing
       }
@@ -455,7 +455,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         clearTimeout(ackTimer);
         if (id !== reqRef.current) return; // you asked something else meanwhile
         if (!res.ok || data.error) {
-          setError(data.error || "Sourci couldn't answer.");
+          setError(data.error || "Donna couldn't answer.");
           setStatus("ready");
           return;
         }
@@ -493,7 +493,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       } catch {
         clearTimeout(ackTimer);
         if (id !== reqRef.current) return;
-        setError("Couldn't reach Sourci. Check your connection.");
+        setError("Couldn't reach Donna. Check your connection.");
         setStatus("ready");
       }
     },
@@ -607,7 +607,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   }, [stopBarge, stopSpeaking]);
 
   /**
-   * Orb click / ⌥S is an on/off switch. On = Sourci keeps listening (between
+   * Orb click / ⌥S is an on/off switch. On = Donna keeps listening (between
    * answers, while dashboards are open) until you click again, press Esc or say
    * "that's all". While it's speaking, a click (or just talking) cuts it off and
    * it listens to you straight away.
@@ -653,7 +653,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         e.preventDefault();
         toggle();
       } else if (e.key === "Escape") {
-        // first Esc closes the pop-up (Sourci stays on); next Esc switches it off
+        // first Esc closes the pop-up (Donna stays on); next Esc switches it off
         if (panelOpen) setPanelOpen(false);
         else if (bubble || convoRef.current) close();
       }
@@ -664,7 +664,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 
   const hasPanel = Boolean(dash || chart || card || pipeline || pending || done);
   const caption = {
-    ready: on ? "On: just talk. Click the orb to switch off" : "Click the orb or press ⌥S to switch Sourci on",
+    ready: on ? "On: just talk. Click the orb to switch off" : "Click the orb or press ⌥S to switch Donna on",
     listening: "Listening. Click the orb to switch off",
     working: "Working on it…",
     speaking: "Talk over me or click the orb to interrupt",
@@ -678,11 +678,11 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
           <section
             className="sourci-anim pointer-events-auto flex max-h-[80vh] w-[min(94vw,880px)] flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#05090f]/95 text-slate-200 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),0_0_60px_-30px_rgba(34,211,238,0.6)] backdrop-blur"
             style={{ animation: "sourci-in .25s ease-out" }}
-            aria-label="Sourci results"
+            aria-label="Donna results"
           >
             <div className="flex items-center gap-2 border-b border-cyan-300/10 px-4 py-3">
               <Orb size={18} pulse={status === "listening"} glow={status !== "ready"} />
-              <p className="font-mono text-[11px] tracking-[0.25em] text-cyan-200">SOURCI</p>
+              <p className="font-mono text-[11px] tracking-[0.25em] text-cyan-200">DONNA</p>
               <span className="flex-1" />
               <button onClick={() => setPanelOpen(false)} className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Close">
                 <X className="h-4 w-4" />
@@ -720,12 +720,12 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
           >
             <div className="flex items-start gap-2">
               <p className="min-w-0 flex-1 font-mono text-[10px] tracking-[0.18em] text-cyan-300/80">
-                {status === "listening" ? <span className="text-orange-400">● LISTENING</span> : status === "working" ? "○ WORKING…" : status === "speaking" ? "● SPEAKING" : "SOURCI"}
+                {status === "listening" ? <span className="text-orange-400">● LISTENING</span> : status === "working" ? "○ WORKING…" : status === "speaking" ? "● SPEAKING" : "DONNA"}
               </p>
               <button onClick={() => setMuted((m) => !m)} className="text-slate-500 hover:text-white" aria-label={muted ? "Turn voice on" : "Mute voice"}>
                 {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
               </button>
-              <button onClick={close} className="text-slate-500 hover:text-white" aria-label="Close Sourci">
+              <button onClick={close} className="text-slate-500 hover:text-white" aria-label="Close Donna">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -747,7 +747,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
                   autoFocus
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
-                  placeholder={pending ? "yes / no…" : "Type to Sourci…"}
+                  placeholder={pending ? "yes / no…" : "Type to Donna…"}
                   maxLength={500}
                   className="h-8 min-w-0 flex-1 rounded-lg border border-cyan-300/20 bg-white/5 px-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/50"
                 />
@@ -772,7 +772,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
             <button
               onClick={() => setVoiceMenu((v) => !v)}
               className="rounded-full bg-[#05090f]/80 p-2 text-slate-400 opacity-60 ring-1 ring-white/10 transition hover:opacity-100"
-              aria-label="Choose Sourci's voice"
+              aria-label="Choose Donna's voice"
               title={`Voice: ${voice}`}
             >
               <AudioLines className="h-4 w-4" />
@@ -831,8 +831,8 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
 /** The corner orb. Calm when idle; glows and pulses while listening; spinning ring while working; ripples while speaking. */
 function OrbButton({ status, on, onClick, orbRef }: { status: Status; on: boolean; onClick: () => void; orbRef?: React.Ref<HTMLSpanElement> }) {
   const label = !on
-    ? "Switch Sourci on (⌥S)"
-    : { ready: "Sourci is on. Click to switch off", listening: "Listening. Click to switch off", working: "Working. Click to switch off", speaking: "Click to interrupt" }[status];
+    ? "Switch Donna on (⌥S)"
+    : { ready: "Donna is on. Click to switch off", listening: "Listening. Click to switch off", working: "Working. Click to switch off", speaking: "Click to interrupt" }[status];
   return (
     <button onClick={onClick} className="relative flex h-14 w-14 items-center justify-center rounded-full" aria-label={label} title={label}>
       {status === "speaking" && (
@@ -1119,7 +1119,7 @@ function ConfirmPanel({ c, onYes, onNo, busy }: { c: SourciConfirm; onYes: () =>
 function DonePanel({ d, onOpen, onUndo }: { d: Done; onOpen: (href: string) => void; onUndo?: () => void }) {
   return (
     <Panel className="relative">
-      <Eyebrow>DONE · BY SOURCI</Eyebrow>
+      <Eyebrow>DONE · BY DONNA</Eyebrow>
       <h3 className="mt-1 text-xl font-bold text-white">{d.title}</h3>
       {d.detail && <p className="mt-1 text-sm text-slate-300">{d.detail}</p>}
       <div className="mt-3 flex items-center gap-4">

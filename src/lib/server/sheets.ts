@@ -3,7 +3,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { dublinDate } from "@/lib/ops-core";
 import { SHEET_TEMPLATES, type CellValue, type SheetVisibility } from "@/lib/sheets";
 
-/** Create a sheet from a template (columns + a starter row). Used by the page and by Sourci. */
+/** Create a sheet from a template (columns + a starter row). Used by the page and by Donna. */
 export async function createSheetFrom(
   templateKey: string,
   name: string,
