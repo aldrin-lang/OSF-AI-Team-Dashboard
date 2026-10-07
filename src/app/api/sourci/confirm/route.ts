@@ -8,7 +8,7 @@ import type { SourciProposal } from "@/lib/sourci-types";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120; // bulk sends
 
-const KINDS = new Set(["update_lead", "create_client", "add_note", "create_task", "invoice_status", "candidate_status", "send_email", "notify_team", "bulk_update_leads", "bulk_update", "move_stage", "convert_lead", "create_invoice", "create_concern", "send_reminders", "send_checkins", "add_sheet_row", "create_sheet", "create_role", "shortlist", "hire"]);
+const KINDS = new Set(["update_lead", "create_client", "add_note", "create_task", "invoice_status", "candidate_status", "send_email", "notify_team", "bulk_update_leads", "bulk_update", "move_stage", "convert_lead", "create_invoice", "create_concern", "send_reminders", "send_checkins", "add_sheet_row", "create_sheet", "create_role", "shortlist", "hire", "distribute", "bulk_tasks", "bulk_email", "bulk_invoices", "bulk_convert", "bulk_rescreen", "notifications_read", "restore"]);
 
 export async function POST(request: Request) {
   const me = await getCurrentProfile();

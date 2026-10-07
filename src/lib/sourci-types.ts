@@ -51,7 +51,15 @@ export type SourciProposal =
   | { kind: "create_concern"; clientId: string; clientName: string; title: string; severity: string; description?: string; ownerId?: string }
   | { kind: "send_reminders"; reminderIds: string[] }
   | { kind: "send_checkins"; checkinIds: string[] }
-  | { kind: "add_sheet_row"; sheetId: string; sheetName: string; cells: Record<string, string | number | boolean | null> }
+  | { kind: "add_sheet_row"; sheetId: string; sheetName: string; cells?: Record<string, string | number | boolean | null>; rows?: Record<string, string | number | boolean | null>[] }
+  | { kind: "distribute"; entity: string; field: string; groups: { value: string; display: string; ids: string[] }[] }
+  | { kind: "bulk_tasks"; items: { title: string; clientId?: string; assigneeId: string }[]; dueDate?: string }
+  | { kind: "bulk_email"; entity: string; subject: string; body: string; items: { to: string; name: string; clientId?: string }[] }
+  | { kind: "bulk_invoices"; currency: string; dueOn: string; description?: string; items: { clientId: string; clientName: string; amount: number; number: string }[] }
+  | { kind: "bulk_convert"; leadIds: string[] }
+  | { kind: "bulk_rescreen"; candidateIds: string[] }
+  | { kind: "notifications_read" }
+  | { kind: "restore"; entity: string; label: string; rows: { id: string; values: Record<string, string | number | boolean | null> }[] }
   | { kind: "create_sheet"; template: string; name: string; visibility: "private" | "everyone" }
   | { kind: "create_role"; clientId: string; clientName: string; title: string; headcount: number; employmentType: "full_time" | "part_time" | "project"; startBy?: string; priority: "low" | "normal" | "high" | "urgent"; requirements?: string }
   | { kind: "shortlist"; roleId: string; roleTitle: string; candidateIds: string[]; names: string[] }
@@ -70,7 +78,7 @@ export type SourciAction =
   | { type: "pipeline"; pipeline: SourciPipeline }
   | { type: "dashboard"; dashboard: SourciDashboard }
   | { type: "confirm"; confirm: SourciConfirm }
-  | { type: "done"; stamp: string; title: string; detail?: string; href?: string };
+  | { type: "done"; stamp: string; title: string; detail?: string; href?: string; undo?: SourciProposal };
 
 export interface SourciTurn {
   role: "user" | "assistant";

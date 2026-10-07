@@ -9,7 +9,9 @@ import { dublinDate, isIsoDate, textToHtml } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
 import type { Profile } from "@/lib/types";
 import type { SourciProposal } from "@/lib/sourci-types";
-import { ENTITIES, type EntityKey } from "@/lib/server/sourci-records";
+import { BULK_MAX, ENTITIES, type EntityKey } from "@/lib/server/sourci-records";
+import { screenCandidate } from "@/lib/server/candidates";
+import { formatMoney } from "@/lib/ops-core";
 import { moveClientStage } from "@/app/(app)/clients/actions";
 import { sendReminder } from "@/lib/server/payments";
 import { sendCheckinEmail } from "@/lib/server/checkins";
@@ -27,12 +29,129 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const clip = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
 
+type Db = Awaited<ReturnType<typeof getServerSupabase>>;
+type Val = string | number | boolean | null;
+type Change = { field: string; value: Val; display: string };
+
+const chunks = <T,>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+
+/** Columns a restore (undo) may write back for an entity: its editable columns + their side-effect columns. */
+function restorableCols(entity: EntityKey): Set<string> {
+  const cols = new Set(Object.values(ENTITIES[entity].editable).map((d) => d.col));
+  for (const c of ["assigned_at", "assigned_by", "resolved_at", "paid_on"]) cols.add(c);
+  return cols;
+}
+
+/**
+ * Apply validated field changes to many records of one type, the same way the
+ * screens do (side effects, notes appended, timeline logging, notifications).
+ * Returns what changed plus a snapshot of the old values so it can be undone.
+ */
+async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[], changes: Change[]): Promise<{ changed: string[]; said: string[]; before: { id: string; values: Record<string, Val> }[] }> {
+  const ent = ENTITIES[entity];
+  const ids = idsIn.filter((x) => UUID.test(x)).slice(0, BULK_MAX);
+  if (!ids.length) throw new Error("Nothing to change");
+  const patch: Record<string, unknown> = {};
+  const appends: { col: string; text: string }[] = [];
+  const said: string[] = [];
+  for (const c of changes ?? []) {
+    const def = ent.editable[c.field];
+    if (!def) throw new Error(`Can't change ${c.field}`);
+    if (def.managerOnly && me.role === "member") throw new Error("Only managers can change that.");
+    const v = c.value;
+    if (def.kind === "enum" && !(typeof v === "string" && def.values?.includes(v))) throw new Error(`Bad value for ${c.field}`);
+    if ((def.kind === "person" || def.kind === "setter") && !(v === null || (typeof v === "string" && UUID.test(v)))) throw new Error(`Bad value for ${c.field}`);
+    if (def.kind === "date" && !(typeof v === "string" && isIsoDate(v))) throw new Error(`Bad date for ${c.field}`);
+    if (def.kind === "number" && !(typeof v === "number" && (def.min == null || v >= def.min) && (def.max == null || v <= def.max))) throw new Error(`Bad number for ${c.field}`);
+    if (def.kind === "bool" && typeof v !== "boolean") throw new Error(`Bad value for ${c.field}`);
+    if (def.kind === "text" && !def.append && !(typeof v === "string" && v.trim())) throw new Error(`${c.field} can't be empty`);
+    if (def.append) appends.push({ col: def.col, text: clip(v, 2000) });
+    else patch[def.col] = typeof v === "string" ? v.slice(0, 2000) : v;
+    said.push(`${c.field.replace(/_/g, " ")} → ${c.display}`);
+    // side effects that keep the record consistent, same as the buttons do
+    if (entity === "leads" && c.field === "setter") {
+      patch.assigned_at = v ? new Date().toISOString() : null;
+      patch.assigned_by = `Sourci (${me.full_name || me.email})`;
+    }
+    if (entity === "concerns" && c.field === "status") patch.resolved_at = v === "resolved" ? new Date().toISOString() : null;
+    if (entity === "invoices" && c.field === "status") patch.paid_on = v === "paid" ? dublinDate() : null;
+  }
+
+  // snapshot for undo
+  const snapCols = [...new Set([...Object.keys(patch), ...appends.map((a) => a.col)])];
+  const before: { id: string; values: Record<string, Val> }[] = [];
+  for (const part of chunks(ids, 150)) {
+    const { data } = await db.from(ent.table).select(["id", ...snapCols].join(", ")).in("id", part);
+    for (const r of (data ?? []) as unknown as Record<string, Val>[]) {
+      const { id, ...values } = r;
+      before.push({ id: id as string, values });
+    }
+  }
+
+  let changed: string[] = before.map((b) => b.id);
+  if (Object.keys(patch).length) {
+    changed = [];
+    for (const part of chunks(ids, 150)) {
+      const { data, error } = await db.from(ent.table).update(patch).in("id", part).select("id");
+      if (error) throw new Error(error.message);
+      changed.push(...(data ?? []).map((r) => r.id as string));
+    }
+  }
+  for (const a of appends) {
+    for (const b of before.filter((x) => changed.includes(x.id))) {
+      const prev = (b.values[a.col] as string | null) ?? "";
+      await db.from(ent.table).update({ [a.col]: [prev, `${dublinDate()}: ${a.text}`].filter(Boolean).join("\n") }).eq("id", b.id);
+    }
+  }
+  if (entity === "invoices" && patch.status && patch.status !== "open") {
+    for (const part of chunks(changed, 150)) await db.from("payment_reminders").update({ status: "skipped" }).in("invoice_id", part).eq("status", "draft");
+  }
+
+  // timeline / notifications
+  const summary = `Sourci: ${said.join(", ")}`;
+  if (ent.logAs === "lead" && changed.length) {
+    for (const part of chunks(changed, 200)) await db.from("lead_events").insert(part.map((id) => ({ lead_id: id, kind: "note", summary, actor_id: me.id })));
+  } else if (ent.logAs === "client" || ent.logAs === "concern") {
+    let entityIds = changed;
+    if (ent.clientCol) {
+      entityIds = [];
+      for (const part of chunks(changed, 150)) entityIds.push(...((await db.from(ent.table).select(ent.clientCol).in("id", part)).data ?? []).map((r) => (r as unknown as Record<string, string>)[ent.clientCol!]));
+    }
+    for (const id of [...new Set(entityIds)].slice(0, 100)) {
+      await logActivity({ entity: ent.logAs === "concern" ? "concern" : "client", entityId: id, verb: "updated", summary }).catch(() => {});
+    }
+  }
+  if (entity === "leads") {
+    const setterChange = changes.find((c) => c.field === "setter" && c.value);
+    if (setterChange) {
+      const { data: setter } = await db.from("setters").select("profile_id").eq("id", setterChange.value as string).maybeSingle();
+      if (setter?.profile_id) await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${changed.length} lead${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/leads" });
+    }
+  }
+  const personField = { tasks: "assignee", concerns: "owner", clients: "manager", roles: "recruiter" }[entity as string];
+  if (personField) {
+    const a = changes.find((c) => c.field === personField && c.value && c.value !== me.id);
+    if (a) await notifyUsers({ userIds: [a.value as string], event: "assigned_to_me", title: `${changed.length} ${changed.length === 1 ? ent.label.replace(/s$/, "") : ent.label} now yours`, body: `By ${me.full_name || me.email} via Sourci`, link: entity === "tasks" ? "/my-desk" : entity === "roles" ? "/roles" : "/" });
+  }
+  return { changed, said, before: before.filter((b) => changed.includes(b.id)) };
+}
+
+const undoFor = (entity: EntityKey, label: string, before: { id: string; values: Record<string, Val> }[]): SourciProposal | undefined =>
+  before.length ? { kind: "restore", entity, label, rows: before } : undefined;
+
+/** Personalise a bulk email: {first_name}, {name}. */
+function fill(t: string, name: string): string {
+  const first = name.trim().split(/\s+/)[0] || "there";
+  return t.replace(/\{first_?name\}/gi, first).replace(/\{name\}/gi, name || "there");
+}
+
 export interface ExecResult {
   ok: boolean;
   message: string; // spoken
   stamp?: string; // CREATED / UPDATED / SENT / NOTIFIED
   title?: string;
   href?: string;
+  undo?: SourciProposal; // lets the user say "undo" / press Undo
 }
 
 export async function executeProposal(p: SourciProposal, me: Profile): Promise<ExecResult> {
@@ -241,75 +360,169 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       const ent = ENTITIES[p.entity as EntityKey];
       if (!ent) throw new Error("Unknown record type");
       if (ent.area) need(ent.area);
-      const ids = (p.ids ?? []).filter((x) => UUID.test(x)).slice(0, 200);
-      if (!ids.length) throw new Error("Nothing to change");
-      const patch: Record<string, unknown> = {};
-      const appends: { col: string; text: string }[] = [];
-      const said: string[] = [];
-      for (const c of p.changes ?? []) {
-        const def = ent.editable[c.field];
-        if (!def) throw new Error(`Can't change ${c.field}`);
-        if (def.managerOnly && me.role === "member") throw new Error("Only managers can change that.");
-        const v = c.value;
-        if (def.kind === "enum" && !(typeof v === "string" && def.values?.includes(v))) throw new Error(`Bad value for ${c.field}`);
-        if ((def.kind === "person" || def.kind === "setter") && !(v === null || (typeof v === "string" && UUID.test(v)))) throw new Error(`Bad value for ${c.field}`);
-        if (def.kind === "date" && !(typeof v === "string" && isIsoDate(v))) throw new Error(`Bad date for ${c.field}`);
-        if (def.kind === "number" && !(typeof v === "number" && (def.min == null || v >= def.min) && (def.max == null || v <= def.max))) throw new Error(`Bad number for ${c.field}`);
-        if (def.kind === "bool" && typeof v !== "boolean") throw new Error(`Bad value for ${c.field}`);
-        if (def.append) {
-          appends.push({ col: def.col, text: clip(v, 2000) });
-        } else {
-          patch[def.col] = v;
-        }
-        said.push(`${c.field.replace(/_/g, " ")} → ${c.display}`);
-        // side effects that keep the record consistent, same as the buttons do
-        if (p.entity === "leads" && c.field === "setter") {
-          patch.assigned_at = v ? new Date().toISOString() : null;
-          patch.assigned_by = `Sourci (${me.full_name || me.email})`;
-        }
-        if (p.entity === "concerns" && c.field === "status") patch.resolved_at = v === "resolved" ? new Date().toISOString() : null;
-        if (p.entity === "invoices" && c.field === "status") patch.paid_on = v === "paid" ? dublinDate() : null;
+      const r = await applyBulk(db, me, p.entity as EntityKey, p.ids ?? [], p.changes ?? []);
+      const n = r.changed.length;
+      const label = `${n} ${n === 1 ? ent.label.replace(/s$/, "") : ent.label}`;
+      return { ok: true, message: `Done. ${label} updated. Say "undo" if that wasn't right.`, stamp: "UPDATED", title: label, href: p.entity === "leads" ? "/leads" : undefined, undo: undoFor(p.entity as EntityKey, label, r.before) };
+    }
+
+    case "distribute": {
+      const entity = p.entity as EntityKey;
+      const ent = ENTITIES[entity];
+      if (!ent) throw new Error("Unknown record type");
+      if (ent.area) need(ent.area);
+      const def = ent.editable[p.field];
+      if (!def || (def.kind !== "person" && def.kind !== "setter")) throw new Error("Can only share out people fields");
+      const before: { id: string; values: Record<string, Val> }[] = [];
+      const parts: string[] = [];
+      for (const g of (p.groups ?? []).slice(0, 20)) {
+        if (!UUID.test(g.value)) throw new Error("Bad person");
+        const r = await applyBulk(db, me, entity, g.ids ?? [], [{ field: p.field, value: g.value, display: g.display }]);
+        before.push(...r.before);
+        parts.push(`${r.changed.length} to ${clip(g.display, 60)}`);
       }
-      let changed: string[] = ids;
-      if (Object.keys(patch).length) {
-        const { data, error } = await db.from(ent.table).update(patch).in("id", ids).select("id");
-        if (error) throw new Error(error.message);
-        changed = (data ?? []).map((r) => r.id as string);
+      const label = `${before.length} ${ent.label}`;
+      return { ok: true, message: `Shared out: ${parts.join(", ")}.`, stamp: "ASSIGNED", title: label, href: entity === "leads" ? "/leads" : undefined, undo: undoFor(entity, label, before) };
+    }
+
+    case "restore": {
+      const entity = p.entity as EntityKey;
+      const ent = ENTITIES[entity];
+      if (!ent) throw new Error("Unknown record type");
+      if (ent.area) need(ent.area);
+      const allowed = restorableCols(entity);
+      const managerCols = new Set(Object.values(ent.editable).filter((d) => d.managerOnly).map((d) => d.col));
+      // group identical old values so it's a few updates, not one per row
+      const groups = new Map<string, string[]>();
+      for (const row of (p.rows ?? []).slice(0, BULK_MAX)) {
+        if (!UUID.test(row.id)) continue;
+        const vals = Object.fromEntries(Object.entries(row.values ?? {}).filter(([k]) => allowed.has(k)));
+        if (me.role === "member" && Object.keys(vals).some((k) => managerCols.has(k))) throw new Error("Only managers can undo that.");
+        const key = JSON.stringify(vals);
+        groups.set(key, [...(groups.get(key) ?? []), row.id]);
       }
-      for (const a of appends) {
-        const { data: rows } = await db.from(ent.table).select(`id, ${a.col}`).in("id", changed);
-        for (const r of (rows ?? []) as unknown as Record<string, unknown>[]) {
-          const prev = (r[a.col] as string | null) ?? "";
-          await db.from(ent.table).update({ [a.col]: [prev, `${dublinDate()}: ${a.text}`].filter(Boolean).join("\n") }).eq("id", r.id as string);
-        }
-      }
-      if (p.entity === "invoices" && patch.status && patch.status !== "open") {
-        await db.from("payment_reminders").update({ status: "skipped" }).in("invoice_id", changed).eq("status", "draft");
-      }
-      const summary = `Sourci: ${said.join(", ")}`;
-      if (ent.logAs === "lead" && changed.length) {
-        await db.from("lead_events").insert(changed.map((id) => ({ lead_id: id, kind: "note", summary, actor_id: me.id })));
-      } else if (ent.logAs === "client" || ent.logAs === "concern") {
-        const entityIds = p.entity === "invoices"
-          ? ((await db.from("invoices").select("client_id").in("id", changed)).data ?? []).map((r) => r.client_id as string)
-          : changed;
-        for (const id of [...new Set(entityIds)].slice(0, 100)) {
-          await logActivity({ entity: ent.logAs === "concern" ? "concern" : "client", entityId: id, verb: "updated", summary });
+      let n = 0;
+      for (const [key, ids] of groups) {
+        const vals = JSON.parse(key) as Record<string, Val>;
+        if (!Object.keys(vals).length) continue;
+        for (const part of chunks(ids, 150)) {
+          const { data, error } = await db.from(ent.table).update(vals).in("id", part).select("id");
+          if (error) throw new Error(error.message);
+          n += data?.length ?? 0;
         }
       }
-      if (p.entity === "leads") {
-        const setterChange = (p.changes ?? []).find((c) => c.field === "setter" && c.value);
-        if (setterChange) {
-          const { data: setter } = await db.from("setters").select("profile_id").eq("id", setterChange.value as string).maybeSingle();
-          if (setter?.profile_id) await notifyUsers({ userIds: [setter.profile_id as string], event: "assigned_to_me", title: `${changed.length} lead${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/leads" });
+      return { ok: n > 0, message: n ? `Undone. ${clip(p.label, 80)} put back how they were.` : "Nothing to undo.", stamp: "UNDONE", title: clip(p.label, 80) };
+    }
+
+    case "bulk_tasks": {
+      const items = (p.items ?? []).slice(0, 200);
+      if (!items.length) throw new Error("No tasks to add");
+      if (p.dueDate && !isIsoDate(p.dueDate)) throw new Error("Bad due date");
+      if (items.some((i) => i.clientId)) need("clients");
+      const rows = items.map((i) => {
+        if (!UUID.test(i.assigneeId) || (i.clientId && !UUID.test(i.clientId))) throw new Error("Bad task");
+        const title = clip(i.title, 300);
+        if (!title) throw new Error("A task needs a title");
+        return { title, client_id: i.clientId ?? null, assignee_id: i.assigneeId, due_date: p.dueDate ?? null, created_by: me.id };
+      });
+      const { error } = await db.from("tasks").insert(rows);
+      if (error) throw new Error(error.message);
+      const per = new Map<string, number>();
+      for (const r of rows) if (r.assignee_id !== me.id) per.set(r.assignee_id, (per.get(r.assignee_id) ?? 0) + 1);
+      for (const [uid, k] of per) {
+        await notifyUsers({ userIds: [uid], event: "assigned_to_me", title: `${k} new task${k === 1 ? "" : "s"} for you`, body: `${rows[0].title}${k > 1 ? " and more" : ""} · from ${me.full_name || me.email} via Sourci`, link: "/my-desk" });
+      }
+      return { ok: true, message: `${rows.length} task${rows.length === 1 ? "" : "s"} added${per.size ? ` and ${per.size} ${per.size === 1 ? "person" : "people"} notified` : ""}.`, stamp: "ADDED", title: `${rows.length} tasks`, href: "/my-desk" };
+    }
+
+    case "bulk_email": {
+      const subject = clip(p.subject, 200);
+      const body = clip(p.body, 8000);
+      if (!subject || !body) throw new Error("The email needs a subject and a message");
+      const area = ENTITIES[p.entity as EntityKey]?.area;
+      if (area) need(area);
+      let sent = 0;
+      const failed: string[] = [];
+      for (const it of (p.items ?? []).slice(0, 50)) {
+        const to = clip(it.to, 200);
+        if (!EMAIL.test(to)) {
+          failed.push(`${it.name}: bad address`);
+          continue;
+        }
+        const text = fill(body, clip(it.name, 120));
+        const res = await sendEmail({ to, subject: fill(subject, clip(it.name, 120)), html: clientEmailShell(textToHtml(text)), text });
+        if (res.skipped) throw new Error("Email sending isn't set up on the server.");
+        if (!res.ok) {
+          failed.push(`${it.name}: rejected`);
+          continue;
+        }
+        sent++;
+        if (it.clientId && UUID.test(it.clientId)) {
+          await db.from("client_emails").insert({ client_id: it.clientId, to_email: to, subject, body: text, status: "sent", created_by: me.id, sent_by: me.id, sent_at: new Date().toISOString() });
         }
       }
-      if (p.entity === "tasks") {
-        const a = (p.changes ?? []).find((c) => c.field === "assignee" && c.value && c.value !== me.id);
-        if (a) await notifyUsers({ userIds: [a.value as string], event: "assigned_to_me", title: `${changed.length} task${changed.length === 1 ? "" : "s"} assigned to you`, body: `By ${me.full_name || me.email} via Sourci`, link: "/my-desk" });
+      return { ok: sent > 0, message: `${sent} email${sent === 1 ? "" : "s"} sent.${failed.length ? ` ${failed.length} didn't go (${failed.slice(0, 2).join("; ")}).` : ""}`, stamp: "SENT", title: subject };
+    }
+
+    case "bulk_invoices": {
+      need("payments");
+      if (me.role === "member") throw new Error("Only managers can add invoices.");
+      if (!(CURRENCIES as readonly string[]).includes(p.currency)) throw new Error("Unknown currency");
+      if (!isIsoDate(p.dueOn)) throw new Error("Bad due date");
+      const issued = dublinDate();
+      const items = (p.items ?? []).slice(0, 200);
+      let made = 0;
+      let total = 0;
+      const failed: string[] = [];
+      for (const it of items) {
+        const amount = Math.round(Number(it.amount) * 100) / 100;
+        if (!UUID.test(it.clientId) || !(amount > 0)) {
+          failed.push(`${it.clientName}: bad amount`);
+          continue;
+        }
+        const number = clip(it.number, 60);
+        const { error } = await db.from("invoices").insert({ client_id: it.clientId, number, amount, currency: p.currency, issued_on: p.dueOn < issued ? p.dueOn : issued, due_on: p.dueOn, description: clip(p.description, 500) || null, created_by: me.id });
+        if (error) {
+          failed.push(`${it.clientName}: ${error.code === "23505" ? "number already used" : "failed"}`);
+          continue;
+        }
+        made++;
+        total += amount;
+        await logActivity({ entity: "client", entityId: it.clientId, verb: "updated", summary: `Invoice ${number} added (via Sourci)` }).catch(() => {});
       }
-      const n = changed.length;
-      return { ok: true, message: `Done. ${n} ${n === 1 ? ent.label.replace(/s$/, "") : ent.label} updated.`, stamp: "UPDATED", title: `${n} ${ent.label}`, href: p.entity === "leads" ? "/leads" : undefined };
+      return { ok: made > 0, message: `${made} invoice${made === 1 ? "" : "s"} added, ${formatMoney(total, p.currency)} in total, due ${p.dueOn}.${failed.length ? ` ${failed.length} skipped (${failed.slice(0, 2).join("; ")}).` : ""}`, stamp: "CREATED", title: `${made} invoices`, href: "/payments" };
+    }
+
+    case "bulk_convert": {
+      need("leads");
+      need("clients");
+      let n = 0;
+      const skipped: string[] = [];
+      for (const id of (p.leadIds ?? []).filter((x) => UUID.test(x)).slice(0, 25)) {
+        try {
+          const r = await executeProposal({ kind: "convert_lead", leadId: id, leadName: "" }, me);
+          if (r.stamp === "CONVERTED") n++;
+        } catch (e) {
+          skipped.push(e instanceof Error ? e.message : "failed");
+        }
+      }
+      return { ok: n > 0, message: `${n} lead${n === 1 ? "" : "s"} turned into clients at the first onboarding stage.${skipped.length ? ` ${skipped.length} skipped.` : ""}`, stamp: "CONVERTED", title: `${n} new clients`, href: "/pipeline" };
+    }
+
+    case "bulk_rescreen": {
+      need("candidates");
+      let ok = 0;
+      for (const id of (p.candidateIds ?? []).filter((x) => UUID.test(x)).slice(0, 20)) {
+        const r = await screenCandidate(id);
+        if (r.ok) ok++;
+      }
+      return { ok: ok > 0, message: `${ok} candidate${ok === 1 ? "" : "s"} re-screened.`, stamp: "SCREENED", title: `${ok} candidates`, href: "/candidates" };
+    }
+
+    case "notifications_read": {
+      const { data, error } = await db.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", me.id).is("read_at", null).select("id");
+      if (error) throw new Error(error.message);
+      return { ok: true, message: `${data?.length ?? 0} notification${data?.length === 1 ? "" : "s"} marked read.`, stamp: "CLEARED", title: "Notifications", href: "/notifications" };
     }
 
     case "move_stage": {
@@ -432,16 +645,19 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (!UUID.test(p.sheetId)) throw new Error("Bad sheet id");
       const { data: cols } = await db.from("sheet_columns").select("id").eq("sheet_id", p.sheetId);
       const valid = new Set((cols ?? []).map((c) => c.id as string));
-      const cells = Object.fromEntries(
-        Object.entries(p.cells ?? {})
-          .filter(([k, v]) => valid.has(k) && (v === null || ["string", "number", "boolean"].includes(typeof v)))
-          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 5000) : v]),
-      );
-      if (!Object.keys(cells).length) throw new Error("Nothing to add");
+      const clean = (cells: Record<string, Val>) =>
+        Object.fromEntries(
+          Object.entries(cells ?? {})
+            .filter(([k, v]) => valid.has(k) && (v === null || ["string", "number", "boolean"].includes(typeof v)))
+            .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 5000) : v]),
+        );
+      const all = (p.rows?.length ? p.rows : p.cells ? [p.cells] : []).slice(0, 100).map(clean).filter((c) => Object.keys(c).length);
+      if (!all.length) throw new Error("Nothing to add");
       const { data: last } = await db.from("sheet_rows").select("position").eq("sheet_id", p.sheetId).order("position", { ascending: false }).limit(1).maybeSingle();
-      const { error } = await db.from("sheet_rows").insert({ sheet_id: p.sheetId, cells, position: ((last?.position as number) ?? 0) + 1, created_by: me.id });
+      const base = (last?.position as number) ?? 0;
+      const { error } = await db.from("sheet_rows").insert(all.map((cells, i) => ({ sheet_id: p.sheetId, cells, position: base + i + 1, created_by: me.id })));
       if (error) throw new Error(error.message.includes("row-level security") ? "You don't have access to that sheet." : error.message);
-      return { ok: true, message: `Logged in ${p.sheetName}.`, stamp: "ADDED", title: p.sheetName, href: `/sheets/${p.sheetId}` };
+      return { ok: true, message: all.length === 1 ? `Logged in ${p.sheetName}.` : `${all.length} rows added to ${p.sheetName}.`, stamp: "ADDED", title: p.sheetName, href: `/sheets/${p.sheetId}` };
     }
 
     case "create_sheet": {

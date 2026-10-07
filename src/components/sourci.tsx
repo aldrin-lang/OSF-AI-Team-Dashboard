@@ -11,6 +11,7 @@ import type {
   SourciConfirm,
   SourciDashboard,
   SourciPipeline,
+  SourciProposal,
   SourciReply,
   SourciTurn,
 } from "@/lib/sourci-types";
@@ -101,6 +102,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   const [pipeline, setPipeline] = useState<SourciPipeline | null>(demo?.pipeline ?? null);
   const [pending, setPending] = useState<SourciConfirm | null>(demo?.confirm ?? null);
   const [done, setDone] = useState<Done | null>(null);
+  const [lastUndo, setLastUndo] = useState<SourciProposal | null>(null); // the last bulk change, so "undo" can put it back
   const [typed, setTyped] = useState("");
   const [muted, setMuted] = useState(false);
   const history = useRef<SourciTurn[]>([]);
@@ -241,33 +243,54 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
     history.current = [...history.current, { role, content }].slice(-8);
   };
 
+  /** Run a confirmed change (or an undo) on the server and show the stamp. */
+  const execute = useCallback(
+    async (proposal: SourciProposal, title: string) => {
+      setStatus("working");
+      setError("");
+      try {
+        const res = await fetch("/api/sourci/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proposal }),
+        });
+        const r = (await res.json()) as { ok: boolean; message: string; stamp?: string; title?: string; href?: string; undo?: SourciProposal };
+        setReply(r.message);
+        remember("assistant", r.ok ? `Done: ${r.message}` : r.message);
+        if (r.ok) {
+          setLastUndo(proposal.kind === "restore" ? null : (r.undo ?? null));
+          setDone({ type: "done", stamp: r.stamp ?? "DONE", title: r.title ?? title, detail: r.message, href: r.href, undo: r.undo });
+          setPanelOpen(true);
+          router.refresh();
+        } else {
+          setError(r.message);
+        }
+        void speak(r.message);
+      } catch {
+        setError("Couldn't reach Sourci.");
+        setStatus("ready");
+      }
+    },
+    [router, speak],
+  );
+
   const confirm = useCallback(async () => {
     if (!pending) return;
     const c = pending;
     setPending(null);
-    setStatus("working");
-    setError("");
-    try {
-      const res = await fetch("/api/sourci/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal: c.proposal }),
-      });
-      const r = (await res.json()) as { ok: boolean; message: string; stamp?: string; title?: string; href?: string };
-      setReply(r.message);
-      remember("assistant", r.ok ? `Done: ${r.message}` : r.message);
-      if (r.ok) {
-        setDone({ type: "done", stamp: r.stamp ?? "DONE", title: r.title ?? c.title, detail: r.message, href: r.href });
-        router.refresh();
-      } else {
-        setError(r.message);
-      }
-      void speak(r.message);
-    } catch {
-      setError("Couldn't reach Sourci.");
-      setStatus("ready");
+    await execute(c.proposal, c.title);
+  }, [execute, pending]);
+
+  const undo = useCallback(() => {
+    const u = lastUndo;
+    if (!u) {
+      const m = "There's nothing for me to undo.";
+      setReply(m);
+      return void speak(m);
     }
-  }, [pending, router, speak]);
+    setLastUndo(null);
+    void execute(u, "Undo");
+  }, [execute, lastUndo, speak]);
 
   const cancel = useCallback(() => {
     setPending(null);
@@ -285,6 +308,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       stopBarge();
       setHeard(q);
       setError("");
+      if (/^\s*(undo( that| it| the last( one| change)?)?|put (it|them) back|revert( that| it)?)[.!]*\s*$/i.test(q)) return undo();
       // A spoken yes/no answers the pending confirmation directly.
       if (pending && YES.test(q)) return void confirm();
       if (pending && NO.test(q)) return cancel();
@@ -344,7 +368,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         setStatus("ready");
       }
     },
-    [cancel, confirm, pathname, pending, router, speak, stopBarge, stopSpeaking],
+    [cancel, confirm, pathname, pending, router, speak, stopBarge, stopSpeaking, undo],
   );
 
   useEffect(() => {
@@ -519,7 +543,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
               {card && <CardPanel c={card} />}
               {chart && <ChartPanel c={chart} />}
               {pending && <ConfirmPanel c={pending} onYes={() => void confirm()} onNo={cancel} busy={status === "working"} />}
-              {done && <DonePanel d={done} onOpen={(href) => router.push(href)} />}
+              {done && <DonePanel d={done} onOpen={(href) => router.push(href)} onUndo={done.undo && lastUndo ? undo : undefined} />}
             </div>
           </section>
         </div>
@@ -900,17 +924,24 @@ function ConfirmPanel({ c, onYes, onNo, busy }: { c: SourciConfirm; onYes: () =>
   );
 }
 
-function DonePanel({ d, onOpen }: { d: Done; onOpen: (href: string) => void }) {
+function DonePanel({ d, onOpen, onUndo }: { d: Done; onOpen: (href: string) => void; onUndo?: () => void }) {
   return (
     <Panel className="relative">
       <Eyebrow>DONE · BY SOURCI</Eyebrow>
       <h3 className="mt-1 text-xl font-bold text-white">{d.title}</h3>
       {d.detail && <p className="mt-1 text-sm text-slate-300">{d.detail}</p>}
-      {d.href && (
-        <button onClick={() => onOpen(d.href!)} className="mt-3 text-sm font-semibold text-cyan-300 hover:underline">
-          Open →
-        </button>
-      )}
+      <div className="mt-3 flex items-center gap-4">
+        {d.href && (
+          <button onClick={() => onOpen(d.href!)} className="text-sm font-semibold text-cyan-300 hover:underline">
+            Open →
+          </button>
+        )}
+        {onUndo && (
+          <button onClick={onUndo} className="rounded-lg px-2.5 py-1 text-sm font-semibold text-slate-300 ring-1 ring-white/15 hover:bg-white/5 hover:text-white">
+            ↶ Undo
+          </button>
+        )}
+      </div>
       <span
         className="sourci-anim absolute bottom-4 right-5 rounded-lg border-2 border-cyan-300 px-3 py-1 text-xl font-black tracking-[0.15em] text-cyan-200"
         style={{ animation: "sourci-stamp .35s ease-out forwards", transform: "rotate(-8deg)" }}

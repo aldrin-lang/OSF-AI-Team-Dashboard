@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getCurrentProfile, getMyAreas } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/supabase/server";
-import { ENTITIES, PERIODS as REC_PERIODS, resolveChanges, searchRecords, summarise, type EntityKey, type Filter } from "@/lib/server/sourci-records";
+import { BULK_MAX, ENTITIES, ENTITY_KEYS, PERIODS as REC_PERIODS, resolveChanges, searchRecords, summarise, type EntityKey, type Filter } from "@/lib/server/sourci-records";
 import { OPEN_STATUSES } from "@/lib/leads-ingest";
 import { CANDIDATE_STATUS, LEAD_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney } from "@/lib/ops-core";
@@ -82,6 +82,38 @@ const SERVICE_LABEL: Record<string, string> = { ai: "AI receptionist", va: "VA",
 // ---------------------------------------------------------------------------
 // Tools (OpenAI function calling)
 // ---------------------------------------------------------------------------
+// Shared parameter shapes for record-picking tools.
+const FILTERS_PARAM = {
+  type: "array",
+  items: {
+    type: "object",
+    properties: {
+      field: { type: "string" },
+      op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] },
+      value: { type: "string" },
+    },
+    required: ["field", "op", "value"],
+    additionalProperties: false,
+  },
+};
+const PERIOD_PARAM = { type: "string", enum: [...REC_PERIODS] };
+const PICK_PROPS = { filters: FILTERS_PARAM, period: PERIOD_PARAM, all_records: { type: "boolean" } };
+const PICK_REQ = ["filters", "period", "all_records"];
+const PICK_HELP = "Pick records with filters (same fields as search_records) and/or a period; all_records = true only when the user clearly means every one.";
+
+/** Field lists for the tool descriptions, generated from the registry so they never drift. */
+function fieldsDoc(kind: "filters" | "editable"): string {
+  return ENTITY_KEYS.map((k) => {
+    const e = ENTITIES[k];
+    const f = Object.entries(e[kind]).map(([name, d]) => {
+      const extra = d.kind === "enum" && d.values ? ` (${d.values.join("|")})` : d.kind === "person" ? " (person/me)" : d.kind === "date" ? " (date)" : d.kind === "bool" ? " (true/false)" : d.kind === "number" ? " (number)" : "";
+      const flags = ("append" in d && d.append ? " appended" : "") + ("managerOnly" in d && d.managerOnly ? " [managers]" : "");
+      return name + extra + flags;
+    });
+    return `${k}: ${f.join(", ")}`;
+  }).join(". ");
+}
+
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
@@ -295,16 +327,16 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "search_records",
-      description: "Find and show ANY records on screen (leads, clients, invoices, candidates, checkins, concerns, tasks) with filters, a period, sort and limit. Use this for any 'show me / which / how many / list' question that the specific summary tools don't cover. Fields per type \u2014 leads: name, email, phone, status (new|contacted|call_booked|no_answer|not_interested|won|lost), service (ai|va|premium|unknown), source, country, setter (setter name), ad_code, unassigned (true/false), received (date). clients: name, status (active=onboarding|live|paused|withdrawn|rejected|churned), service (ai|va), country, source, manager (person or \"me\"), no_manager (true), stage (stage name), start_date, created. invoices: number, status (open|paid|void), client, currency, amount, due (date), overdue (true). candidates: name, email, status (new|screened|shortlisted|interview|hired|rejected), role (AI-recommended role), applied_role, score, created. checkins: status (due|sent|replied|done|skipped), mood (good|neutral|at_risk), kind (client|va), client, due. concerns: title, status (open|in_progress|resolved), severity (low|medium|high|urgent), client, owner (person), raised. tasks: title, status (open|done), assignee (person or \"me\"), client, due, overdue (true). Use \"a|b\" in value for several enum values. Dates are YYYY-MM-DD.",
-      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] }, filters: { type: "array", items: { type: "object", properties: { field: { type: "string" }, op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] }, value: { type: "string" } }, required: ["field", "op", "value"], additionalProperties: false } }, period: { type: "string", enum: ["any", "today", "yesterday", "last_7_days", "this_week", "this_month", "last_30_days", "next_7_days"] }, sort: { type: "string" }, sort_dir: { type: "string", enum: ["asc", "desc"] } }, required: ["entity", "filters", "period", "sort", "sort_dir"], additionalProperties: false },
+      description: `Find and show ANY records on screen with filters, a period, sort and limit. Use this for any 'show me / which / how many / list' question that the specific summary tools don't cover. Filter fields per type: ${fieldsDoc("filters")}. Client status "active" means onboarding. vas = placed VAs; roles = open roles; role_candidates = candidates on a role. Use "a|b" for several enum values. Dates are YYYY-MM-DD.`,
+      parameters: { type: "object", properties: { entity: { type: "string", enum: [...ENTITY_KEYS] }, filters: FILTERS_PARAM, period: PERIOD_PARAM, sort: { type: "string" }, sort_dir: { type: "string", enum: ["asc", "desc"] } }, required: ["entity", "filters", "period", "sort", "sort_dir"], additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
       name: "propose_bulk_update",
-      description: "Prepare a change to one OR many records of any type, selected with the same filters as search_records (up to 200). all_records = true ONLY when the user clearly means every record of that type (\"all clients\", \"every lead\"); then filters can be empty. Otherwise false and give filters. Don't ask the user to narrow it down when they said all. The user must confirm. Editable fields \u2014 leads: status, setter (setter name or \"nobody\"), note (appended), country, ad_name, ad_code. clients: name (rename the client), company_name, contact_email, industry, closed_by, demo_call_date, portal_url, status, manager (person/\"me\"/\"nobody\"), country, source, start_date, remark (appended), checkin_every_days (3-90), checkin_paused (true/false); managers only: setup_fee, daily_rate, hiring_fee_status (not_applicable|pending|invoiced|paid). To rename ONE client filter by its current name. invoices (managers): status (open|paid|void), due_on, note. candidates: status, note. checkins: status (due|done|skipped). concerns: status, severity, owner. tasks: status (open|done), assignee, due_date. Pipeline stage is NOT here: use propose_move_stage.",
-      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] }, filters: { type: "array", items: { type: "object", properties: { field: { type: "string" }, op: { type: "string", enum: ["is", "is_not", "contains", "before", "after", "on_or_before", "on_or_after", "more_than", "less_than", "is_empty", "is_not_empty", "is_true", "is_false"] }, value: { type: "string" } }, required: ["field", "op", "value"], additionalProperties: false } }, period: { type: "string", enum: ["any", "today", "yesterday", "last_7_days", "this_week", "this_month", "last_30_days", "next_7_days"] }, all_records: { type: "boolean" }, set: { type: "array", items: { type: "object", properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"], additionalProperties: false } } }, required: ["entity", "filters", "period", "all_records", "set"], additionalProperties: false },
+      description: `Prepare a change to one OR many records of any type (up to ${BULK_MAX}). ${PICK_HELP} Don't ask the user to narrow it down when they said all. To rename ONE record filter by its current name. Editable fields: ${fieldsDoc("editable")}. Pipeline stage is NOT here: use propose_move_stage. Hiring is propose_hire. The user must confirm.`,
+      parameters: { type: "object", properties: { entity: { type: "string", enum: [...ENTITY_KEYS] }, ...PICK_PROPS, set: { type: "array", items: { type: "object", properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"], additionalProperties: false } } }, required: ["entity", ...PICK_REQ, "set"], additionalProperties: false },
     },
   },
   {
@@ -391,14 +423,22 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "propose_sheet_row",
-      description: "Prepare a new row in a sheet. values = list of {column, value} using the sheet's column names (dates YYYY-MM-DD, person = team member name or 'me', checkbox = yes/no). Call read_sheet first if you don't know the columns. The user must confirm.",
+      description: "Prepare one or more new rows in a sheet (up to 100). Each row = list of {column, value} using the sheet's column names (dates YYYY-MM-DD or 'today', person = team member name or 'me', checkbox = yes/no). For 'a row for each setter/person', make one row each. Call read_sheet first if you don't know the columns. The user must confirm.",
       parameters: {
         type: "object",
         properties: {
           sheet: { type: "string" },
-          values: { type: "array", items: { type: "object", properties: { column: { type: "string" }, value: { type: "string" } }, required: ["column", "value"], additionalProperties: false } },
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { values: { type: "array", items: { type: "object", properties: { column: { type: "string" }, value: { type: "string" } }, required: ["column", "value"], additionalProperties: false } } },
+              required: ["values"],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ["sheet", "values"],
+        required: ["sheet", "rows"],
         additionalProperties: false,
       },
     },
@@ -480,6 +520,62 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         required: ["role", "candidate", "start_date", "hourly_rate", "currency"],
         additionalProperties: false,
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_distribute",
+      description: `Share records out evenly (round robin) between people, e.g. "split the unassigned leads between Dean and Scott", "spread the open tasks across the team". Sets leads→setter, clients→manager, tasks→assignee, concerns→owner, roles→recruiter. people = names separated by commas. ${PICK_HELP} The user must confirm.`,
+      parameters: { type: "object", properties: { entity: { type: "string", enum: ["leads", "clients", "tasks", "concerns", "roles"] }, ...PICK_PROPS, people: { type: "string" } }, required: ["entity", ...PICK_REQ, "people"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_tasks",
+      description: `Create one task per record, e.g. "add a follow-up task for every onboarding client for their manager". title may use {name} for the record's name. assign_to = "owner" (each record's manager/setter/owner/recruiter), "me", or a team member name. due_date YYYY-MM-DD or empty. ${PICK_HELP} The user must confirm.`,
+      parameters: { type: "object", properties: { entity: { type: "string", enum: [...ENTITY_KEYS] }, ...PICK_PROPS, title: { type: "string" }, assign_to: { type: "string" }, due_date: { type: "string" } }, required: ["entity", ...PICK_REQ, "title", "assign_to", "due_date"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_email",
+      description: `Email many people at once (max 50): clients (contact email), leads, candidates or placed VAs. Write a short, warm, plain-text email; use {first_name} to personalise. Records without an email are skipped. ${PICK_HELP} The user must confirm and sees the count first.`,
+      parameters: { type: "object", properties: { entity: { type: "string", enum: ["clients", "leads", "candidates", "vas"] }, ...PICK_PROPS, subject: { type: "string" }, body: { type: "string" } }, required: ["entity", ...PICK_REQ, "subject", "body"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_invoices",
+      description: `Create an invoice for each matching client (managers only), e.g. "invoice all live VA clients £600 due on the 1st". Either a fixed amount, or use_daily_rate = true with days to bill each client's own daily rate × days. currency GBP|EUR|NZD|AUD|CAD|USD. due_date YYYY-MM-DD (empty = 14 days). ${PICK_HELP} (client filters). The user must confirm.`,
+      parameters: { type: "object", properties: { ...PICK_PROPS, amount: { type: "number" }, use_daily_rate: { type: "boolean" }, days: { type: "integer" }, currency: { type: "string" }, due_date: { type: "string" }, description: { type: "string" } }, required: [...PICK_REQ, "amount", "use_daily_rate", "days", "currency", "due_date", "description"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_convert",
+      description: `Turn several AI-receptionist leads into clients at the first onboarding stage (max 25), e.g. "convert all won leads from this week". No filters = all won leads. ${PICK_HELP} The user must confirm.`,
+      parameters: { type: "object", properties: { ...PICK_PROPS }, required: [...PICK_REQ], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_bulk_rescreen",
+      description: `Re-run the AI screening on several candidates (max 20), e.g. "re-screen everyone whose screening failed" or "re-screen this week's applicants". ${PICK_HELP} The user must confirm.`,
+      parameters: { type: "object", properties: { ...PICK_PROPS }, required: [...PICK_REQ], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_mark_notifications_read",
+      description: "Mark all of the user's unread notifications as read. The user must confirm.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
     },
   },
   {
@@ -1180,27 +1276,222 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const ent = ENTITIES[entity];
       if (!ent) return { data: { error: "Unknown record type" } };
       if (ent.area) need(ent.area);
-      const period = (REC_PERIODS as readonly string[]).includes(String(args.period)) ? String(args.period) : "any";
-      const filters = (args.filters as Filter[]) ?? [];
-      const everything = !filters.length && period === "any";
-      // Changing every record is fine when the user said so; the confirm card shows the full count first.
-      if (everything && args.all_records !== true) return { data: { error: "No filter given. If the user meant every record, call again with all_records true; otherwise ask which ones." } };
-      const res = await searchRecords(entity, filters, period, meId, { limit: 200 });
-      if (res.problems.length) return { data: { error: res.problems.join("; ") } };
-      if (!res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to change.` };
+      const pk = await pickRecords(entity, args, meId);
+      if ("error" in pk) return { data: { error: pk.error } };
+      if (!pk.res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to change.` };
       const ch = await resolveChanges(entity, (args.set as { field: string; value: string }[]) ?? [], meId);
       if (ch.problems.length || !ch.changes.length) return { data: { error: ch.problems.join("; ") || "Say what to change" } };
-      const names = res.rows.map((r) => ent.name(r));
+      const n = pk.res.rows.length;
       return proposeOut({
-        title: `Update ${res.rows.length} ${res.rows.length === 1 ? ent.label.replace(/s$/, "") : ent.label}`,
-        preview: [
-          ...(everything ? [{ label: "Scope", value: `ALL ${res.count} ${ent.label}` }] : []),
-          { label: "Which", value: names.slice(0, 8).join(", ") + (names.length > 8 ? ` +${names.length - 8} more` : "") },
-          ...ch.changes.map((c) => ({ label: c.field.replace(/_/g, " "), value: c.display })),
-          ...(res.count > res.rows.length ? [{ label: "Note", value: `Only the first ${res.rows.length} of ${res.count} will change` }] : []),
-        ],
-        proposal: { kind: "bulk_update", entity, ids: res.rows.map((r) => r.id as string), changes: ch.changes },
+        title: `Update ${n} ${n === 1 ? ent.label.replace(/s$/, "") : ent.label}`,
+        preview: [...scopeLines(ent, pk.res, pk.everything), ...ch.changes.map((c) => ({ label: c.field.replace(/_/g, " "), value: c.display }))],
+        proposal: { kind: "bulk_update", entity, ids: pk.res.rows.map((r) => r.id as string), changes: ch.changes },
       });
+    }
+
+    case "propose_distribute": {
+      const entity = String(args.entity) as EntityKey;
+      const field = ({ leads: "setter", clients: "manager", tasks: "assignee", concerns: "owner", roles: "recruiter" } as Record<string, string>)[entity];
+      const ent = ENTITIES[entity];
+      if (!ent || !field) return { data: { error: "Can share out leads, clients, tasks, concerns or roles" } };
+      if (ent.area) need(ent.area);
+      const pk = await pickRecords(entity, args, meId);
+      if ("error" in pk) return { data: { error: pk.error } };
+      if (!pk.res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to share out.` };
+      // people: setters for leads, team members otherwise
+      let people: { id: string; name: string }[] = [];
+      const names = String(args.people ?? "");
+      if (entity === "leads") {
+        for (const raw of names.split(/,| and |&/).map((x) => clean(x, 60)).filter(Boolean).slice(0, 20)) {
+          const f = await findSetter(db, raw);
+          if ("error" in f) return { data: { error: f.error } };
+          if ("ask" in f) return { data: { ask_which_setter: f.ask } };
+          people.push(f);
+        }
+      } else {
+        const r = await findPeople(db, names, meId);
+        if (r.problems.length) return { data: { error: r.problems.join("; ") } };
+        people = r.ids;
+      }
+      people = people.filter((x, i) => people.findIndex((y) => y.id === x.id) === i);
+      if (people.length < 1) return { data: { error: "Who should they go to?" } };
+      const groups = people.map((x) => ({ value: x.id, display: x.name, ids: [] as string[] }));
+      pk.res.rows.forEach((r, i) => groups[i % groups.length].ids.push(r.id as string));
+      return proposeOut({
+        title: `Share out ${pk.res.rows.length} ${ent.label}`,
+        preview: [...scopeLines(ent, pk.res, pk.everything), { label: "Split", value: groups.map((g) => `${g.display}: ${g.ids.length}`).join(" · ") }],
+        proposal: { kind: "distribute", entity, field, groups },
+      });
+    }
+
+    case "propose_bulk_tasks": {
+      const entity = String(args.entity) as EntityKey;
+      const ent = ENTITIES[entity];
+      if (!ent) return { data: { error: "Unknown record type" } };
+      if (ent.area) need(ent.area);
+      const title = String(args.title ?? "").trim().slice(0, 300);
+      if (!title) return { data: { error: "What's the task?" } };
+      const pk = await pickRecords(entity, args, meId, { limit: 200 });
+      if ("error" in pk) return { data: { error: pk.error } };
+      if (!pk.res.count) return { data: { error: "No records match" } };
+      const rows = pk.res.rows;
+      const clientOf = (r: Record<string, unknown>) => (entity === "clients" ? (r.id as string) : ent.clientCol ? ((r[ent.clientCol] as string) ?? undefined) : undefined);
+      const to = String(args.assign_to ?? "").trim();
+      const owners = new Map<string, string>(); // record id -> profile id
+      if (!to || /^owner|their|each/i.test(to)) {
+        if (entity === "leads") {
+          const { data: setters } = await db.from("setters").select("id, profile_id");
+          const sp = new Map((setters ?? []).map((x) => [x.id as string, x.profile_id as string | null]));
+          for (const r of rows) {
+            const pid = sp.get(r.setter_id as string);
+            if (pid) owners.set(r.id as string, pid);
+          }
+        } else if (ent.ownerCol) {
+          for (const r of rows) if (r[ent.ownerCol]) owners.set(r.id as string, r[ent.ownerCol] as string);
+        } else {
+          const cids = [...new Set(rows.map(clientOf).filter(Boolean))] as string[];
+          const { data: cl } = cids.length ? await db.from("clients").select("id, manager_id").in("id", cids) : { data: [] };
+          const mgr = new Map((cl ?? []).map((c) => [c.id as string, c.manager_id as string | null]));
+          for (const r of rows) {
+            const m = mgr.get(clientOf(r) ?? "");
+            if (m) owners.set(r.id as string, m);
+          }
+        }
+      }
+      let fixed = meId;
+      if (to && !/^(owner|their|each|me|myself)/i.test(to)) {
+        const r = await findPeople(db, to, meId);
+        if (r.problems.length || !r.ids.length) return { data: { error: r.problems.join("; ") || "Who should do it?" } };
+        fixed = r.ids[0].id;
+      }
+      const usesName = /\{name\}/i.test(title);
+      const items = rows.map((r) => {
+        const cid = clientOf(r);
+        const nm = ent.name(r);
+        const t = usesName ? title.replace(/\{name\}/gi, nm) : cid ? title : `${title}: ${nm}`;
+        return { title: t.slice(0, 300), clientId: cid, assigneeId: owners.get(r.id as string) ?? fixed };
+      });
+      const team = await teamNames();
+      const per = new Map<string, number>();
+      for (const i of items) per.set(i.assigneeId, (per.get(i.assigneeId) ?? 0) + 1);
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(String(args.due_date)) ? String(args.due_date) : undefined;
+      return proposeOut({
+        title: `Add ${items.length} task${items.length === 1 ? "" : "s"}`,
+        preview: [
+          ...scopeLines(ent, pk.res, pk.everything),
+          { label: "Task", value: items[0].title + (items.length > 1 ? " …" : "") },
+          { label: "For", value: [...per].map(([id, k]) => `${team.get(id) ?? "someone"}: ${k}`).join(" · ") },
+          ...(due ? [{ label: "Due", value: due }] : []),
+        ],
+        proposal: { kind: "bulk_tasks", items, dueDate: due },
+      });
+    }
+
+    case "propose_bulk_email": {
+      const entity = String(args.entity) as EntityKey;
+      const ent = ENTITIES[entity];
+      const nameCol = ({ clients: "name", leads: "name", candidates: "full_name", vas: "va_name" } as Record<string, string>)[entity];
+      if (!ent || !ent.emailCol || !nameCol) return { data: { error: "Can email clients, leads, candidates or VAs" } };
+      if (ent.area) need(ent.area);
+      const subject = String(args.subject ?? "").trim().slice(0, 200);
+      const body = String(args.body ?? "").trim().slice(0, 8000);
+      if (!subject || !body) return { data: { error: "The email needs a subject and a message" } };
+      const pk = await pickRecords(entity, args, meId, { limit: 200 });
+      if ("error" in pk) return { data: { error: pk.error } };
+      const withEmail = pk.res.rows.filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r[ent.emailCol!] ?? "")));
+      const missing = pk.res.rows.length - withEmail.length;
+      const items = withEmail.slice(0, 50).map((r) => ({ to: String(r[ent.emailCol!]), name: String(r[nameCol] ?? ""), clientId: entity === "clients" ? (r.id as string) : undefined }));
+      if (!items.length) return { data: { error: "None of them has an email address on file" } };
+      const first = items[0].name.trim().split(/\s+/)[0] || "there";
+      return proposeOut({
+        title: `Email ${items.length} ${items.length === 1 ? ent.label.replace(/s$/, "") : ent.label}`,
+        preview: [
+          ...scopeLines(ent, pk.res, pk.everything),
+          { label: "Subject", value: subject },
+          { label: `Preview (to ${items[0].name || items[0].to})`, value: body.replace(/\{first_?name\}/gi, first).replace(/\{name\}/gi, items[0].name || "there") },
+          ...(missing ? [{ label: "Skipped", value: `${missing} with no email address` }] : []),
+          ...(withEmail.length > 50 ? [{ label: "Note", value: `Only the first 50 of ${withEmail.length} will be emailed` }] : []),
+        ],
+        proposal: { kind: "bulk_email", entity, subject, body, items },
+      });
+    }
+
+    case "propose_bulk_invoices": {
+      need("payments");
+      need("clients");
+      const pk = await pickRecords("clients", args, meId, { limit: 200 });
+      if ("error" in pk) return { data: { error: pk.error } };
+      if (!pk.res.count) return { data: { error: "No clients match" } };
+      const currency = String(args.currency || "GBP").toUpperCase();
+      if (!["GBP", "EUR", "NZD", "AUD", "CAD", "USD"].includes(currency)) return { data: { error: "Currency must be GBP, EUR, NZD, AUD, CAD or USD" } };
+      const useRate = args.use_daily_rate === true;
+      const days = Math.max(1, Math.min(31, Math.round(Number(args.days) || 0)));
+      const fixed = Math.round(Number(args.amount) * 100) / 100;
+      if (!useRate && !(fixed > 0)) return { data: { error: "I need the amount (or say to use each client's daily rate)" } };
+      if (useRate && !Number(args.days)) return { data: { error: "How many days should I bill at the daily rate?" } };
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(String(args.due_date ?? "")) ? String(args.due_date) : addDays(dublinDate(), 14);
+      const stamp = dublinDate().replace(/-/g, "");
+      const base = Math.floor(100 + Math.random() * 800);
+      const noRate: string[] = [];
+      const items = pk.res.rows
+        .map((r, i) => {
+          const amount = useRate ? Math.round(Number(r.daily_rate ?? 0) * days * 100) / 100 : fixed;
+          if (!(amount > 0)) {
+            noRate.push(r.name as string);
+            return null;
+          }
+          return { clientId: r.id as string, clientName: r.name as string, amount, number: `INV-${stamp}-${base + i}` };
+        })
+        .filter((x): x is { clientId: string; clientName: string; amount: number; number: string } => Boolean(x));
+      if (!items.length) return { data: { error: "None of those clients has a daily rate set" } };
+      const total = items.reduce((t, i) => t + i.amount, 0);
+      return proposeOut({
+        title: `Create ${items.length} invoice${items.length === 1 ? "" : "s"}`,
+        preview: [
+          ...scopeLines(ENTITIES.clients, pk.res, pk.everything),
+          { label: "Amount", value: useRate ? `Each client's daily rate × ${days} days` : `${formatMoney(fixed, currency)} each` },
+          { label: "Total", value: formatMoney(total, currency) },
+          { label: "Due", value: due },
+          ...(args.description ? [{ label: "For", value: String(args.description).slice(0, 200) }] : []),
+          ...(noRate.length ? [{ label: "Skipped", value: `${noRate.length} with no daily rate (${noRate.slice(0, 3).join(", ")})` }] : []),
+        ],
+        proposal: { kind: "bulk_invoices", currency, dueOn: due, description: String(args.description ?? "").slice(0, 500) || undefined, items },
+      });
+    }
+
+    case "propose_bulk_convert": {
+      need("leads");
+      need("clients");
+      const pk = await pickRecords("leads", args, meId, { limit: 200, defaultFilters: [{ field: "status", op: "is", value: "won" }] });
+      if ("error" in pk) return { data: { error: pk.error } };
+      const rows = pk.res.rows.filter((r) => !r.client_id && r.service === "ai").slice(0, 25);
+      if (!rows.length) return { data: { error: "No AI-receptionist leads there that aren't clients yet (VA onboarding isn't in the dashboard yet)" } };
+      return proposeOut({
+        title: `Convert ${rows.length} lead${rows.length === 1 ? "" : "s"} to clients`,
+        preview: [
+          { label: "Leads", value: rows.map((r) => ENTITIES.leads.name(r)).slice(0, 10).join(", ") + (rows.length > 10 ? ` +${rows.length - 10} more` : "") },
+          { label: "What happens", value: "Each becomes an AI receptionist client at the first onboarding stage with its checklist, and the lead is marked won" },
+        ],
+        proposal: { kind: "bulk_convert", leadIds: rows.map((r) => r.id as string) },
+      });
+    }
+
+    case "propose_bulk_rescreen": {
+      need("candidates");
+      const pk = await pickRecords("candidates", args, meId, { limit: 20 });
+      if ("error" in pk) return { data: { error: pk.error } };
+      if (!pk.res.count) return { data: { error: "No candidates match" } };
+      return proposeOut({
+        title: `Re-screen ${pk.res.rows.length} candidate${pk.res.rows.length === 1 ? "" : "s"}`,
+        preview: [...scopeLines(ENTITIES.candidates, pk.res, pk.everything), { label: "What happens", value: "AI re-reads each application and updates the score and recommended role" }],
+        proposal: { kind: "bulk_rescreen", candidateIds: pk.res.rows.map((r) => r.id as string) },
+      });
+    }
+
+    case "propose_mark_notifications_read": {
+      const { count } = await db.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", meId).is("read_at", null);
+      if (!count) return { data: { unread: 0 }, say: `${hi}you're all caught up, nothing unread.` };
+      return proposeOut({ title: `Mark ${count} notification${count === 1 ? "" : "s"} read`, preview: [{ label: "Unread", value: String(count) }], proposal: { kind: "notifications_read" } });
     }
 
     case "propose_move_stage": {
@@ -1396,34 +1687,46 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       if ("ask" in sheet) return { data: { ask_which: sheet.ask } };
       const { data: cols } = await db.from("sheet_columns").select("*").eq("sheet_id", sheet.id).order("position");
       const columns = (cols as SheetColumn[]) ?? [];
-      const values = Array.isArray(args.values) ? (args.values as { column?: unknown; value?: unknown }[]).slice(0, 40) : [];
-      const cells: Record<string, CellValue> = {};
-      const preview: { label: string; value: string }[] = [];
-      const unknown: string[] = [];
       const people = await teamNames();
-      for (const v of values) {
-        const name = String(v.column ?? "").trim().toLowerCase();
-        const col = columns.find((c) => c.name.toLowerCase() === name) ?? columns.find((c) => c.name.toLowerCase().includes(name) && name.length > 2);
-        if (!col) {
-          unknown.push(String(v.column));
-          continue;
+      const unknown = new Set<string>();
+      const rowsIn = Array.isArray(args.rows) ? (args.rows as { values?: { column?: unknown; value?: unknown }[] }[]).slice(0, 100) : [];
+      const rows: Record<string, CellValue>[] = [];
+      const shown: string[] = [];
+      for (const row of rowsIn) {
+        const cells: Record<string, CellValue> = {};
+        const bits: string[] = [];
+        for (const v of (row.values ?? []).slice(0, 40)) {
+          const name = String(v.column ?? "").trim().toLowerCase();
+          const col = columns.find((c) => c.name.toLowerCase() === name) ?? columns.find((c) => c.name.toLowerCase().includes(name) && name.length > 2);
+          if (!col) {
+            unknown.add(String(v.column));
+            continue;
+          }
+          const raw = String(v.value ?? "").trim();
+          let val: CellValue;
+          if (col.type === "person") {
+            if (/^(me|myself|i)$/i.test(raw)) val = meId || null;
+            else val = [...people].find(([, n]) => n.toLowerCase().includes(raw.toLowerCase()) && raw.length > 1)?.[0] ?? null;
+          } else if (col.type === "date" && /^today$/i.test(raw)) val = dublinDate();
+          else val = parseCell(col.type, raw);
+          if (val === null || val === "") continue;
+          cells[col.id] = val;
+          bits.push(`${col.name}: ${formatCell(col, val, people)}`);
         }
-        const raw = String(v.value ?? "").trim();
-        let val: CellValue;
-        if (col.type === "person") {
-          if (/^(me|myself|i)$/i.test(raw)) val = meId || null;
-          else val = [...people].find(([, n]) => n.toLowerCase().includes(raw.toLowerCase()) && raw.length > 1)?.[0] ?? null;
-        } else if (col.type === "date" && /^today$/i.test(raw)) val = dublinDate();
-        else val = parseCell(col.type, raw);
-        if (val === null || val === "") continue;
-        cells[col.id] = val;
-        preview.push({ label: col.name, value: formatCell(col, val, people) });
+        if (Object.keys(cells).length) {
+          rows.push(cells);
+          shown.push(bits.join(" · "));
+        }
       }
-      if (!preview.length) return { data: { error: "Nothing to add", columns: columns.map((c) => c.name), unknown_columns: unknown } };
+      if (!rows.length) return { data: { error: "Nothing to add", columns: columns.map((c) => c.name), unknown_columns: [...unknown] } };
       return proposeOut({
-        title: `New row in ${sheet.name}`,
-        preview: unknown.length ? [...preview, { label: "Skipped", value: `No column called ${unknown.join(", ")}` }] : preview,
-        proposal: { kind: "add_sheet_row", sheetId: sheet.id, sheetName: sheet.name, cells },
+        title: rows.length === 1 ? `New row in ${sheet.name}` : `${rows.length} new rows in ${sheet.name}`,
+        preview: [
+          ...shown.slice(0, 6).map((t, i) => ({ label: rows.length === 1 ? "Row" : `Row ${i + 1}`, value: t })),
+          ...(rows.length > 6 ? [{ label: "More", value: `+${rows.length - 6} more rows` }] : []),
+          ...(unknown.size ? [{ label: "Skipped", value: `No column called ${[...unknown].join(", ")}` }] : []),
+        ],
+        proposal: { kind: "add_sheet_row", sheetId: sheet.id, sheetName: sheet.name, rows },
       });
     }
 
@@ -1840,6 +2143,45 @@ const GROUP_LABEL: Record<string, string> = {
 
 
 /** A proposal is never executed here: it is shown to the user, who confirms in the widget. */
+/** Shared record picker for bulk tools: filters/period, or everything when the user said "all". */
+async function pickRecords(entity: EntityKey, args: Record<string, unknown>, meId: string, opts: { limit?: number; defaultFilters?: Filter[] } = {}) {
+  const ent = ENTITIES[entity];
+  const period = (REC_PERIODS as readonly string[]).includes(String(args.period)) ? String(args.period) : "any";
+  let filters = (args.filters as Filter[]) ?? [];
+  if (!filters.length && opts.defaultFilters) filters = opts.defaultFilters;
+  const everything = !filters.length && period === "any";
+  if (everything && args.all_records !== true) return { error: "No filter given. If the user meant every record, call again with all_records true; otherwise ask which ones." };
+  const res = await searchRecords(entity, filters, period, meId, { limit: opts.limit ?? BULK_MAX, bulk: true });
+  if (res.problems.length) return { error: res.problems.join("; ") };
+  return { ent, res, everything };
+}
+
+function scopeLines(ent: (typeof ENTITIES)[EntityKey], res: { rows: Record<string, unknown>[]; count: number }, everything: boolean) {
+  const names = res.rows.map((r) => ent.name(r));
+  return [
+    ...(everything ? [{ label: "Scope", value: `ALL ${res.count} ${ent.label}` }] : []),
+    { label: "Which", value: names.slice(0, 8).join(", ") + (names.length > 8 ? ` +${names.length - 8} more` : "") },
+    ...(res.count > res.rows.length ? [{ label: "Note", value: `Only the first ${res.rows.length} of ${res.count} will be included` }] : []),
+  ];
+}
+
+async function findPeople(db: Db, list: string, meId: string): Promise<{ ids: { id: string; name: string }[]; problems: string[] }> {
+  const ids: { id: string; name: string }[] = [];
+  const problems: string[] = [];
+  for (const raw of list.split(/,| and |&/).map((x) => clean(x, 60)).filter(Boolean).slice(0, 20)) {
+    if (/^(me|myself)$/i.test(raw)) {
+      const { data } = await db.from("profiles").select("id, full_name, email").eq("id", meId).maybeSingle();
+      if (data) ids.push({ id: data.id, name: data.full_name || data.email });
+      continue;
+    }
+    const { data } = await db.from("profiles").select("id, full_name, email").eq("active", true).or(`full_name.ilike.%${raw}%,email.ilike.%${raw}%`).limit(3);
+    if (!data?.length) problems.push(`no team member called "${raw}"`);
+    else if (data.length > 1) problems.push(`"${raw}" matches ${data.map((d) => d.full_name || d.email).join(" and ")}`);
+    else ids.push({ id: data[0].id, name: data[0].full_name || data[0].email });
+  }
+  return { ids, problems };
+}
+
 function proposeOut(confirm: SourciConfirm): ToolOut {
   const verb: Record<string, string> = {
     update_lead: "Shall I update it?",
@@ -1856,6 +2198,13 @@ function proposeOut(confirm: SourciConfirm): ToolOut {
     create_role: "Shall I open it?",
     shortlist: "Shall I add them?",
     hire: "Shall I confirm the hire?",
+    distribute: "Shall I share them out?",
+    bulk_tasks: "Shall I add them?",
+    bulk_email: "Want me to send them?",
+    bulk_invoices: "Shall I create them?",
+    bulk_convert: "Shall I convert them?",
+    bulk_rescreen: "Shall I run it?",
+    notifications_read: "Shall I clear them?",
   };
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
@@ -1982,6 +2331,7 @@ How to work:
 - VA STAFFING: roles_summary = open roles (client job orders). role_matches = best candidates for a role. propose_open_role when a client wants a VA. propose_shortlist to put candidates on a role. propose_hire to hire someone on a role (creates the placement). vas_summary = every placed VA across clients.
 - If the request truly can't be done with your tools, call log_wish, then say so. Never pretend something was done.
 - When the user says "all" or "every" (e.g. "make Paul the manager of all clients"), do exactly that with all_records true; don't ask them to narrow it down. The confirmation card shows the count.
+- BULK: change fields on many records = propose_bulk_update (works for leads, clients, invoices, candidates, checkins, concerns, tasks, vas, roles, role_candidates). Share out evenly between people = propose_distribute. One task per record = propose_bulk_tasks. Email a group = propose_bulk_email. Invoice a group of clients = propose_bulk_invoices. Convert won leads = propose_bulk_convert. Re-screen candidates = propose_bulk_rescreen. Several sheet rows = propose_sheet_row with several rows. Clear notifications = propose_mark_notifications_read. After any bulk change the user can say "undo".
 - Renaming a client or fixing its details (company name, contact email, industry…) is propose_bulk_update on clients, filtered by the client's current name.
 - Only ONE propose_ tool per reply. If a tool returns ask_which, ask the user which one they mean.
 - You cannot delete anything, move money, or charge cards. Say so if asked.

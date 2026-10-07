@@ -1,6 +1,6 @@
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { CANDIDATE_STATUS, CHECKIN_MOOD, CHECKIN_STATUS, CLIENT_STATUS, HIRING_FEE_STATUS, LEAD_STATUS } from "@/lib/labels";
+import { CANDIDATE_STATUS, CHECKIN_MOOD, CHECKIN_STATUS, CLIENT_STATUS, HIRING_FEE_STATUS, LEAD_STATUS, PLACEMENT_STATUS, ROLE_PRIORITY, ROLE_STAGE, ROLE_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney, isIsoDate } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
 
@@ -12,10 +12,10 @@ import type { Area } from "@/lib/areas";
 type Db = Awaited<ReturnType<typeof getServerSupabase>>;
 type Row = Record<string, unknown>;
 
-export const ENTITY_KEYS = ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks"] as const;
+export const ENTITY_KEYS = ["leads", "clients", "invoices", "candidates", "checkins", "concerns", "tasks", "vas", "roles", "role_candidates"] as const;
 export type EntityKey = (typeof ENTITY_KEYS)[number];
 
-type Kind = "text" | "enum" | "date" | "number" | "bool" | "person" | "setter" | "client" | "stage";
+type Kind = "text" | "enum" | "date" | "number" | "bool" | "person" | "setter" | "client" | "stage" | "role" | "candidate";
 interface FieldDef {
   col: string;
   kind: Kind;
@@ -43,6 +43,12 @@ interface EntityDef {
   filters: Record<string, FieldDef>;
   editable: Record<string, EditDef>;
   logAs?: "lead" | "client" | "concern";
+  /** For logging on the client's timeline when the record isn't the client itself. */
+  clientCol?: string;
+  /** Column holding the person who "owns" a record (bulk tasks: "assign to their owner"). */
+  ownerCol?: string;
+  /** Column holding an email to write to (bulk email). */
+  emailCol?: string;
 }
 
 const keys = (o: Record<string, unknown>) => Object.keys(o);
@@ -53,7 +59,7 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     table: "leads",
     area: "leads",
     label: "leads",
-    select: "id, name, email, phone, status, service, source, country, setter_id, received_at, ad_code, notes",
+    select: "id, name, email, phone, status, service, source, country, setter_id, received_at, ad_code, notes, client_id",
     dateCol: "received_at",
     order: { col: "received_at", asc: false },
     name: (r) => (r.name as string) || (r.email as string) || "Unnamed lead",
@@ -79,14 +85,21 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       country: { col: "country", kind: "text" },
       ad_name: { col: "ad_name", kind: "text" },
       ad_code: { col: "ad_code", kind: "text" },
+      name: { col: "name", kind: "text" },
+      email: { col: "email", kind: "text" },
+      phone: { col: "phone", kind: "text" },
+      service: { col: "service", kind: "enum", values: ["ai", "va", "premium", "unknown"] },
+      source: { col: "source", kind: "text" },
     },
+    ownerCol: "setter_id",
+    emailCol: "email",
     logAs: "lead",
   },
   clients: {
     table: "clients",
     area: "clients",
     label: "clients",
-    select: "id, name, company_name, status, pipeline, country, source, manager_id, stage_id, start_date, contact_email, created_at, remarks",
+    select: "id, name, company_name, status, pipeline, country, source, manager_id, stage_id, start_date, contact_email, created_at, remarks, daily_rate",
     dateCol: "created_at",
     order: { col: "name", asc: true },
     name: (r) => (r.name as string) || "Client",
@@ -125,6 +138,8 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       checkin_paused: { col: "checkin_paused", kind: "bool" },
     },
     logAs: "client",
+    ownerCol: "manager_id",
+    emailCol: "contact_email",
   },
   invoices: {
     table: "invoices",
@@ -149,8 +164,11 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       status: { col: "status", kind: "enum", values: ["open", "paid", "void"], managerOnly: true },
       due_on: { col: "due_on", kind: "date", managerOnly: true },
       note: { col: "notes", kind: "text", append: true, managerOnly: true },
+      amount: { col: "amount", kind: "number", min: 0.01, max: 1_000_000, decimals: true, managerOnly: true },
+      currency: { col: "currency", kind: "enum", values: ["GBP", "EUR", "NZD", "AUD", "CAD", "USD"], managerOnly: true },
     },
     logAs: "client",
+    clientCol: "client_id",
   },
   candidates: {
     table: "candidates",
@@ -174,7 +192,11 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     editable: {
       status: { col: "status", kind: "enum", values: keys(CANDIDATE_STATUS) },
       note: { col: "notes", kind: "text", append: true },
+      role: { col: "ai_recommended_role", kind: "text" },
+      email: { col: "email", kind: "text" },
+      phone: { col: "phone", kind: "text" },
     },
+    emailCol: "email",
   },
   checkins: {
     table: "checkins",
@@ -195,7 +217,10 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     },
     editable: {
       status: { col: "status", kind: "enum", values: ["due", "done", "skipped"] },
+      due_on: { col: "due_on", kind: "date" },
+      channel: { col: "channel", kind: "enum", values: ["email", "whatsapp", "call"] },
     },
+    clientCol: "client_id",
   },
   concerns: {
     table: "concerns",
@@ -219,8 +244,10 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       status: { col: "status", kind: "enum", values: ["open", "in_progress", "resolved"] },
       severity: { col: "severity", kind: "enum", values: ["low", "medium", "high", "urgent"] },
       owner: { col: "owner_id", kind: "person" },
+      title: { col: "title", kind: "text" },
     },
     logAs: "concern",
+    ownerCol: "owner_id",
   },
   tasks: {
     table: "tasks",
@@ -244,9 +271,106 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       status: { col: "status", kind: "enum", values: ["open", "done"] },
       assignee: { col: "assignee_id", kind: "person" },
       due_date: { col: "due_date", kind: "date" },
+      title: { col: "title", kind: "text" },
+    },
+    ownerCol: "assignee_id",
+  },
+  vas: {
+    table: "va_placements",
+    area: "clients",
+    label: "VAs",
+    select: "id, va_name, va_email, role, placement_status, start_date, end_date, hourly_rate, rate_currency, hours_per_week, client_id, checkin_paused, notes, created_at, clients(name)",
+    dateCol: "created_at",
+    order: { col: "va_name", asc: true },
+    name: (r) => `${(r.va_name as string) || "VA"}${clientName(r) ? ` · ${clientName(r)}` : ""}`,
+    detail: (r) => [r.role, PLACEMENT_STATUS[r.placement_status as keyof typeof PLACEMENT_STATUS]?.label, r.start_date ? `since ${r.start_date}` : null, r.hourly_rate != null ? `${r.rate_currency} ${r.hourly_rate}/h` : null].filter(Boolean).join(" · "),
+    href: (r) => `/clients/${r.client_id}`,
+    filters: {
+      name: { col: "va_name", kind: "text" },
+      email: { col: "va_email", kind: "text" },
+      client: { col: "client_id", kind: "client" },
+      role: { col: "role", kind: "text" },
+      status: { col: "placement_status", kind: "enum", values: keys(PLACEMENT_STATUS) },
+      start_date: { col: "start_date", kind: "date" },
+      rate: { col: "hourly_rate", kind: "number" },
+      hours: { col: "hours_per_week", kind: "number" },
+      checkin_paused: { col: "checkin_paused", kind: "bool" },
+    },
+    editable: {
+      status: { col: "placement_status", kind: "enum", values: keys(PLACEMENT_STATUS) },
+      role: { col: "role", kind: "text" },
+      hourly_rate: { col: "hourly_rate", kind: "number", min: 0, max: 1000, decimals: true },
+      rate_currency: { col: "rate_currency", kind: "enum", values: ["GBP", "EUR", "NZD", "AUD", "CAD", "USD", "PHP"] },
+      hours_per_week: { col: "hours_per_week", kind: "number", min: 1, max: 80 },
+      start_date: { col: "start_date", kind: "date" },
+      end_date: { col: "end_date", kind: "date" },
+      checkin_paused: { col: "checkin_paused", kind: "bool" },
+      checkin_every_days: { col: "checkin_every_days", kind: "number", min: 3, max: 90 },
+      email: { col: "va_email", kind: "text" },
+      note: { col: "notes", kind: "text", append: true },
+    },
+    logAs: "client",
+    clientCol: "client_id",
+    emailCol: "va_email",
+  },
+  roles: {
+    table: "va_roles",
+    area: "candidates",
+    label: "roles",
+    select: "id, title, status, priority, headcount, start_by, owner_id, client_id, budget, created_at",
+    dateCol: "created_at",
+    order: { col: "created_at", asc: false },
+    name: (r) => (r.title as string) || "Role",
+    detail: (r) => [ROLE_STATUS[r.status as keyof typeof ROLE_STATUS]?.label, r.priority !== "normal" ? r.priority : null, r.start_by ? `start by ${r.start_by}` : null].filter(Boolean).join(" · "),
+    href: (r) => `/roles/${r.id}`,
+    filters: {
+      title: { col: "title", kind: "text" },
+      status: { col: "status", kind: "enum", values: keys(ROLE_STATUS) },
+      priority: { col: "priority", kind: "enum", values: keys(ROLE_PRIORITY) },
+      recruiter: { col: "owner_id", kind: "person" },
+      client: { col: "client_id", kind: "client" },
+      start_by: { col: "start_by", kind: "date" },
+      created: { col: "created_at", kind: "date" },
+    },
+    editable: {
+      status: { col: "status", kind: "enum", values: keys(ROLE_STATUS) },
+      priority: { col: "priority", kind: "enum", values: keys(ROLE_PRIORITY) },
+      recruiter: { col: "owner_id", kind: "person" },
+      start_by: { col: "start_by", kind: "date" },
+      headcount: { col: "headcount", kind: "number", min: 1, max: 50 },
+      hours_per_week: { col: "hours_per_week", kind: "number", min: 1, max: 80 },
+      budget: { col: "budget", kind: "text" },
+      title: { col: "title", kind: "text" },
+    },
+    ownerCol: "owner_id",
+  },
+  role_candidates: {
+    table: "va_role_candidates",
+    area: "candidates",
+    label: "role candidates",
+    select: "id, stage, match_score, role_id, candidate_id, created_at, notes, candidates(full_name, email), va_roles(title)",
+    dateCol: "created_at",
+    order: { col: "match_score", asc: false },
+    name: (r) => `${(r.candidates as { full_name?: string } | null)?.full_name ?? "Candidate"} · ${(r.va_roles as { title?: string } | null)?.title ?? "role"}`,
+    detail: (r) => [ROLE_STAGE[r.stage as keyof typeof ROLE_STAGE]?.label, r.match_score != null ? `${r.match_score}% fit` : null].filter(Boolean).join(" · "),
+    href: (r) => `/roles/${r.role_id}`,
+    filters: {
+      stage: { col: "stage", kind: "enum", values: keys(ROLE_STAGE) },
+      role: { col: "role_id", kind: "role" },
+      candidate: { col: "candidate_id", kind: "candidate" },
+      score: { col: "match_score", kind: "number" },
+      added: { col: "created_at", kind: "date" },
+    },
+    editable: {
+      // hiring creates a placement, so it goes through propose_hire, not here
+      stage: { col: "stage", kind: "enum", values: ["suggested", "shortlisted", "interview", "offered", "rejected"] },
+      note: { col: "notes", kind: "text", append: true },
     },
   },
 };
+
+/** Most records one bulk change may touch (the confirm card always shows the count). */
+export const BULK_MAX = 1000;
 
 export interface Filter {
   field: string;
@@ -295,6 +419,14 @@ async function resolveRef(db: Db, kind: Kind, value: string, meId: string): Prom
   }
   if (kind === "client") {
     const { data } = await db.from("clients").select("id").or(`name.ilike.%${v}%,company_name.ilike.%${v}%`).limit(50);
+    return data?.length ? data.map((x) => x.id as string) : null;
+  }
+  if (kind === "role") {
+    const { data } = await db.from("va_roles").select("id").ilike("title", `%${v}%`).limit(20);
+    return data?.length ? data.map((x) => x.id as string) : null;
+  }
+  if (kind === "candidate") {
+    const { data } = await db.from("candidates").select("id").ilike("full_name", `%${v}%`).limit(20);
     return data?.length ? data.map((x) => x.id as string) : null;
   }
   if (kind === "stage") {
@@ -349,7 +481,7 @@ async function applyFilters(db: Db, ent: EntityDef, q: Q, filters: Filter[], per
       q = q.eq(def.col, !/^(false|no|0)$/i.test(val) && op !== "is_false");
       continue;
     }
-    if (["person", "setter", "client", "stage"].includes(def.kind)) {
+    if (["person", "setter", "client", "stage", "role", "candidate"].includes(def.kind)) {
       const ids = await resolveRef(db, def.kind, val, meId);
       if (!ids) {
         problems.push(`nothing matches ${f.field} "${val}"`);
@@ -414,7 +546,7 @@ export async function searchRecords(
   filters: Filter[],
   period: string,
   meId: string,
-  opts: { limit?: number; sort?: string; sortDir?: "asc" | "desc" } = {},
+  opts: { limit?: number; sort?: string; sortDir?: "asc" | "desc"; bulk?: boolean } = {},
 ): Promise<SearchResult> {
   const db = await getServerSupabase();
   const ent = ENTITIES[entity];
@@ -422,7 +554,7 @@ export async function searchRecords(
   const asc = opts.sortDir ? opts.sortDir === "asc" : ent.order.asc;
   let q: Q = db.from(ent.table).select(ent.select, { count: "exact" }).order(sortCol, { ascending: asc, nullsFirst: false });
   const applied = await applyFilters(db, ent, q, filters, period, meId);
-  q = applied.q.limit(Math.min(Math.max(opts.limit ?? 50, 1), 200));
+  q = applied.q.limit(Math.min(Math.max(opts.limit ?? 50, 1), opts.bulk ? BULK_MAX : 200));
   const { data, count, error } = await q;
   if (error) applied.problems.push(error.message);
   return { rows: (data ?? []) as Row[], count: count ?? (data ?? []).length, problems: applied.problems, periodLabel: periodRange(period).label };
