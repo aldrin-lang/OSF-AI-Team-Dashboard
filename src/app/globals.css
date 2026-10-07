@@ -91,6 +91,25 @@ html.dark {
   --scroll: rgba(148, 163, 184, 0.22);
 }
 
+/* Everything clickable gets the hand cursor (Tailwind v4 leaves buttons on the arrow) */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+/* Switching VA / AI / All: the page fades softly while the other side loads */
+main {
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+html[data-switching] main {
+  opacity: 0.45;
+  filter: saturate(0.6);
+  pointer-events: none;
+}
 /* VA Outsourcing side: violet accent so it's obvious which business you're in */
 [data-service="va"] {
   --color-brand-50: #f5f3ff;
