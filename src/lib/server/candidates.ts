@@ -176,12 +176,48 @@ export async function sendRecommendation(id: string, exclude?: string | null): P
   return true;
 }
 
-/** Webhook path: store, screen, and tell the team about brand-new candidates. */
+/** Only recent applicants are picked back up, so an old record never re-alerts the team. */
+const RESUME_DAYS = 7;
+
+/**
+ * Finish whatever a candidate is still missing: screening first, then the
+ * team alert. Progress lives on the row (ai_screened_at, recommendation_sent_at),
+ * so a failed step is retried by the next webhook delivery or the daily job.
+ */
+async function finishCandidate(id: string): Promise<void> {
+  const db = getAdminSupabase();
+  const since = new Date(Date.now() - RESUME_DAYS * 86_400_000).toISOString();
+  const { data } = await db
+    .from("candidates")
+    .select("ai_screened_at, recommendation_sent_at, created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data || data.created_at < since) return;
+  if (!data.ai_screened_at) {
+    const s = await screenCandidate(id);
+    if (!s.ok) return; // stays unscreened: retried next time
+  }
+  if (!data.recommendation_sent_at) await sendRecommendation(id);
+}
+
+/** Webhook path: store, then screen and tell the team (resuming anything a previous delivery didn't finish). */
 export async function receiveCandidate(c: IncomingCandidate) {
   const r = await ingestCandidate(c);
-  if (r.created) {
-    await screenCandidate(r.id);
-    await sendRecommendation(r.id);
-  }
+  await finishCandidate(r.id);
   return r;
+}
+
+/** Daily job: retry screening / alerts for recent candidates that didn't finish. */
+export async function resumeUnfinishedCandidates(limit = 20): Promise<{ retried: number }> {
+  const db = getAdminSupabase();
+  const since = new Date(Date.now() - RESUME_DAYS * 86_400_000).toISOString();
+  const { data } = await db
+    .from("candidates")
+    .select("id")
+    .gte("created_at", since)
+    .or("ai_screened_at.is.null,recommendation_sent_at.is.null")
+    .order("created_at")
+    .limit(limit);
+  for (const row of data ?? []) await finishCandidate(row.id as string);
+  return { retried: data?.length ?? 0 };
 }

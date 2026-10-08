@@ -182,7 +182,7 @@ export async function moveClientStage(input: {
 
   const gate = await checkStageGate(input.clientId, input.toStageId);
   if (!gate.allowed) {
-    return { ok: false, error: `Blocked — not done: ${gate.blockedBy.join(", ")}` };
+    return { ok: false, error: gate.error ?? `Blocked — not done: ${gate.blockedBy.join(", ")}` };
   }
 
   const { data: stages } = await supabase

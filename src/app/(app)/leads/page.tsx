@@ -14,6 +14,7 @@ import { ghlConfigFromEnv } from "@/lib/server/leads";
 import { SettersPanel } from "./setters-panel";
 import { LeadRowControls } from "./lead-row-controls";
 import type { Lead, Setter } from "@/lib/types";
+import { allRows } from "@/lib/server/paged";
 
 export const metadata = { title: "Leads · AI Receptionist Ops" };
 
@@ -46,17 +47,20 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
   else if (setterFilter !== "all") q = q.eq("setter_id", setterFilter);
   if (term) q = q.or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
 
-  const [{ data }, { data: setterRows }, { data: settings }, { data: openRows }] = await Promise.all([
+  const [{ data }, { data: setterRows }, { data: settings }, openRows] = await Promise.all([
     q,
     supabase.from("setters").select("*").order("name"),
     supabase.from("lead_settings").select("live_from").eq("id", 1).maybeSingle(),
-    supabase
-      .from("leads")
-      .select("setter_id, status")
-      .eq("historical", false)
-      .in("status", [...OPEN_STATUSES])
-      .in("service", sideServices ?? ["ai", "va", "premium", "unknown"])
-      .limit(5000),
+    allRows((a, b) =>
+      supabase
+        .from("leads")
+        .select("setter_id, status")
+        .eq("historical", false)
+        .in("status", [...OPEN_STATUSES])
+        .in("service", sideServices ?? ["ai", "va", "premium", "unknown"])
+        .order("id")
+        .range(a, b),
+    ),
   ]);
 
   const leads = (data as Lead[]) ?? [];

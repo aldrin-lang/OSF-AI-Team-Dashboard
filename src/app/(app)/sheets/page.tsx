@@ -10,6 +10,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { SHEET_TEMPLATES, VISIBILITY_LABEL, type Sheet, type SheetVisibility } from "@/lib/sheets";
 import { relativeTime } from "@/lib/utils";
 import { createSheet } from "./actions";
+import { allRows } from "@/lib/server/paged";
 
 export const metadata = { title: "Sheets · OSF AI Team Dashboard" };
 
@@ -38,9 +39,9 @@ export default async function SheetsPage(props: PageProps<"/sheets">) {
   ]);
   const sheets = (data as Sheet[]) ?? [];
   const ids = sheets.map((s) => s.id);
-  const { data: rowStats } = ids.length
-    ? await supabase.from("sheet_rows").select("sheet_id, updated_at").in("sheet_id", ids).order("updated_at", { ascending: false }).limit(5000)
-    : { data: [] as { sheet_id: string; updated_at: string }[] };
+  const rowStats = ids.length
+    ? await allRows((a, b) => supabase.from("sheet_rows").select("sheet_id, updated_at").in("sheet_id", ids).order("updated_at", { ascending: false }).order("id").range(a, b))
+    : [];
   const stats = new Map<string, { rows: number; last: string }>();
   for (const r of rowStats ?? []) {
     const s = stats.get(r.sheet_id);

@@ -1,5 +1,6 @@
 import "server-only";
 import { getAdminSupabase } from "@/lib/supabase/server";
+import { allRows, countOf } from "@/lib/server/paged";
 import { aiConfigured, aiErrorMessage, aiText } from "@/lib/server/ai";
 import { emailShell, sendEmail } from "@/lib/server/email";
 import { areaUserIds } from "@/lib/server/notify";
@@ -44,6 +45,9 @@ export async function computeDailyMetrics(date: string): Promise<DailyMetrics> {
   const db = getAdminSupabase();
   const { start, end } = dublinDayBounds(date);
 
+  // Lists are read in full (paged past the API's 1,000-row cap); totals are
+  // database counts. Any failed query fails the report instead of showing 0.
+  const C = { count: "exact" as const, head: true };
   const [
     leadsToday,
     openLeads,
@@ -67,30 +71,30 @@ export async function computeDailyMetrics(date: string): Promise<DailyMetrics> {
     remSent,
     remWaiting,
   ] = await Promise.all([
-    db.from("leads").select("service, source, setter_id").eq("historical", false).gte("received_at", start).lt("received_at", end),
-    db.from("leads").select("status, setter_id").eq("historical", false).in("status", [...OPEN_STATUSES]).limit(10000),
-    db.from("lead_events").select("kind, summary").gte("created_at", start).lt("created_at", end),
-    db.from("setters").select("id, name"),
-    db.from("clients").select("status, created_at"),
-    db.from("activity_log").select("id").eq("verb", "stage_changed").gte("created_at", start).lt("created_at", end),
-    db.from("concerns").select("id").gte("created_at", start).lt("created_at", end),
-    db.from("concerns").select("id").gte("resolved_at", start).lt("resolved_at", end),
-    db.from("concerns").select("severity").neq("status", "resolved"),
-    db.from("tasks").select("id").eq("status", "done").gte("updated_at", start).lt("updated_at", end),
-    db.from("tasks").select("id").eq("status", "open").lt("due_date", date),
-    db.from("candidates").select("full_name, ai_recommended_role, ai_score").gte("created_at", start).lt("created_at", end),
-    db.from("candidates").select("id").eq("status", "shortlisted"),
-    db.from("checkins").select("id").gte("sent_at", start).lt("sent_at", end),
-    db.from("checkins").select("id").not("reply", "is", null).gte("updated_at", start).lt("updated_at", end),
-    db.from("checkins").select("id").eq("mood", "at_risk").eq("status", "replied"),
-    db.from("checkins").select("id").eq("status", "due"),
-    db.from("invoices").select("amount, currency, due_on").eq("status", "open"),
-    db.from("invoices").select("id").eq("status", "paid").eq("paid_on", date),
-    db.from("payment_reminders").select("id").gte("sent_at", start).lt("sent_at", end),
-    db.from("payment_reminders").select("id").eq("status", "draft"),
+    allRows((a, b) => db.from("leads").select("service, source, setter_id").eq("historical", false).gte("received_at", start).lt("received_at", end).order("id").range(a, b)),
+    allRows((a, b) => db.from("leads").select("status, setter_id").eq("historical", false).in("status", [...OPEN_STATUSES]).order("id").range(a, b)),
+    allRows((a, b) => db.from("lead_events").select("kind, summary").gte("created_at", start).lt("created_at", end).order("id").range(a, b)),
+    allRows((a, b) => db.from("setters").select("id, name").order("id").range(a, b)),
+    allRows((a, b) => db.from("clients").select("status, created_at").order("id").range(a, b)),
+    countOf(db.from("activity_log").select("id", C).eq("verb", "stage_changed").gte("created_at", start).lt("created_at", end)),
+    countOf(db.from("concerns").select("id", C).gte("created_at", start).lt("created_at", end)),
+    countOf(db.from("concerns").select("id", C).gte("resolved_at", start).lt("resolved_at", end)),
+    allRows((a, b) => db.from("concerns").select("severity").neq("status", "resolved").order("id").range(a, b)),
+    countOf(db.from("tasks").select("id", C).eq("status", "done").gte("updated_at", start).lt("updated_at", end)),
+    countOf(db.from("tasks").select("id", C).eq("status", "open").lt("due_date", date)),
+    allRows((a, b) => db.from("candidates").select("full_name, ai_recommended_role, ai_score").gte("created_at", start).lt("created_at", end).order("id").range(a, b)),
+    countOf(db.from("candidates").select("id", C).eq("status", "shortlisted")),
+    countOf(db.from("checkins").select("id", C).gte("sent_at", start).lt("sent_at", end)),
+    countOf(db.from("checkins").select("id", C).not("reply", "is", null).gte("updated_at", start).lt("updated_at", end)),
+    countOf(db.from("checkins").select("id", C).eq("mood", "at_risk").eq("status", "replied")),
+    countOf(db.from("checkins").select("id", C).eq("status", "due")),
+    allRows((a, b) => db.from("invoices").select("amount, currency, due_on").eq("status", "open").order("id").range(a, b)),
+    countOf(db.from("invoices").select("id", C).eq("status", "paid").eq("paid_on", date)),
+    countOf(db.from("payment_reminders").select("id", C).gte("sent_at", start).lt("sent_at", end)),
+    countOf(db.from("payment_reminders").select("id", C).eq("status", "draft")),
   ]);
 
-  const setterName = new Map((setters.data ?? []).map((s) => [s.id as string, s.name as string]));
+  const setterName = new Map(setters.map((s) => [s.id as string, s.name as string]));
   const m: DailyMetrics = {
     date,
     leads: {
@@ -98,56 +102,56 @@ export async function computeDailyMetrics(date: string): Promise<DailyMetrics> {
       by_service: {},
       by_source: {},
       by_setter: {},
-      open_total: openLeads.data?.length ?? 0,
-      open_untouched: (openLeads.data ?? []).filter((l) => l.status === "new").length,
-      open_unassigned: (openLeads.data ?? []).filter((l) => !l.setter_id).length,
-      status_changes: (leadEvents.data ?? []).filter((e) => e.kind === "status").length,
-      won: (leadEvents.data ?? []).filter((e) => e.kind === "converted" || /→ Won$/.test(String(e.summary))).length,
+      open_total: openLeads.length,
+      open_untouched: openLeads.filter((l) => l.status === "new").length,
+      open_unassigned: openLeads.filter((l) => !l.setter_id).length,
+      status_changes: leadEvents.filter((e) => e.kind === "status").length,
+      won: leadEvents.filter((e) => e.kind === "converted" || /→ Won$/.test(String(e.summary))).length,
     },
     clients: {
-      new: (clientsAll.data ?? []).filter((c) => c.created_at >= start && c.created_at < end).length,
-      live: (clientsAll.data ?? []).filter((c) => c.status === "live").length,
-      onboarding: (clientsAll.data ?? []).filter((c) => c.status === "active").length,
-      stage_moves: stageMoves.data?.length ?? 0,
+      new: clientsAll.filter((c) => c.created_at >= start && c.created_at < end).length,
+      live: clientsAll.filter((c) => c.status === "live").length,
+      onboarding: clientsAll.filter((c) => c.status === "active").length,
+      stage_moves: stageMoves,
     },
     concerns: {
-      opened: concernsOpened.data?.length ?? 0,
-      resolved: concernsResolved.data?.length ?? 0,
-      open_total: concernsOpen.data?.length ?? 0,
-      urgent_open: (concernsOpen.data ?? []).filter((c) => c.severity === "urgent" || c.severity === "high").length,
+      opened: concernsOpened,
+      resolved: concernsResolved,
+      open_total: concernsOpen.length,
+      urgent_open: concernsOpen.filter((c) => c.severity === "urgent" || c.severity === "high").length,
     },
-    tasks: { completed: tasksDone.data?.length ?? 0, overdue: tasksOverdue.data?.length ?? 0 },
+    tasks: { completed: tasksDone, overdue: tasksOverdue },
     candidates: {
-      received: candsToday.data?.length ?? 0,
-      shortlisted_total: candsShort.data?.length ?? 0,
-      top: (candsToday.data ?? [])
+      received: candsToday.length,
+      shortlisted_total: candsShort,
+      top: candsToday
         .map((c) => ({ name: c.full_name as string, role: c.ai_recommended_role as string | null, score: c.ai_score as number | null }))
         .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
         .slice(0, 3),
     },
     checkins: {
-      sent: ckSent.data?.length ?? 0,
-      replies: ckReplies.data?.length ?? 0,
-      at_risk_open: ckRisk.data?.length ?? 0,
-      waiting_to_send: ckDue.data?.length ?? 0,
+      sent: ckSent,
+      replies: ckReplies,
+      at_risk_open: ckRisk,
+      waiting_to_send: ckDue,
     },
     payments: {
       outstanding: {},
       overdue_count: 0,
       overdue: {},
-      paid_today: invPaid.data?.length ?? 0,
-      reminders_sent: remSent.data?.length ?? 0,
-      reminders_waiting: remWaiting.data?.length ?? 0,
+      paid_today: invPaid,
+      reminders_sent: remSent,
+      reminders_waiting: remWaiting,
     },
   };
 
-  for (const l of leadsToday.data ?? []) {
+  for (const l of leadsToday) {
     m.leads.received += 1;
     bump(m.leads.by_service, l.service as string);
     bump(m.leads.by_source, l.source as string);
     bump(m.leads.by_setter, l.setter_id ? setterName.get(l.setter_id as string) : "Unassigned");
   }
-  for (const i of invOpen.data ?? []) {
+  for (const i of invOpen) {
     const amt = Number(i.amount) || 0;
     bump(m.payments.outstanding, i.currency as string, amt);
     if ((i.due_on as string) < date) {
@@ -195,7 +199,12 @@ export async function runDailyReport(
   opts: { email: boolean },
 ): Promise<{ ok: boolean; emailed: number; error?: string }> {
   const db = getAdminSupabase();
-  const metrics = await computeDailyMetrics(date);
+  let metrics: DailyMetrics;
+  try {
+    metrics = await computeDailyMetrics(date);
+  } catch (e) {
+    return { ok: false, emailed: 0, error: `couldn't read the numbers (${e instanceof Error ? e.message : String(e)})` };
+  }
   const facts = factsText(metrics);
 
   let summary = facts;

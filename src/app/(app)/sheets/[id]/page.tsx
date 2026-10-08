@@ -12,6 +12,7 @@ import { relativeTime } from "@/lib/utils";
 import { SheetGrid } from "./grid";
 import { ShareChoice } from "./share-choice";
 import { deleteSheet, duplicateSheet, renameSheet, setSheetArchived, shareSheet } from "../actions";
+import { allRows } from "@/lib/server/paged";
 
 const VIS_ICON: Record<SheetVisibility, typeof Lock> = { private: Lock, everyone: Globe2, departments: Users2, people: UserRound };
 
@@ -30,10 +31,10 @@ export default async function SheetPage(props: PageProps<"/sheets/[id]">) {
   const msg = flashFrom(sp);
   const supabase = await getServerSupabase();
 
-  const [{ data: sheet }, { data: cols }, { data: rows }, profiles, { data: depts }] = await Promise.all([
+  const [{ data: sheet }, { data: cols }, rows, profiles, { data: depts }] = await Promise.all([
     supabase.from("sheets").select("*").eq("id", id).maybeSingle(),
     supabase.from("sheet_columns").select("*").eq("sheet_id", id).order("position"),
-    supabase.from("sheet_rows").select("*").eq("sheet_id", id).order("position").limit(5000),
+    allRows((a, b) => supabase.from("sheet_rows").select("*").eq("sheet_id", id).order("position").order("id").range(a, b)),
     getProfiles(),
     supabase.from("departments").select("key, name").order("position"),
   ]);

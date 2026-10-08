@@ -2,12 +2,14 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { checkLeadFeed } from "@/lib/server/lead-heartbeat";
 import { getAdminSupabase } from "@/lib/supabase/server";
+import { allRows } from "@/lib/server/paged";
 import { notifyUsers } from "@/lib/server/notify";
 import { sendEmail, emailShell } from "@/lib/server/email";
 import { daysSince } from "@/lib/utils";
 import { dublinDate, addDays } from "@/lib/ops-core";
 import { generateDueCheckins } from "@/lib/server/checkins";
 import { generateReminderDrafts } from "@/lib/server/payments";
+import { resumeUnfinishedCandidates } from "@/lib/server/candidates";
 import { runDailyReport } from "@/lib/server/daily-report";
 import type { Client, NotificationPreferences, PipelineStage, Profile } from "@/lib/types";
 
@@ -35,9 +37,9 @@ export async function GET(request: Request) {
   }
 
   const admin = getAdminSupabase();
-  const [{ data: clients }, { data: stages }, { data: profiles }, { data: prefs }] =
+  const [clients, { data: stages }, { data: profiles }, { data: prefs }] =
     await Promise.all([
-      admin.from("clients").select("*").not("status", "in", "(withdrawn,rejected,churned)"),
+      allRows((a, b) => admin.from("clients").select("*").not("status", "in", "(withdrawn,rejected,churned)").order("id").range(a, b)),
       admin.from("pipeline_stages").select("*"),
       admin.from("profiles").select("*").eq("active", true),
       admin.from("notification_preferences").select("*"),
@@ -128,6 +130,12 @@ export async function GET(request: Request) {
   } catch (e) {
     console.error("[cron] check-ins failed", e);
     ops.checkins = { error: String(e) };
+  }
+  try {
+    ops.candidates = await resumeUnfinishedCandidates();
+  } catch (e) {
+    console.error("[cron] candidate retries failed", e);
+    ops.candidates = { error: String(e) };
   }
   try {
     const r = await generateReminderDrafts(today);

@@ -14,6 +14,7 @@ import { relativeTime } from "@/lib/utils";
 import { aiConfigured } from "@/lib/server/ai";
 import { addCandidate } from "./actions";
 import type { Candidate } from "@/lib/types";
+import { allRows } from "@/lib/server/paged";
 
 export const metadata = { title: "Candidates · OSF AI Team Dashboard" };
 
@@ -39,9 +40,9 @@ export default async function CandidatesPage(props: PageProps<"/candidates">) {
   if (statuses) q = q.in("status", [...statuses]);
   if (role) q = q.eq("ai_recommended_role", role);
   if (term) q = q.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,applied_role.ilike.%${term}%`);
-  const [{ data }, { data: counts }] = await Promise.all([
+  const [{ data }, counts] = await Promise.all([
     q,
-    supabase.from("candidates").select("status, created_at").limit(5000),
+    allRows((a, b) => supabase.from("candidates").select("status, created_at").order("id").range(a, b)),
   ]);
   const rows = (data as Candidate[]) ?? [];
   const all = counts ?? [];

@@ -16,6 +16,7 @@ import { VA_ROLES, dublinDate } from "@/lib/ops-core";
 import { cn, formatDate, relativeTime } from "@/lib/utils";
 import type { RoleCandidateStage, VaRole } from "@/lib/types";
 import { createRole } from "./actions";
+import { allRows } from "@/lib/server/paged";
 
 export const metadata = { title: "Open roles · OSF AI Team Dashboard" };
 
@@ -42,9 +43,9 @@ export default async function RolesPage(props: PageProps<"/roles">) {
   let q = supabase.from("va_roles").select("*").order("created_at", { ascending: false }).limit(500);
   const st = VIEWS[view].statuses;
   if (st) q = q.in("status", [...st]);
-  const [{ data }, { data: allRoles }, profiles] = await Promise.all([
+  const [{ data }, allRoles, profiles] = await Promise.all([
     q,
-    supabase.from("va_roles").select("status, headcount, updated_at").limit(2000),
+    allRows((a, b) => supabase.from("va_roles").select("status, headcount, updated_at").order("id").range(a, b)),
     getProfiles(),
   ]);
   const roles = ((data as VaRole[]) ?? []).sort(

@@ -1,5 +1,6 @@
 import "server-only";
 import { getAdminSupabase } from "@/lib/supabase/server";
+import { allRows } from "@/lib/server/paged";
 import { clientEmailShell, sendEmail } from "@/lib/server/email";
 import { claimSend, releaseSend } from "@/lib/server/send-claim";
 import { areaUserIds, notifyUsers } from "@/lib/server/notify";
@@ -35,20 +36,24 @@ export function draftFor(inv: InvoiceWithClient, stage: ReminderStage | "manual"
  */
 export async function generateReminderDrafts(today: string): Promise<{ created: number; titles: string[] }> {
   const db = getAdminSupabase();
-  const { data: invRows } = await db
-    .from("invoices")
-    .select("*, clients(name, contact_email)")
-    .eq("status", "open")
-    .lte("due_on", addDays(today, 3)) // nothing further out needs a reminder yet
-    .limit(2000);
-  const invoices = ((invRows as InvoiceWithClient[]) ?? []).filter((i) => reminderStage(i.due_on, today));
+  const invRows = await allRows((a, b) =>
+    db
+      .from("invoices")
+      .select("*, clients(name, contact_email)")
+      .eq("status", "open")
+      .lte("due_on", addDays(today, 3)) // nothing further out needs a reminder yet
+      .order("id")
+      .range(a, b),
+  );
+  const invoices = (invRows as InvoiceWithClient[]).filter((i) => reminderStage(i.due_on, today));
   if (!invoices.length) return { created: 0, titles: [] };
 
-  const { data: existing } = await db
-    .from("payment_reminders")
-    .select("invoice_id, stage")
-    .in("invoice_id", invoices.map((i) => i.id));
-  const have = new Set((existing ?? []).map((r) => `${r.invoice_id}:${r.stage}`));
+  const have = new Set<string>();
+  for (let i = 0; i < invoices.length; i += 150) {
+    const ids = invoices.slice(i, i + 150).map((x) => x.id);
+    const existing = await allRows((a, b) => db.from("payment_reminders").select("invoice_id, stage").in("invoice_id", ids).order("id").range(a, b));
+    for (const r of existing) have.add(`${r.invoice_id}:${r.stage}`);
+  }
   const names = await contactNames([...new Set(invoices.map((i) => i.client_id))]);
 
   const titles: string[] = [];

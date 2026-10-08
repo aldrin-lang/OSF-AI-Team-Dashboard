@@ -15,6 +15,7 @@ import { aiConfigured } from "@/lib/server/ai";
 import { CheckinComposer } from "./composer";
 import { checkInNow, closeCheckin, runDueNow, saveReply, updateCadence } from "./actions";
 import type { Checkin, Client, VaPlacement } from "@/lib/types";
+import { allRows } from "@/lib/server/paged";
 
 export const metadata = { title: "Check-ins · OSF AI Team Dashboard" };
 
@@ -283,10 +284,10 @@ async function Schedule() {
   const supabase = await getServerSupabase();
   const pipes = pipelinesFor(await getService());
   const today = dublinDate();
-  const [{ data: clientRows }, { data: placementRows }, { data: last }] = await Promise.all([
+  const [{ data: clientRows }, { data: placementRows }, last] = await Promise.all([
     supabase.from("clients").select("*").in("status", ["active", "live"]).in("pipeline", pipes).order("name"),
     supabase.from("va_placements").select("*, clients!inner(pipeline)").eq("placement_status", "active").in("clients.pipeline", pipes),
-    supabase.from("checkins").select("kind, client_id, placement_id, due_on").order("due_on", { ascending: false }).limit(5000),
+    allRows((a, b) => supabase.from("checkins").select("kind, client_id, placement_id, due_on").order("due_on", { ascending: false }).order("id").range(a, b)),
   ]);
   const clients = (clientRows as Client[]) ?? [];
   const placements = (placementRows as VaPlacement[]) ?? [];

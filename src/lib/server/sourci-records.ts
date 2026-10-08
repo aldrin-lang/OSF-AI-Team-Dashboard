@@ -3,6 +3,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { CANDIDATE_STATUS, CHECKIN_MOOD, CHECKIN_STATUS, CLIENT_STATUS, HIRING_FEE_STATUS, LEAD_STATUS, PLACEMENT_STATUS, ROLE_PRIORITY, ROLE_STAGE, ROLE_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney, isIsoDate } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
+import { leadServicesFor, pipelinesFor, type Service } from "@/lib/service";
 
 /**
  * Donna's general record engine: one search and one bulk change for every
@@ -253,7 +254,7 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     table: "tasks",
     area: null,
     label: "tasks",
-    select: "id, title, status, due_date, assignee_id, client_id, clients(name)",
+    select: "id, title, status, due_date, assignee_id, client_id, clients(name, pipeline)",
     dateCol: "due_date",
     order: { col: "due_date", asc: true },
     name: (r) => (r.title as string) || "Task",
@@ -543,23 +544,53 @@ export interface SearchResult {
   periodLabel: string;
 }
 
+/** VA-only record types: they don't exist on the AI receptionist side. */
+const VA_ONLY: EntityKey[] = ["candidates", "roles", "role_candidates", "vas"];
+/** Record types tied to a client, scoped by that client's pipeline. */
+const BY_CLIENT: EntityKey[] = ["invoices", "checkins", "concerns"];
+
 export async function searchRecords(
   entity: EntityKey,
   filters: Filter[],
   period: string,
   meId: string,
-  opts: { limit?: number; sort?: string; sortDir?: "asc" | "desc"; bulk?: boolean } = {},
+  opts: { limit?: number; sort?: string; sortDir?: "asc" | "desc"; bulk?: boolean; service?: Service } = {},
 ): Promise<SearchResult> {
   const db = await getServerSupabase();
   const ent = ENTITIES[entity];
+  const svc = opts.service ?? "all";
+  const periodLabel = periodRange(period).label;
+  // The VA / AI switch is enforced here, not left to the model.
+  if (svc === "ai" && VA_ONLY.includes(entity)) {
+    return { rows: [], count: 0, problems: [`${ent.label} are on the VA side. Switch Donna to VA or All to work with them.`], periodLabel };
+  }
+  const pipes = pipelinesFor(svc);
+  const scopeByClient = svc !== "all" && BY_CLIENT.includes(entity);
+  const select = scopeByClient ? ent.select.replace(/\bclients\(/, "clients!inner(pipeline, ") : ent.select;
   const sortCol = opts.sort && (ent.filters[opts.sort]?.col ?? null) ? ent.filters[opts.sort].col : ent.order.col;
   const asc = opts.sortDir ? opts.sortDir === "asc" : ent.order.asc;
-  let q: Q = db.from(ent.table).select(ent.select, { count: "exact" }).order(sortCol, { ascending: asc, nullsFirst: false });
+  let q: Q = db.from(ent.table).select(select, { count: "exact" }).order(sortCol, { ascending: asc, nullsFirst: false });
+  if (svc !== "all") {
+    if (entity === "leads") q = q.in("service", leadServicesFor(svc) ?? []);
+    else if (entity === "clients") q = q.in("pipeline", pipes);
+    else if (scopeByClient) q = q.in("clients.pipeline", pipes);
+  }
   const applied = await applyFilters(db, ent, q, filters, period, meId);
   q = applied.q.limit(Math.min(Math.max(opts.limit ?? 50, 1), opts.bulk ? BULK_MAX : 200));
   const { data, count, error } = await q;
   if (error) applied.problems.push(error.message);
-  return { rows: (data ?? []) as Row[], count: count ?? (data ?? []).length, problems: applied.problems, periodLabel: periodRange(period).label };
+  let rows = (data ?? []) as Row[];
+  let total = count ?? rows.length;
+  // Tasks may have no client (personal to-dos): keep those, drop the other side's.
+  if (svc !== "all" && entity === "tasks") {
+    const keep = rows.filter((r) => {
+      const p = (r.clients as { pipeline?: string } | null)?.pipeline;
+      return !r.client_id || !p || (pipes as string[]).includes(p);
+    });
+    total -= rows.length - keep.length;
+    rows = keep;
+  }
+  return { rows, count: total, problems: applied.problems, periodLabel };
 }
 
 export interface ResolvedChange {

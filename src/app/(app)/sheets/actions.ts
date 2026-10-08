@@ -6,6 +6,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { requireActor } from "@/lib/server/rbac";
 import { createSheetFrom } from "@/lib/server/sheets";
 import { SHEET_VISIBILITY, type CellValue, type SheetVisibility } from "@/lib/sheets";
+import { allRows } from "@/lib/server/paged";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -81,10 +82,10 @@ export async function duplicateSheet(formData: FormData) {
   const id = str(formData, "id", 40);
   if (!UUID.test(id)) return;
   const supabase = await getServerSupabase();
-  const [{ data: src }, { data: cols }, { data: rows }] = await Promise.all([
+  const [{ data: src }, { data: cols }, rows] = await Promise.all([
     supabase.from("sheets").select("*").eq("id", id).single(),
     supabase.from("sheet_columns").select("*").eq("sheet_id", id).order("position"),
-    supabase.from("sheet_rows").select("*").eq("sheet_id", id).order("position").limit(5000),
+    allRows((a, b) => supabase.from("sheet_rows").select("*").eq("sheet_id", id).order("position").order("id").range(a, b)),
   ]);
   if (!src) return;
   const { data: copy } = await supabase

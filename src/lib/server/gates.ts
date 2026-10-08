@@ -5,6 +5,7 @@ import type { ChecklistItem, PipelineStage, StageGate } from "@/lib/types";
 export interface GateCheck {
   allowed: boolean;
   blockedBy: string[]; // human-readable labels of unmet gates
+  error?: string; // set when the rules couldn't be checked (the move is blocked)
 }
 
 function evaluate(
@@ -14,7 +15,8 @@ function evaluate(
   checklist: ChecklistItem[],
 ): GateCheck {
   const target = stages.find((s) => s.id === targetStageId);
-  if (!target) return { allowed: true, blockedBy: [] };
+  // Unknown stage = can't prove the move is allowed, so it isn't.
+  if (!target) return { allowed: false, blockedBy: [], error: "That stage doesn't exist." };
   // only gates from the target's own pipeline (VA rules never block AI clients and vice versa)
   const stagePos = new Map(stages.filter((s) => s.pipeline === target.pipeline).map((s) => [s.id, s.position]));
   const itemsByKey = new Map(checklist.map((c) => [c.key, c]));
@@ -37,16 +39,21 @@ export async function checkStageGate(
   targetStageId: string,
 ): Promise<GateCheck> {
   const supabase = await getServerSupabase();
-  const [{ data: stages }, { data: gates }, { data: checklist }] = await Promise.all([
+  const [st, gt, ck] = await Promise.all([
     supabase.from("pipeline_stages").select("*"),
     supabase.from("stage_gates").select("*"),
     supabase.from("checklist_items").select("*").eq("client_id", clientId),
   ]);
+  // A failed lookup must block the move, never wave it through.
+  if (st.error || gt.error || ck.error || !st.data || !gt.data || !ck.data) {
+    return { allowed: false, blockedBy: [], error: "Couldn't check the stage rules. Try again." };
+  }
+  const [stages, gates, checklist] = [st.data, gt.data, ck.data];
   return evaluate(
     targetStageId,
-    (stages as PipelineStage[]) ?? [],
-    (gates as StageGate[]) ?? [],
-    (checklist as ChecklistItem[]) ?? [],
+    stages as PipelineStage[],
+    gates as StageGate[],
+    checklist as ChecklistItem[],
   );
 }
 

@@ -47,7 +47,10 @@ function restorableCols(entity: EntityKey): Set<string> {
  * screens do (side effects, notes appended, timeline logging, notifications).
  * Returns what changed plus a snapshot of the old values so it can be undone.
  */
-async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[], changes: Change[]): Promise<{ changed: string[]; said: string[]; before: { id: string; values: Record<string, Val> }[] }> {
+type Snap = { id: string; values: Record<string, Val>; expect?: Record<string, Val> };
+type BulkResult = { changed: string[]; said: string[]; before: Snap[]; reminders: string[]; failed?: string };
+
+async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[], changes: Change[]): Promise<BulkResult> {
   const ent = ENTITIES[entity];
   const ids = idsIn.filter((x) => UUID.test(x)).slice(0, BULK_MAX);
   if (!ids.length) throw new Error("Nothing to change");
@@ -88,23 +91,43 @@ async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[]
     }
   }
 
+  // Chunks are separate requests: if one fails, stop and report exactly what
+  // did change (with its undo) instead of throwing the earlier chunks away.
+  let failed: string | undefined;
+  const expect = new Map<string, Record<string, Val>>();
   let changed: string[] = before.map((b) => b.id);
   if (Object.keys(patch).length) {
     changed = [];
     for (const part of chunks(ids, 150)) {
       const { data, error } = await db.from(ent.table).update(patch).in("id", part).select("id");
-      if (error) throw new Error(error.message);
+      if (error) {
+        failed = error.message;
+        break;
+      }
       changed.push(...(data ?? []).map((r) => r.id as string));
     }
+    for (const id of changed) expect.set(id, { ...(patch as Record<string, Val>) });
   }
   for (const a of appends) {
+    if (failed) break;
     for (const b of before.filter((x) => changed.includes(x.id))) {
       const prev = (b.values[a.col] as string | null) ?? "";
-      await db.from(ent.table).update({ [a.col]: [prev, `${dublinDate()}: ${a.text}`].filter(Boolean).join("\n") }).eq("id", b.id);
+      const next = [prev, `${dublinDate()}: ${a.text}`].filter(Boolean).join("\n");
+      const { error } = await db.from(ent.table).update({ [a.col]: next }).eq("id", b.id);
+      if (error) {
+        failed = error.message;
+        break;
+      }
+      expect.set(b.id, { ...(expect.get(b.id) ?? {}), [a.col]: next });
     }
   }
+  if (!Object.keys(patch).length) changed = changed.filter((id) => expect.has(id));
+  const reminders: string[] = [];
   if (entity === "invoices" && patch.status && patch.status !== "open") {
-    for (const part of chunks(changed, 150)) await db.from("payment_reminders").update({ status: "skipped" }).in("invoice_id", part).eq("status", "draft");
+    for (const part of chunks(changed, 150)) {
+      const { data } = await db.from("payment_reminders").update({ status: "skipped" }).in("invoice_id", part).eq("status", "draft").select("id");
+      reminders.push(...(data ?? []).map((r) => r.id as string));
+    }
   }
 
   // timeline / notifications
@@ -133,11 +156,17 @@ async function applyBulk(db: Db, me: Profile, entity: EntityKey, idsIn: string[]
     const a = changes.find((c) => c.field === personField && c.value && c.value !== me.id);
     if (a) await notifyUsers({ userIds: [a.value as string], event: "assigned_to_me", title: `${changed.length} ${changed.length === 1 ? ent.label.replace(/s$/, "") : ent.label} now yours`, body: `By ${me.full_name || me.email} via Donna`, link: entity === "tasks" ? "/my-desk" : entity === "roles" ? "/roles" : "/" });
   }
-  return { changed, said, before: before.filter((b) => changed.includes(b.id)) };
+  return {
+    changed,
+    said,
+    before: before.filter((b) => changed.includes(b.id)).map((b) => ({ ...b, expect: expect.get(b.id) })),
+    reminders,
+    failed,
+  };
 }
 
-const undoFor = (entity: EntityKey, label: string, before: { id: string; values: Record<string, Val> }[]): SourciProposal | undefined =>
-  before.length ? { kind: "restore", entity, label, rows: before } : undefined;
+const undoFor = (entity: EntityKey, label: string, before: Snap[], reminders: string[] = []): SourciProposal | undefined =>
+  before.length ? { kind: "restore", entity, label, rows: before, ...(reminders.length ? { reminders } : {}) } : undefined;
 
 /** Personalise a bulk email: {first_name}, {name}. */
 function fill(t: string, name: string): string {
@@ -363,7 +392,12 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       const r = await applyBulk(db, me, p.entity as EntityKey, p.ids ?? [], p.changes ?? []);
       const n = r.changed.length;
       const label = `${n} ${n === 1 ? ent.label.replace(/s$/, "") : ent.label}`;
-      return { ok: true, message: `Done. ${label} updated. Say "undo" if that wasn't right.`, stamp: "UPDATED", title: label, href: p.entity === "leads" ? "/leads" : undefined, undo: undoFor(p.entity as EntityKey, label, r.before) };
+      const undo = undoFor(p.entity as EntityKey, label, r.before, r.reminders);
+      if (r.failed) {
+        if (!n) throw new Error(r.failed);
+        return { ok: true, message: `Only partly done: ${label} updated, then it failed (${r.failed}). The rest weren't changed. Say "undo" to put those ${n} back.`, stamp: "PARTLY DONE", title: label, href: p.entity === "leads" ? "/leads" : undefined, undo };
+      }
+      return { ok: true, message: `Done. ${label} updated. Say "undo" if that wasn't right.`, stamp: "UPDATED", title: label, href: p.entity === "leads" ? "/leads" : undefined, undo };
     }
 
     case "distribute": {
@@ -373,16 +407,32 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (ent.area) need(ent.area);
       const def = ent.editable[p.field];
       if (!def || (def.kind !== "person" && def.kind !== "setter")) throw new Error("Can only share out people fields");
-      const before: { id: string; values: Record<string, Val> }[] = [];
+      const before: Snap[] = [];
       const parts: string[] = [];
+      let failed: string | undefined;
       for (const g of (p.groups ?? []).slice(0, 20)) {
         if (!UUID.test(g.value)) throw new Error("Bad person");
-        const r = await applyBulk(db, me, entity, g.ids ?? [], [{ field: p.field, value: g.value, display: g.display }]);
+        let r: BulkResult;
+        try {
+          r = await applyBulk(db, me, entity, g.ids ?? [], [{ field: p.field, value: g.value, display: g.display }]);
+        } catch (e) {
+          failed = e instanceof Error ? e.message : "error";
+          break;
+        }
         before.push(...r.before);
         parts.push(`${r.changed.length} to ${clip(g.display, 60)}`);
+        if (r.failed) {
+          failed = r.failed;
+          break;
+        }
       }
       const label = `${before.length} ${ent.label}`;
-      return { ok: true, message: `Shared out: ${parts.join(", ")}.`, stamp: "ASSIGNED", title: label, href: entity === "leads" ? "/leads" : undefined, undo: undoFor(entity, label, before) };
+      const undo = undoFor(entity, label, before);
+      if (failed) {
+        if (!before.length) throw new Error(failed);
+        return { ok: true, message: `Only partly shared out (${parts.join(", ")}), then it failed (${failed}). Say "undo" to put those back.`, stamp: "PARTLY DONE", title: label, href: entity === "leads" ? "/leads" : undefined, undo };
+      }
+      return { ok: true, message: `Shared out: ${parts.join(", ")}.`, stamp: "ASSIGNED", title: label, href: entity === "leads" ? "/leads" : undefined, undo };
     }
 
     case "restore": {
@@ -392,26 +442,47 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
       if (ent.area) need(ent.area);
       const allowed = restorableCols(entity);
       const managerCols = new Set(Object.values(ent.editable).filter((d) => d.managerOnly).map((d) => d.col));
-      // group identical old values so it's a few updates, not one per row
+      // Group rows with the same old + expected values so it's a few updates,
+      // not one per row. Each update only matches rows that still hold exactly
+      // what Donna wrote: anything a teammate edited since is left alone.
       const groups = new Map<string, string[]>();
       for (const row of (p.rows ?? []).slice(0, BULK_MAX)) {
         if (!UUID.test(row.id)) continue;
         const vals = Object.fromEntries(Object.entries(row.values ?? {}).filter(([k]) => allowed.has(k)));
+        // (very long notes aren't compared: they'd make the request URL too long)
+        const exp = Object.fromEntries(Object.entries(row.expect ?? {}).filter(([k, v]) => allowed.has(k) && !(typeof v === "string" && v.length > 1000)));
         if (me.role === "member" && Object.keys(vals).some((k) => managerCols.has(k))) throw new Error("Only managers can undo that.");
-        const key = JSON.stringify(vals);
+        const key = JSON.stringify([vals, exp]);
         groups.set(key, [...(groups.get(key) ?? []), row.id]);
       }
       let n = 0;
+      let asked = 0;
+      const restored: string[] = [];
       for (const [key, ids] of groups) {
-        const vals = JSON.parse(key) as Record<string, Val>;
+        const [vals, exp] = JSON.parse(key) as [Record<string, Val>, Record<string, Val>];
         if (!Object.keys(vals).length) continue;
+        asked += ids.length;
         for (const part of chunks(ids, 150)) {
-          const { data, error } = await db.from(ent.table).update(vals).in("id", part).select("id");
+          let q = db.from(ent.table).update(vals).in("id", part);
+          for (const [col, v] of Object.entries(exp)) q = v === null ? q.is(col, null) : q.eq(col, v);
+          const { data, error } = await q.select("id");
           if (error) throw new Error(error.message);
           n += data?.length ?? 0;
+          restored.push(...(data ?? []).map((r) => r.id as string));
         }
       }
-      return { ok: n > 0, message: n ? `Undone. ${clip(p.label, 80)} put back how they were.` : "Nothing to undo.", stamp: "UNDONE", title: clip(p.label, 80) };
+      // Closing invoices skipped their reminder drafts: reopening brings them back.
+      const rem = (p.reminders ?? []).filter((x) => UUID.test(x)).slice(0, 2000);
+      if (entity === "invoices" && rem.length && restored.length) {
+        const { data: open } = await db.from("invoices").select("id").in("id", restored).eq("status", "open");
+        const openIds = (open ?? []).map((r) => r.id as string);
+        for (const part of chunks(rem, 150)) {
+          if (openIds.length) await db.from("payment_reminders").update({ status: "draft" }).in("id", part).in("invoice_id", openIds).eq("status", "skipped");
+        }
+      }
+      const skipped = asked - n;
+      const note = skipped ? ` ${skipped} ${skipped === 1 ? "was" : "were"} changed by someone since, so I left ${skipped === 1 ? "it" : "them"} alone.` : "";
+      return { ok: n > 0, message: n ? `Undone. ${n} put back how they were.${note}` : `Nothing to undo.${note}`, stamp: "UNDONE", title: clip(p.label, 80) };
     }
 
     case "bulk_tasks": {

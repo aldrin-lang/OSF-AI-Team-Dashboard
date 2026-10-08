@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { getAdminSupabase } from "@/lib/supabase/server";
+import { allRows } from "@/lib/server/paged";
 import { aiConfigured, aiErrorMessage, aiJson } from "@/lib/server/ai";
 import { clientEmailShell, sendEmail } from "@/lib/server/email";
 import { claimSend, releaseSend } from "@/lib/server/send-claim";
@@ -74,23 +75,27 @@ async function draftFor(s: Subject, extra: { openConcerns: string[]; lastSummary
 // ---------------------------------------------------------------------------
 export async function generateDueCheckins(today: string): Promise<{ created: number; ai: number }> {
   const db = getAdminSupabase();
-  const [{ data: clientRows }, { data: placementRows }, { data: leadRows }, { data: history }, { data: concernRows }] =
-    await Promise.all([
-      db.from("clients").select("*").in("status", ["active", "live"]).eq("checkin_paused", false),
-      db.from("va_placements").select("*").eq("placement_status", "active").eq("checkin_paused", false),
-      db.from("leads").select("client_id, name, phone").not("client_id", "is", null),
+  // Read everything (paged past the API's 1,000-row cap). A failed read throws:
+  // better no run than one that misses an open draft and makes a duplicate.
+  const [clientRows, placementRows, leadRows, history, concernRows] = await Promise.all([
+    allRows((a, b) => db.from("clients").select("*").in("status", ["active", "live"]).eq("checkin_paused", false).order("id").range(a, b)),
+    allRows((a, b) => db.from("va_placements").select("*").eq("placement_status", "active").eq("checkin_paused", false).order("id").range(a, b)),
+    allRows((a, b) => db.from("leads").select("client_id, name, phone").not("client_id", "is", null).order("id").range(a, b)),
+    allRows((a, b) =>
       db
         .from("checkins")
         .select("kind, client_id, placement_id, due_on, status, ai_summary")
         .order("due_on", { ascending: false })
-        .limit(5000),
-      db.from("concerns").select("client_id, title").neq("status", "resolved"),
-    ]);
+        .order("id")
+        .range(a, b),
+    ),
+    allRows((a, b) => db.from("concerns").select("client_id, title").neq("status", "resolved").order("id").range(a, b)),
+  ]);
 
-  const clients = (clientRows as Client[]) ?? [];
+  const clients = clientRows as Client[];
   const byId = new Map(clients.map((c) => [c.id, c]));
   const leadByClient = new Map<string, { name: string; phone: string | null }>();
-  for (const l of leadRows ?? []) leadByClient.set(l.client_id as string, { name: l.name as string, phone: l.phone as string | null });
+  for (const l of leadRows) leadByClient.set(l.client_id as string, { name: l.name as string, phone: l.phone as string | null });
 
   const subjects: Subject[] = [];
   for (const c of clients) {
@@ -106,9 +111,10 @@ export async function generateDueCheckins(today: string): Promise<{ created: num
       contactPhone: lead?.phone ?? null,
     });
   }
-  for (const p of (placementRows as VaPlacement[]) ?? []) {
+  for (const p of placementRows as VaPlacement[]) {
     const c = byId.get(p.client_id);
     if (!c) continue;
+    if (p.start_date && p.start_date > today) continue; // the VA hasn't started yet
     subjects.push({
       kind: "va",
       client: c,
@@ -122,13 +128,13 @@ export async function generateDueCheckins(today: string): Promise<{ created: num
   type H = { kind: string; client_id: string; placement_id: string | null; due_on: string; status: string; ai_summary: string | null };
   const last = new Map<string, H>();
   const openDue = new Set<string>();
-  for (const h of (history as H[]) ?? []) {
+  for (const h of history as H[]) {
     const key = `${h.kind}:${h.placement_id ?? h.client_id}`;
     if (!last.has(key)) last.set(key, h);
     if (h.status === "due") openDue.add(key);
   }
   const concernsBy = new Map<string, string[]>();
-  for (const r of concernRows ?? []) {
+  for (const r of concernRows) {
     const arr = concernsBy.get(r.client_id as string) ?? [];
     arr.push(r.title as string);
     concernsBy.set(r.client_id as string, arr);
@@ -143,7 +149,7 @@ export async function generateDueCheckins(today: string): Promise<{ created: num
     const every = s.placement?.checkin_every_days ?? s.client.checkin_every_days;
     const next = nextCheckinDue({
       lastDueOn: prev?.due_on ?? null,
-      startDate: s.client.start_date,
+      startDate: s.placement ? (s.placement.start_date ?? s.client.start_date) : s.client.start_date,
       createdAt: s.placement?.created_at ?? s.client.created_at,
       everyDays: every,
     });

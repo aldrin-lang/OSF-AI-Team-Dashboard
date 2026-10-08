@@ -2,7 +2,8 @@ import { getService } from "@/lib/server/service";
 import { pipelinesFor } from "@/lib/service";
 import { requireArea } from "@/lib/auth";
 import Link from "next/link";
-import { getServerSupabase } from "@/lib/supabase/server";
+import { getAdminSupabase } from "@/lib/supabase/server";
+import { allRows } from "@/lib/server/paged";
 import { getProfiles, getStages, profileMap } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
@@ -13,14 +14,24 @@ export const metadata = { title: "Reports · OSF AI Team Dashboard" };
 
 export default async function ReportsPage() {
   await requireArea("reports");
-  const supabase = await getServerSupabase();
+  // Reports access is its own permission: someone with Reports but not Clients
+  // still gets the numbers. Read on the server with only the columns these
+  // totals need (no names, contacts or notes reach the page).
+  const db = getAdminSupabase();
   const pipes = pipelinesFor(await getService());
-  const [{ data: clientRows }, stages, profiles] = await Promise.all([
-    supabase.from("clients").select("*").in("pipeline", pipes),
+  const [clientRows, stages, profiles] = await Promise.all([
+    allRows((a, b) =>
+      db
+        .from("clients")
+        .select("id, status, stage_id, stage_entered_at, start_date, manager_id, setup_fee, hiring_fee_status")
+        .in("pipeline", pipes)
+        .order("id")
+        .range(a, b),
+    ),
     getStages().then((all) => all.filter((st) => pipes.includes(st.pipeline))),
     getProfiles(),
   ]);
-  const clients = (clientRows as Client[]) ?? [];
+  const clients = clientRows as Pick<Client, "id" | "status" | "stage_id" | "stage_entered_at" | "start_date" | "manager_id" | "setup_fee" | "hiring_fee_status">[];
   const pm = profileMap(profiles);
 
   const active = clients.filter((c) => !["withdrawn", "rejected", "churned"].includes(c.status));

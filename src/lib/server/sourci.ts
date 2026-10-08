@@ -14,6 +14,7 @@ import { ROLE_STATUS } from "@/lib/labels";
 import { bestMatches } from "@/lib/fuzzy";
 import { SERVICE_INFO, leadServicesFor, pipelinesFor, type Service } from "@/lib/service";
 import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashboard, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
+import { allRows } from "@/lib/server/paged";
 
 /**
  * Donna — the dashboard voice assistant. Reads data, opens pages, draws charts
@@ -650,9 +651,9 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
     case "leads_summary": {
       need("leads");
       const per = periodBounds(asPeriod(args.period));
-      const [{ data: rows }, { data: open }, { data: setters }, { data: latest }] = await Promise.all([
-        db.from("leads").select("service, source, setter_id").gte("received_at", per.start).lt("received_at", per.end).limit(5000),
-        db.from("leads").select("status, setter_id").in("status", [...OPEN_STATUSES]).limit(10000),
+      const [rows, open, { data: setters }, { data: latest }] = await Promise.all([
+        allRows((a, b) => db.from("leads").select("service, source, setter_id").gte("received_at", per.start).lt("received_at", per.end).order("id").range(a, b)),
+        allRows((a, b) => db.from("leads").select("status, setter_id").in("status", [...OPEN_STATUSES]).order("id").range(a, b)),
         db.from("setters").select("id, name"),
         db.from("leads").select("id, name, service, source, received_at").gte("received_at", per.start).lt("received_at", per.end).order("received_at", { ascending: false }).limit(6),
       ]);
@@ -833,9 +834,9 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
     case "candidates_summary": {
       need("candidates");
       const per = periodBounds(asPeriod(args.period));
-      const [{ data: recent }, { data: all }] = await Promise.all([
-        db.from("candidates").select("id, full_name, ai_recommended_role, ai_score, status").gte("created_at", per.start).lt("created_at", per.end).limit(1000),
-        db.from("candidates").select("status").limit(5000),
+      const [recent, all] = await Promise.all([
+        allRows((a, b) => db.from("candidates").select("id, full_name, ai_recommended_role, ai_score, status").gte("created_at", per.start).lt("created_at", per.end).order("id").range(a, b)),
+        allRows((a, b) => db.from("candidates").select("status").order("id").range(a, b)),
       ]);
       const r = recent ?? [];
       const top = r.filter((c) => c.ai_score != null).sort((a, b) => (b.ai_score as number) - (a.ai_score as number)).slice(0, 5);
@@ -871,8 +872,8 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
 
     case "clients_summary": {
       need("clients");
-      const [{ data: clients }, { data: concerns }] = await Promise.all([
-        db.from("clients").select("status").limit(5000),
+      const [clients, { data: concerns }] = await Promise.all([
+        allRows((a, b) => db.from("clients").select("status").order("id").range(a, b)),
         db.from("concerns").select("id, title, severity, client_id, clients(name)").neq("status", "resolved").order("raised_at", { ascending: false }).limit(200),
       ]);
       const c = clients ?? [];
@@ -980,8 +981,8 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
     case "pipeline_overview": {
       need("leads");
       const today = dublinDate();
-      const [{ data: open }, { data: overdue }, { data: risk }] = await Promise.all([
-        db.from("leads").select("name, status, setter_id, received_at").in("status", [...OPEN_STATUSES]).order("received_at").limit(5000),
+      const [open, { data: overdue }, { data: risk }] = await Promise.all([
+        allRows((a, b) => db.from("leads").select("name, status, setter_id, received_at").in("status", [...OPEN_STATUSES]).order("received_at").order("id").range(a, b)),
         areas.includes("payments")
           ? db.from("invoices").select("number, due_on, clients(name)").eq("status", "open").lt("due_on", today).limit(20)
           : Promise.resolve({ data: [] as unknown[] }),
@@ -1281,6 +1282,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const res = await searchRecords(entity, (args.filters as Filter[]) ?? [], period, meId, {
         sort: String(args.sort ?? "") || undefined,
         sortDir: args.sort_dir === "asc" ? "asc" : args.sort_dir === "desc" ? "desc" : undefined,
+        service: svc,
       });
       const items = summarise(entity, res.rows, 15);
       const extra = entity === "invoices" ? (() => {
@@ -1310,7 +1312,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const ent = ENTITIES[entity];
       if (!ent) return { data: { error: "Unknown record type" } };
       if (ent.area) need(ent.area);
-      const pk = await pickRecords(entity, args, meId);
+      const pk = await pickRecords(entity, args, meId, { svc });
       if ("error" in pk) return { data: { error: pk.error } };
       if (!pk.res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to change.` };
       const ch = await resolveChanges(entity, (args.set as { field: string; value: string }[]) ?? [], meId);
@@ -1329,7 +1331,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const ent = ENTITIES[entity];
       if (!ent || !field) return { data: { error: "Can share out leads, clients, tasks, concerns or roles" } };
       if (ent.area) need(ent.area);
-      const pk = await pickRecords(entity, args, meId);
+      const pk = await pickRecords(entity, args, meId, { svc });
       if ("error" in pk) return { data: { error: pk.error } };
       if (!pk.res.count) return { data: { error: "No records match" }, say: `${hi}nothing matches that, so there's nothing to share out.` };
       // people: setters for leads, team members otherwise
@@ -1365,7 +1367,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       if (ent.area) need(ent.area);
       const title = String(args.title ?? "").trim().slice(0, 300);
       if (!title) return { data: { error: "What's the task?" } };
-      const pk = await pickRecords(entity, args, meId, { limit: 200 });
+      const pk = await pickRecords(entity, args, meId, { svc, limit: 200 });
       if ("error" in pk) return { data: { error: pk.error } };
       if (!pk.res.count) return { data: { error: "No records match" } };
       const rows = pk.res.rows;
@@ -1430,7 +1432,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       const subject = String(args.subject ?? "").trim().slice(0, 200);
       const body = String(args.body ?? "").trim().slice(0, 8000);
       if (!subject || !body) return { data: { error: "The email needs a subject and a message" } };
-      const pk = await pickRecords(entity, args, meId, { limit: 200 });
+      const pk = await pickRecords(entity, args, meId, { svc, limit: 200 });
       if ("error" in pk) return { data: { error: pk.error } };
       const withEmail = pk.res.rows.filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r[ent.emailCol!] ?? "")));
       const missing = pk.res.rows.length - withEmail.length;
@@ -1453,7 +1455,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
     case "propose_bulk_invoices": {
       need("payments");
       need("clients");
-      const pk = await pickRecords("clients", args, meId, { limit: 200 });
+      const pk = await pickRecords("clients", args, meId, { svc, limit: 200 });
       if ("error" in pk) return { data: { error: pk.error } };
       if (!pk.res.count) return { data: { error: "No clients match" } };
       const currency = String(args.currency || "GBP").toUpperCase();
@@ -1496,7 +1498,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
     case "propose_bulk_convert": {
       need("leads");
       need("clients");
-      const pk = await pickRecords("leads", args, meId, { limit: 200, defaultFilters: [{ field: "status", op: "is", value: "won" }] });
+      const pk = await pickRecords("leads", args, meId, { svc, limit: 200, defaultFilters: [{ field: "status", op: "is", value: "won" }] });
       if ("error" in pk) return { data: { error: pk.error } };
       const rows = pk.res.rows.filter((r) => !r.client_id && r.service !== "unknown").slice(0, 25);
       if (!rows.length) return { data: { error: "No leads there that aren't clients yet (leads with an unknown service need sorting into AI or VA first)" } };
@@ -1512,7 +1514,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
 
     case "propose_bulk_rescreen": {
       need("candidates");
-      const pk = await pickRecords("candidates", args, meId, { limit: 20 });
+      const pk = await pickRecords("candidates", args, meId, { svc, limit: 20 });
       if ("error" in pk) return { data: { error: pk.error } };
       if (!pk.res.count) return { data: { error: "No candidates match" } };
       return proposeOut({
@@ -1854,9 +1856,9 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
         const { data: cl } = await db.from("clients").select("id").ilike("name", `%${q}%`).limit(10);
         query = query.in("client_id", (cl ?? []).map((c) => c.id));
       }
-      const [{ data }, { data: moods }] = await Promise.all([
+      const [{ data }, moods] = await Promise.all([
         query,
-        db.from("checkins").select("placement_id, mood, due_on").eq("kind", "va").not("mood", "is", null).order("due_on", { ascending: false }).limit(2000),
+        allRows((a, b) => db.from("checkins").select("placement_id, mood, due_on").eq("kind", "va").not("mood", "is", null).order("due_on", { ascending: false }).order("id").range(a, b)),
       ]);
       const vas = (data ?? []) as unknown as { id: string; va_name: string | null; role: string | null; client_id: string; start_date: string | null; hours_per_week: number | null; clients: { name: string } | null }[];
       const last = new Map<string, string>();
@@ -2031,7 +2033,7 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       if (has("leads"))
         tasks.push((async () => {
           const since = dublinDayBounds(addDays(today, -30)).start;
-          const { data } = await db.from("leads").select("setter_id, status").gte("received_at", since).in("status", [...OPEN_STATUSES]).limit(5000);
+          const data = await allRows((a, b) => db.from("leads").select("setter_id, status").gte("received_at", since).in("status", [...OPEN_STATUSES]).order("id").range(a, b));
           const un = (data ?? []).filter((l) => !l.setter_id).length;
           const fresh = (data ?? []).filter((l) => l.status === "new").length;
           stats.push({ label: "Unassigned leads", value: String(un), tone: un ? "alert" : "good" });
@@ -2355,14 +2357,14 @@ export async function sourciHello(userName: string, service: Service = "all"): P
 }
 
 /** Shared record picker for bulk tools: filters/period, or everything when the user said "all". */
-async function pickRecords(entity: EntityKey, args: Record<string, unknown>, meId: string, opts: { limit?: number; defaultFilters?: Filter[] } = {}) {
+async function pickRecords(entity: EntityKey, args: Record<string, unknown>, meId: string, opts: { svc: Service; limit?: number; defaultFilters?: Filter[] }) {
   const ent = ENTITIES[entity];
   const period = (REC_PERIODS as readonly string[]).includes(String(args.period)) ? String(args.period) : "any";
   let filters = (args.filters as Filter[]) ?? [];
   if (!filters.length && opts.defaultFilters) filters = opts.defaultFilters;
   const everything = !filters.length && period === "any";
   if (everything && args.all_records !== true) return { error: "No filter given. If the user meant every record, call again with all_records true; otherwise ask which ones." };
-  const res = await searchRecords(entity, filters, period, meId, { limit: opts.limit ?? BULK_MAX, bulk: true });
+  const res = await searchRecords(entity, filters, period, meId, { limit: opts.limit ?? BULK_MAX, bulk: true, service: opts.svc });
   if (res.problems.length) return { error: res.problems.join("; ") };
   return { ent, res, everything };
 }

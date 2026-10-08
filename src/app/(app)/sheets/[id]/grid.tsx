@@ -53,6 +53,9 @@ const TYPE_ICON: Record<ColumnType, typeof Type> = {
   url: Link2,
 };
 
+/** Most rows one paste may touch (set_sheet_cells allows the same). */
+const MAX_PASTE_ROWS = 2000;
+
 const PRESENCE_COLORS = ["#2b7fff", "#f2691f", "#10b981", "#8b5cf6", "#e11d48", "#0891b2", "#ca8a04"];
 function colorFor(id: string): string {
   let h = 0;
@@ -118,23 +121,43 @@ export function SheetGrid({
     return sbRef.current;
   }, []);
 
-  const run = useCallback(async (fn: (s: SupabaseClient) => PromiseLike<{ error: { message: string } | null }>) => {
+  // Saves that failed, by what they change. They stay here (and the toolbar
+  // says "not saved") until a retry or a newer save of the same thing succeeds.
+  type Op = (s: SupabaseClient) => PromiseLike<{ error: { message: string } | null }>;
+  const failedRef = useRef(new Map<string, Op>());
+  const [failedCount, setFailedCount] = useState(0);
+
+  const run = useCallback(async (fn: Op, key: string = crypto.randomUUID()) => {
     setPending((n) => n + 1);
+    let message: string | null = null;
     try {
       const { error: e } = await fn(await sb());
-      if (e)
-        setError(
-          e.message.includes("row-level security")
-            ? "You don't have edit access to this sheet."
-            : /could not find|does not exist|schema cache/i.test(e.message)
-              ? "Sheets isn't set up in the database yet."
-              : "Couldn't save. Check your connection and try again.",
-        );
-      else setError("");
+      if (e) message = e.message;
+    } catch (e) {
+      message = e instanceof Error ? e.message : "network error";
     } finally {
       setPending((n) => n - 1);
     }
+    const failed = failedRef.current;
+    if (message) {
+      failed.set(key, fn);
+      setError(
+        message.includes("row-level security")
+          ? "You don't have edit access to this sheet."
+          : /could not find|does not exist|schema cache/i.test(message)
+            ? "Sheets isn't set up in the database yet."
+            : "Check your connection and press Retry.",
+      );
+    } else {
+      failed.delete(key);
+      if (!failed.size) setError("");
+    }
+    setFailedCount(failed.size);
   }, [sb]);
+
+  const retryFailed = () => {
+    for (const [key, fn] of [...failedRef.current]) run(fn, key);
+  };
 
   const upsertRow = (r: SheetRow) =>
     setRows((list) => (list.some((x) => x.id === r.id) ? list.map((x) => (x.id === r.id ? r : x)) : [...list, r]));
@@ -200,7 +223,7 @@ export function SheetGrid({
       if (value === null) delete cells[col.id];
       else cells[col.id] = value;
       upsertRow({ ...row, cells });
-      run((s) => s.rpc("set_sheet_cell", { p_row: row.id, p_column: col.id, p_value: value }));
+      run((s) => s.rpc("set_sheet_cell", { p_row: row.id, p_column: col.id, p_value: value }), `cell:${row.id}:${col.id}`);
     },
     [run],
   );
@@ -249,7 +272,7 @@ export function SheetGrid({
 
   const updateColumn = (col: SheetColumn, patch: Partial<Pick<SheetColumn, "name" | "type" | "options" | "width" | "position">>) => {
     upsertCol({ ...col, ...patch });
-    run((s) => s.from("sheet_columns").update(patch).eq("id", col.id));
+    run((s) => s.from("sheet_columns").update(patch).eq("id", col.id), `col:${col.id}:${Object.keys(patch).sort().join(",")}`);
   };
 
   const deleteColumn = (col: SheetColumn) => {
@@ -341,7 +364,11 @@ export function SheetGrid({
     const grid = parsePasted(text);
     const nameToId = new Map(people.map((p) => [p.name.toLowerCase(), p.id]));
     const targetRows = [...visibleRows];
-    const missing = Math.min(1000, sel.r + grid.length - targetRows.length);
+    // Check the whole paste before writing anything.
+    if (grid.length > MAX_PASTE_ROWS) {
+      return setError(`That paste has ${grid.length.toLocaleString()} rows. Paste up to ${MAX_PASTE_ROWS.toLocaleString()} at a time.`);
+    }
+    const missing = sel.r + grid.length - targetRows.length;
     if (missing > 0) {
       const base = rows.reduce((m, r) => Math.max(m, r.position), 0);
       setPending((n) => n + 1);
@@ -355,19 +382,28 @@ export function SheetGrid({
       added.forEach(upsertRow);
       targetRows.push(...added);
     }
+    // Only the pasted cells are sent; the database merges them into each row in
+    // one transaction, so a teammate's edits to other columns are kept.
+    const changes: { row: string; cells: Record<string, CellValue> }[] = [];
     grid.forEach((line, i) => {
       const row = targetRows[sel.r + i];
-      const cells = { ...row.cells };
+      if (!row) return;
+      const patch: Record<string, CellValue> = {};
       line.forEach((raw, j) => {
         const col = orderedCols[sel.c + j];
         if (!col) return;
-        const v = col.type === "person" ? (nameToId.get(raw.trim().toLowerCase()) ?? null) : parseCell(col.type, raw);
-        if (v === null) delete cells[col.id];
-        else cells[col.id] = v;
+        patch[col.id] = col.type === "person" ? (nameToId.get(raw.trim().toLowerCase()) ?? null) : parseCell(col.type, raw);
       });
+      if (!Object.keys(patch).length) return;
+      changes.push({ row: row.id, cells: patch });
+      const cells = { ...row.cells };
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === null) delete cells[k];
+        else cells[k] = v;
+      }
       upsertRow({ ...row, cells });
-      run((s) => s.from("sheet_rows").update({ cells, updated_by: me.id }).eq("id", row.id));
     });
+    if (changes.length) run((s) => s.rpc("set_sheet_cells", { p_changes: changes }), `paste:${crypto.randomUUID()}`);
   };
 
   const exportCsv = () => {
@@ -447,7 +483,14 @@ export function SheetGrid({
         </button>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-[11px] text-ink-faint">
-            {pending > 0 ? "Saving…" : error ? <span className="text-rose-500">{error}</span> : "All changes saved"}
+            {failedCount > 0 ? (
+              <span className="text-rose-500">
+                {failedCount} change{failedCount === 1 ? "" : "s"} not saved. {error}{" "}
+                <button onClick={retryFailed} disabled={pending > 0} className="font-semibold underline disabled:opacity-50">
+                  {pending > 0 ? "Retrying…" : "Retry"}
+                </button>
+              </span>
+            ) : pending > 0 ? "Saving…" : error ? <span className="text-rose-500">{error}</span> : "All changes saved"}
           </span>
           <div className="flex -space-x-1.5">
             {[{ id: me.id, name: me.name, cell: null }, ...viewers].slice(0, 6).map((v) => (

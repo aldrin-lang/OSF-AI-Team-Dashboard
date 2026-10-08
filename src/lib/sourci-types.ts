@@ -59,7 +59,15 @@ export type SourciProposal =
   | { kind: "bulk_convert"; leadIds: string[] }
   | { kind: "bulk_rescreen"; candidateIds: string[] }
   | { kind: "notifications_read" }
-  | { kind: "restore"; entity: string; label: string; rows: { id: string; values: Record<string, string | number | boolean | null> }[] }
+  | {
+      kind: "restore";
+      entity: string;
+      label: string;
+      /** values = what to put back; expect = what Donna wrote (a row that no longer matches was edited since, so it's left alone). */
+      rows: { id: string; values: Record<string, string | number | boolean | null>; expect?: Record<string, string | number | boolean | null> }[];
+      /** Payment reminder drafts the change skipped (closing invoices); undo puts them back to draft. */
+      reminders?: string[];
+    }
   | { kind: "create_sheet"; template: string; name: string; visibility: "private" | "everyone" }
   | { kind: "create_role"; clientId: string; clientName: string; title: string; headcount: number; employmentType: "full_time" | "part_time" | "project"; startBy?: string; priority: "low" | "normal" | "high" | "urgent"; requirements?: string }
   | { kind: "shortlist"; roleId: string; roleTitle: string; candidateIds: string[]; names: string[] }

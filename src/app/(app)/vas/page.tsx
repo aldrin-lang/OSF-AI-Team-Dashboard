@@ -10,6 +10,7 @@ import { dublinDate } from "@/lib/ops-core";
 import { cn, formatDate, initials } from "@/lib/utils";
 import type { PlacementStatus, VaPlacement } from "@/lib/types";
 import { savePlacementDetails } from "./actions";
+import { allRows } from "@/lib/server/paged";
 
 export const metadata = { title: "VAs · OSF AI Team Dashboard" };
 
@@ -39,14 +40,17 @@ export default async function VasPage(props: PageProps<"/vas">) {
   const term = one("q").trim().toLowerCase().slice(0, 60);
 
   const supabase = await getServerSupabase();
-  const [{ data }, { data: checks }] = await Promise.all([
-    supabase.from("va_placements").select("*, clients(name)").order("created_at", { ascending: false }).limit(2000),
-    supabase
-      .from("checkins")
-      .select("placement_id, status, mood, due_on, sent_at")
-      .eq("kind", "va")
-      .order("due_on", { ascending: false })
-      .limit(5000),
+  const [data, checks] = await Promise.all([
+    allRows((a, b) => supabase.from("va_placements").select("*, clients(name)").order("created_at", { ascending: false }).order("id").range(a, b)),
+    allRows((a, b) =>
+      supabase
+        .from("checkins")
+        .select("placement_id, status, mood, due_on, sent_at")
+        .eq("kind", "va")
+        .order("due_on", { ascending: false })
+        .order("id")
+        .range(a, b),
+    ),
   ]);
   const all = (data as Row[]) ?? [];
   const lastMood = new Map<string, Check>();
