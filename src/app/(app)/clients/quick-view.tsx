@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -32,14 +32,33 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
-  useEffect(() => {
-    if (!clientId) return;
+  // New client selected: clear the old panel straight away (no effect needed).
+  const [shownId, setShownId] = useState(clientId);
+  if (clientId !== shownId) {
+    setShownId(clientId);
     setData(null);
     setErr(null);
-    setLoading(true);
+    setLoading(Boolean(clientId));
+  }
+  // Latest selected id, so late responses for a previous client are ignored.
+  const currentId = useRef(clientId);
+  useEffect(() => {
+    currentId.current = clientId;
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let live = true;
     getClientQuick(clientId)
-      .then((d) => setData(d))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (live) setData(d);
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
   }, [clientId]);
 
   useEffect(() => {
@@ -51,7 +70,11 @@ export function QuickView({ clientId, onClose }: { clientId: string | null; onCl
   }, [clientId, onClose]);
 
   function refresh() {
-    if (clientId) getClientQuick(clientId).then((d) => setData(d));
+    const id = clientId;
+    if (id)
+      getClientQuick(id).then((d) => {
+        if (currentId.current === id) setData(d);
+      });
     router.refresh();
   }
 

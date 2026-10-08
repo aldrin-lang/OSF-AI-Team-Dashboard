@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 function env(name: string): string {
   const v = process.env[name];
@@ -30,7 +31,6 @@ export async function getServerSupabase() {
 
 /** Service-role client — bypasses RLS. Server-only. Use sparingly (cron, imports, admin). */
 export function getAdminSupabase() {
-  const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
   return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
   });

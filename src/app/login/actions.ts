@@ -2,11 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/safe-redirect";
 
 export async function signIn(_prev: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/") || "/";
+  const next = safeNext(formData.get("next"));
 
   if (!email || !password) {
     return { error: "Enter your email and password." };
@@ -19,7 +20,7 @@ export async function signIn(_prev: unknown, formData: FormData) {
     return { error: "Incorrect email or password." };
   }
 
-  redirect(next.startsWith("/") ? next : "/");
+  redirect(next);
 }
 
 export async function signOut() {

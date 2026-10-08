@@ -9,13 +9,11 @@ import type { Area } from "@/lib/areas";
 import type { Service } from "@/lib/service";
 
 export function MobileNav({ isManager, areas, service }: { isManager: boolean; areas: Area[]; service: Service }) {
-  const [open, setOpen] = useState(false);
   const pathname = usePathname();
-
-  // close on route change
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  // The menu is open only for the page it was opened on, so navigating closes it.
+  const [openAt, setOpenAt] = useState<string | null>(null);
+  const open = openAt === pathname;
+  const setOpen = (v: boolean) => setOpenAt(v ? pathname : null);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";

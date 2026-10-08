@@ -15,7 +15,7 @@ import { portalLinkFor } from "@/lib/constants";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/badge";
-import { CLIENT_STATUS, RB_STATUS, BUILD_STATUS, HIRING_FEE_STATUS } from "@/lib/labels";
+import { CLIENT_STATUS, RB_STATUS, BUILD_STATUS } from "@/lib/labels";
 import { formatDate, daysSince } from "@/lib/utils";
 import { ghlLinks } from "@/lib/ghl";
 import { StageMover } from "./stage-mover";

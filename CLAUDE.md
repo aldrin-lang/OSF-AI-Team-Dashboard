@@ -27,4 +27,4 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - `supabase/migrations/` — schema, RLS, `allocate_lead`. `supabase/demo_ops_*.sql` — demo data add/remove (not migrations).
 
 ## Check before saying done
-`npx tsc --noEmit`, `npx eslint <files>`, `npm run build`, `node scripts/test-leads-core.mjs`, `node scripts/test-ops-core.mjs`.
+`npx tsc --noEmit`, `npx eslint <files>`, `npm run build`, `node scripts/test-leads-core.mjs`, `node scripts/test-ops-core.mjs`, `node scripts/test-confirm-words.mjs`.

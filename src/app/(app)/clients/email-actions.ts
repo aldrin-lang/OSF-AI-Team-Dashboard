@@ -103,6 +103,7 @@ export async function sendClientEmail(input: { id: string; clientId: string }) {
 
   const res = await sendEmail({ to: email.to_email, subject: email.subject, html, text: email.body });
   if (!res.ok) return { ok: false, error: "Email provider rejected the send" };
+  if (res.skipped) return { ok: false, error: "Email sending isn't set up yet (RESEND_API_KEY / EMAIL_FROM). The draft was not sent." };
 
   await supabase
     .from("client_emails")

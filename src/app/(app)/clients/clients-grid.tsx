@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -13,7 +13,7 @@ import {
   ExternalLink,
   X,
 } from "lucide-react";
-import { CLIENT_STATUS, RB_STATUS, HIRING_FEE_STATUS, type Tone, TONE_CLASS } from "@/lib/labels";
+import { CLIENT_STATUS, HIRING_FEE_STATUS, type Tone, TONE_CLASS } from "@/lib/labels";
 import { portalLinkFor } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 import { QuickView } from "./quick-view";
@@ -45,7 +45,11 @@ export function ClientsGrid({
   const router = useRouter();
   const [rows, setRows] = useState(initial);
   // pull in fresh server data (own saves + teammates' live edits)
-  useEffect(() => setRows(initial), [initial]);
+  const [prevInitial, setPrevInitial] = useState(initial);
+  if (initial !== prevInitial) {
+    setPrevInitial(initial);
+    setRows(initial);
+  }
   const [q, setQ] = useState("");
   const [fStage, setFStage] = useState("");
   const [fManager, setFManager] = useState("");
@@ -55,7 +59,6 @@ export function ClientsGrid({
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stageName = useMemo(() => new Map(stages.map((s) => [s.id, s.name])), [stages]);
   const stagePos = useMemo(
     () => new Map(rows.map((r) => [r.client.stage_id, r.stage?.position ?? 99])),
     [rows],

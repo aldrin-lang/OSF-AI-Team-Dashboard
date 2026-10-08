@@ -2,7 +2,7 @@ import { getService } from "@/lib/server/service";
 import { pipelinesFor } from "@/lib/service";
 import * as React from "react";
 import Link from "next/link";
-import { Users, ListChecks, Clock, AlertTriangle, Rocket, ExternalLink } from "lucide-react";
+import { Users, Clock, AlertTriangle, Rocket, ExternalLink } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getStages, getProfiles, profileMap } from "@/lib/data/queries";

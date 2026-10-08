@@ -39,12 +39,17 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
+  // Fresh search each time the palette opens.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setQ("");
       setI(0);
-      setTimeout(() => inputRef.current?.focus(), 20);
     }
+  }
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 20);
   }, [open]);
 
   const results = useMemo(() => {

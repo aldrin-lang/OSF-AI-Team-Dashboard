@@ -6,6 +6,7 @@ import { AudioLines, Check, Keyboard, Send, Volume2, VolumeX, X } from "lucide-r
 import { ackClip, audioCtx, chime, fadeOut, femaleVoice, levelOf, micMeter, playBlob, playMp3, warmAcks } from "@/components/sourci-audio";
 import { DEFAULT_VOICE, SOURCI_VOICES, isSourciVoice, type SourciVoice } from "@/lib/sourci-voices";
 import { cn } from "@/lib/utils";
+import { isNoOrUnclear, isStrongYes, isYes } from "@/lib/confirm-words";
 import type {
   SourciAction,
   SourciCard,
@@ -52,10 +53,6 @@ function recCtor(): RecCtor | null {
 type Status = "ready" | "listening" | "working" | "speaking";
 type Done = Extract<SourciAction, { type: "done" }>;
 
-const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|confirm(ed)?|do it|go ahead|send it|create it|please do|correct)\b/i;
-const NO = /^\s*(no|nope|cancel|stop|don'?t|never ?mind|not now)\b/i;
-/** For big changes a plain "yes" isn't enough. */
-const STRONG_YES = /\b(confirm(ed)?|send (it|them)|do it|go ahead|create them|hire (him|her|them))\b/i;
 
 /** Always-on switches itself off after this long with nothing said (saves the mic/battery). */
 const IDLE_OFF_MS = 10 * 60_000;
@@ -409,15 +406,16 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       setError("");
       if (!hello && /^\s*(undo( that| it| the last( one| change)?)?|put (it|them) back|revert( that| it)?)[.!]*\s*$/i.test(q)) return undo();
       // A spoken yes/no answers the pending confirmation directly.
-      if (!hello && pending && YES.test(q)) {
-        if (pending.strong && !STRONG_YES.test(q)) {
+      // Only a clean "yes" confirms; "yes, but..." / "not yet" cancels (see src/lib/confirm-words.ts).
+      if (!hello && pending && isYes(q)) {
+        if (pending.strong && !isStrongYes(q)) {
           const m = "Just to be safe with this one, say confirm, or tap the button.";
           setReply(m);
           return void speak(m);
         }
         return void confirm();
       }
-      if (!hello && pending && NO.test(q)) return cancel();
+      if (!hello && pending && isNoOrUnclear(q)) return cancel();
       if (/^\s*(that'?s all|that is all|stop listening|turn off|switch off|go to sleep|bye|goodbye|good night)\b/i.test(q) && q.split(/\s+/).length <= 6) {
         convoRef.current = false;
         setOn(false);

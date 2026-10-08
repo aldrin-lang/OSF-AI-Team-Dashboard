@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -44,7 +44,11 @@ const ACCENTS = [
 export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card[] }) {
   const router = useRouter();
   const [cards, setCards] = useState(initial);
-  useEffect(() => setCards(initial), [initial]);
+  const [prevInitial, setPrevInitial] = useState(initial);
+  if (initial !== prevInitial) {
+    setPrevInitial(initial);
+    setCards(initial);
+  }
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

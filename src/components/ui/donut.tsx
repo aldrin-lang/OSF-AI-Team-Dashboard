@@ -20,7 +20,8 @@ export function Donut({
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
-  let offset = 0;
+  // Where each segment starts along the ring (running total of the ones before it).
+  const starts = data.map((_, i) => data.slice(0, i).reduce((s, d) => s + (d.value / total) * c, 0));
 
   return (
     <div className="flex flex-wrap items-center gap-6">
@@ -47,12 +48,11 @@ export function Donut({
                 stroke={PALETTE[i % PALETTE.length]}
                 strokeWidth={thickness}
                 strokeDasharray={`${dash} ${c - dash}`}
-                strokeDashoffset={-offset}
+                strokeDashoffset={-starts[i]}
                 strokeLinecap="round"
                 style={{ filter: "drop-shadow(0 0 6px rgba(43,127,255,0.25))" }}
               />
             );
-            offset += dash;
             return seg;
           })}
         </svg>

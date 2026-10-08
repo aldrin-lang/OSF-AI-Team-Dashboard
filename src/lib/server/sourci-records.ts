@@ -494,9 +494,11 @@ async function applyFilters(db: Db, ent: EntityDef, q: Q, filters: Filter[], per
         problems.push(`${f.field} needs a YYYY-MM-DD date`);
         continue;
       }
+      // Timestamps use half-open day ranges; plain date columns compare inclusively.
+      const ts = isTimestamp(def.col);
       if (op === "before") q = q.lt(def.col, dayStart(def.col, val));
-      else if (op === "after") q = q.gte(def.col, dayEnd(def.col, val));
-      else if (op === "on_or_before") q = q.lt(def.col, dayEnd(def.col, val));
+      else if (op === "after") q = ts ? q.gte(def.col, dayEnd(def.col, val)) : q.gt(def.col, val);
+      else if (op === "on_or_before") q = ts ? q.lt(def.col, dayEnd(def.col, val)) : q.lte(def.col, val);
       else if (op === "on_or_after") q = q.gte(def.col, dayStart(def.col, val));
       else q = isTimestamp(def.col) ? q.gte(def.col, dayStart(def.col, val)).lt(def.col, dayEnd(def.col, val)) : q.eq(def.col, val);
       continue;
@@ -530,7 +532,7 @@ async function applyFilters(db: Db, ent: EntityDef, q: Q, filters: Filter[], per
   }
   const pr = periodRange(period);
   if (pr.from) q = q.gte(ent.dateCol, dayStart(ent.dateCol, pr.from));
-  if (pr.to) q = q.lt(ent.dateCol, dayEnd(ent.dateCol, pr.to));
+  if (pr.to) q = isTimestamp(ent.dateCol) ? q.lt(ent.dateCol, dayEnd(ent.dateCol, pr.to)) : q.lte(ent.dateCol, pr.to);
   return { q, problems };
 }
 
