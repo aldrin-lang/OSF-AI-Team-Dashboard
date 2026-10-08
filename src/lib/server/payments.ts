@@ -1,6 +1,7 @@
 import "server-only";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { clientEmailShell, sendEmail } from "@/lib/server/email";
+import { claimSend, releaseSend } from "@/lib/server/send-claim";
 import { areaUserIds, notifyUsers } from "@/lib/server/notify";
 import { addDays, formatMoney, reminderStage, reminderTemplate, textToHtml, type ReminderStage } from "@/lib/ops-core";
 import type { Invoice, PaymentReminder } from "@/lib/types";
@@ -109,13 +110,19 @@ export async function sendReminder(
   const to = r.invoices.bill_to_email ?? r.invoices.clients?.contact_email;
   if (!to) return { ok: false, error: "No billing email. Add one on the invoice or the client." };
 
+  if (!(await claimSend(db, "payment_reminders", id, "draft"))) {
+    return { ok: false, error: "This reminder was already sent, or someone is sending it right now." };
+  }
   const res = await sendEmail({ to, subject: edits.subject, html: clientEmailShell(textToHtml(edits.body)), text: edits.body });
-  if (res.skipped) return { ok: false, error: "Email sending isn't set up on the server (RESEND_API_KEY / EMAIL_FROM)." };
-  if (!res.ok) return { ok: false, error: "The email provider rejected the message. Try again." };
+  if (res.skipped || !res.ok) {
+    await releaseSend(db, "payment_reminders", id);
+    if (res.skipped) return { ok: false, error: "Email sending isn't set up on the server (RESEND_API_KEY / EMAIL_FROM)." };
+    return { ok: false, error: "The email provider rejected the message. Try again." };
+  }
 
   await db
     .from("payment_reminders")
-    .update({ subject: edits.subject, body: edits.body, status: "sent", sent_at: new Date().toISOString(), sent_by: actorId })
+    .update({ subject: edits.subject, body: edits.body, status: "sent", sent_at: new Date().toISOString(), sent_by: actorId, send_claimed_at: null })
     .eq("id", id);
   return { ok: true };
 }

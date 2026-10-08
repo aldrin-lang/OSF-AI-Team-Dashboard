@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { aiConfigured, aiErrorMessage, aiJson } from "@/lib/server/ai";
 import { clientEmailShell, sendEmail } from "@/lib/server/email";
+import { claimSend, releaseSend } from "@/lib/server/send-claim";
 import { areaUserIds, notifyUsers } from "@/lib/server/notify";
 import { checkinTemplate, daysBetween, nextCheckinDue, textToHtml } from "@/lib/ops-core";
 import type { Checkin, CheckinKind, Client, VaPlacement } from "@/lib/types";
@@ -188,10 +189,17 @@ export async function sendCheckinEmail(
   if (!ck) return { ok: false, error: "Check-in not found" };
   const to = edits.to ?? ck.contact_email;
   if (!to) return { ok: false, error: "No email address for this contact. Add one or use WhatsApp." };
+  if (ck.status !== "due") return { ok: false, error: "This check-in was already sent." };
+  if (!(await claimSend(db, "checkins", id, "due"))) {
+    return { ok: false, error: "This check-in was already sent, or someone is sending it right now." };
+  }
 
   const res = await sendEmail({ to, subject: edits.subject, html: clientEmailShell(textToHtml(edits.message)), text: edits.message });
-  if (res.skipped) return { ok: false, error: "Email sending isn't set up on the server (RESEND_API_KEY / EMAIL_FROM)." };
-  if (!res.ok) return { ok: false, error: "The email provider rejected the message. Try again or use WhatsApp." };
+  if (res.skipped || !res.ok) {
+    await releaseSend(db, "checkins", id);
+    if (res.skipped) return { ok: false, error: "Email sending isn't set up on the server (RESEND_API_KEY / EMAIL_FROM)." };
+    return { ok: false, error: "The email provider rejected the message. Try again or use WhatsApp." };
+  }
 
   await db
     .from("checkins")
@@ -203,6 +211,7 @@ export async function sendCheckinEmail(
       status: "sent",
       sent_at: new Date().toISOString(),
       sent_by: actorId,
+      send_claimed_at: null,
     })
     .eq("id", id);
   return { ok: true };

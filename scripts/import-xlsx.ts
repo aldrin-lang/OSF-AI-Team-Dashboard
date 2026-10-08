@@ -4,7 +4,15 @@
  *   npx tsx scripts/import-xlsx.ts "/path/to/External Hires Update.xlsx"
  *
  * Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment
- * (loaded from .env.local). Idempotent — safe to re-run; keyed on source_row_hash.
+ * (loaded from .env.local). Keyed on source_row_hash.
+ *
+ * Re-running is safe by default: clients already imported are SKIPPED, so
+ * nothing the team changed in the dashboard is touched. Only new rows are added.
+ *
+ *   --overwrite-existing   also re-write already-imported clients from the
+ *                          spreadsheet. DESTRUCTIVE: it replaces their AI lines
+ *                          and VA placements (and with them those VAs' check-ins).
+ *                          Only for a fresh project. Needs IMPORT_CONFIRM=overwrite.
  */
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -15,11 +23,21 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-const FILE = process.argv[2];
+const args = process.argv.slice(2);
+const OVERWRITE = args.includes("--overwrite-existing");
+const FILE = args.find((a) => !a.startsWith("--")) ?? "";
 if (!FILE) {
-  console.error('Usage: npx tsx scripts/import-xlsx.ts "<path to .xlsx>"');
+  console.error('Usage: npx tsx scripts/import-xlsx.ts "<path to .xlsx>" [--overwrite-existing]');
   process.exit(1);
 }
+if (OVERWRITE && process.env.IMPORT_CONFIRM !== "overwrite") {
+  console.error(
+    "--overwrite-existing replaces AI lines and VA placements (and their check-ins) for every client already imported.\n" +
+      "If you really mean it, run again with IMPORT_CONFIRM=overwrite in the environment.",
+  );
+  process.exit(1);
+}
+let skipped = 0;
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !KEY) {
@@ -175,6 +193,7 @@ async function importAI(wb: ExcelJS.Workbook, stages: Map<string, string>, templ
     if (!stageId) report.push({ sheet: "AI", row: rowNumber, client: clientName, issue: `Unmapped status "${statusRaw}"` });
   });
 
+  let aiCount = 0;
   for (const [, g] of grouped) {
     const { data: existing } = await db
       .from("clients")
@@ -183,6 +202,10 @@ async function importAI(wb: ExcelJS.Workbook, stages: Map<string, string>, templ
       .maybeSingle();
 
     let clientId = existing?.id as string | undefined;
+    if (clientId && !OVERWRITE) {
+      skipped += 1;
+      continue;
+    }
     if (clientId) {
       await db.from("clients").update(g.client).eq("id", clientId);
       await db.from("client_lines").delete().eq("client_id", clientId);
@@ -199,8 +222,9 @@ async function importAI(wb: ExcelJS.Workbook, stages: Map<string, string>, templ
       );
     }
     await db.from("client_lines").insert(g.lines.map((l) => ({ ...l, client_id: clientId })));
+    aiCount += 1;
   }
-  console.log(`AI: imported ${grouped.size} clients`);
+  console.log(`AI: imported ${aiCount} clients`);
 }
 
 async function importVA(wb: ExcelJS.Workbook, stages: Map<string, string>, templates: Tpl[]) {
@@ -243,6 +267,10 @@ async function importVA(wb: ExcelJS.Workbook, stages: Map<string, string>, templ
 
     const { data: existing } = await db.from("clients").select("id").eq("source_row_hash", rowHash).maybeSingle();
     let clientId = existing?.id as string | undefined;
+    if (clientId && !OVERWRITE) {
+      skipped += 1;
+      continue;
+    }
     if (clientId) {
       await db.from("clients").update(client).eq("id", clientId);
       await db.from("va_placements").delete().eq("client_id", clientId);
@@ -295,6 +323,7 @@ async function main() {
 
   await importAI(wb, stages, templates);
   await importVA(wb, stages, templates);
+  if (skipped) console.log(`Skipped ${skipped} clients that were already imported (left untouched).`);
 
   const csv =
     "sheet,row,client,issue\n" +

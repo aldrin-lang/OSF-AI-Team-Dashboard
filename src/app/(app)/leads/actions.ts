@@ -7,7 +7,7 @@ import { requireActor, requireActorArea } from "@/lib/server/rbac";
 import { logActivity } from "@/lib/server/activity";
 import { refreshLeadExtras, runAssignUnassigned, runSync } from "@/lib/server/leads";
 import { LEAD_STATUS } from "@/lib/labels";
-import type { Lead, LeadStatus, PipelineType } from "@/lib/types";
+import type { LeadStatus } from "@/lib/types";
 
 function s(fd: FormData, k: string): string | null {
   const v = fd.get(k);
@@ -176,69 +176,21 @@ export async function convertLead(formData: FormData) {
   const id = s(formData, "id");
   if (!id || !UUID.test(id)) throw new Error("Missing lead id");
 
-  const { data } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
-  const lead = data as Lead | null;
-  if (!lead) throw new Error("Lead not found");
-  if (lead.client_id) redirect(`/clients/${lead.client_id}`);
-
-  // VA and Premium VA leads start the VA pipeline; AI leads the AI receptionist onboarding.
-  if (lead.service === "unknown") throw new Error("Set whether this lead is AI or VA first, then convert it.");
-  const pipeline: PipelineType = lead.service === "va" || lead.service === "premium" ? "va" : "ai";
-  const { data: firstStage } = await supabase
-    .from("pipeline_stages")
-    .select("id")
-    .eq("pipeline", pipeline)
-    .order("position")
-    .limit(1)
-    .maybeSingle();
-
-  let closedBy: string | null = null;
-  if (lead.setter_id) {
-    const { data: setter } = await supabase.from("setters").select("name").eq("id", lead.setter_id).maybeSingle();
-    closedBy = setter?.name ?? null;
-  }
-
-  const name = lead.name || lead.email || lead.phone || "New client";
-  const { data: client, error } = await supabase
-    .from("clients")
-    .insert({
-      pipeline,
-      name,
-      contact_email: lead.email,
-      source: lead.source,
-      closed_by: closedBy,
-      stage_id: firstStage?.id ?? null,
-    })
-    .select("id")
-    .single();
+  // One transaction with the lead row locked (convert_lead in SQL), so a double
+  // click or Donna at the same time can't create two clients.
+  const { data, error } = await supabase.rpc("convert_lead", { p_lead_id: id, p_actor: actor.id }).single();
   if (error) throw new Error(error.message);
-
-  const { data: templates } = await supabase
-    .from("checklist_templates")
-    .select("key, label, position")
-    .eq("pipeline", pipeline)
-    .order("position");
-  if (templates?.length) {
-    await supabase.from("checklist_items").insert(
-      templates.map((t) => ({ client_id: client.id, key: t.key, label: t.label, position: t.position })),
-    );
+  const res = data as { client_id: string; client_name: string; created: boolean };
+  if (res.created) {
+    await logActivity({
+      entity: "client",
+      entityId: res.client_id,
+      verb: "created",
+      summary: `Created ${res.client_name} from a lead`,
+    });
   }
-
-  await supabase.from("leads").update({ client_id: client.id, status: "won" }).eq("id", id);
-  await supabase.from("lead_events").insert({
-    lead_id: id,
-    kind: "converted",
-    summary: "Converted to an AI receptionist client",
-    actor_id: actor.id,
-  });
-  await logActivity({
-    entity: "client",
-    entityId: client.id,
-    verb: "created",
-    summary: `Created ${name} from a lead`,
-  });
 
   revalidatePath("/leads");
   revalidatePath("/pipeline");
-  redirect(`/clients/${client.id}`);
+  redirect(`/clients/${res.client_id}`);
 }

@@ -84,50 +84,25 @@ export async function hireCandidate(input: HireInput, me: Profile): Promise<{ ok
   const r = role as VaRole;
   const c = cand as Candidate;
 
-  const { data: existing } = await supabase
-    .from("va_placements")
-    .select("id")
-    .eq("candidate_id", c.id)
-    .eq("role_id", r.id)
-    .maybeSingle();
-  let placementId = existing?.id as string | undefined;
-  if (!placementId) {
-    const { data: placed, error } = await supabase
-      .from("va_placements")
-      .insert({
-        client_id: r.client_id,
-        va_name: c.full_name,
-        va_email: c.email,
-        va_phone: c.phone,
-        va_cv_url: c.cv_url,
-        role: r.title,
-        employment_type: EMPLOYMENT_TYPE[r.employment_type],
-        placement_status: "active",
-        candidate_id: c.id,
-        role_id: r.id,
-        start_date: input.startDate,
-        hourly_rate: input.hourlyRate,
-        rate_currency: input.currency,
-        hours_per_week: input.hoursPerWeek ?? r.hours_per_week,
-      })
-      .select("id")
-      .single();
-    if (error || !placed) return { ok: false, message: `Couldn't create the placement: ${error?.message ?? "unknown error"}` };
-    placementId = placed.id as string;
+  // Placement + stages + role status in one transaction with the role locked
+  // (hire_candidate in SQL): no duplicate placements, no hiring past headcount.
+  const { data: hired, error } = await supabase
+    .rpc("hire_candidate", {
+      p_role_candidate_id: rc.id,
+      p_employment_type: EMPLOYMENT_TYPE[r.employment_type],
+      p_start_date: input.startDate,
+      p_hourly_rate: input.hourlyRate,
+      p_currency: input.currency,
+      p_hours_per_week: input.hoursPerWeek,
+    })
+    .single();
+  if (error || !hired) return { ok: false, message: error?.message ?? "Couldn't create the placement." };
+  const h = hired as { placement_id: string; role_filled: boolean; already_hired: boolean };
+  const placementId = h.placement_id;
+  const filled = h.role_filled;
+  if (h.already_hired) {
+    return { ok: true, clientId: r.client_id, placementId, message: `${c.full_name} is already hired for this role.` };
   }
-
-  await Promise.all([
-    supabase.from("va_role_candidates").update({ stage: "hired" }).eq("id", rc.id),
-    supabase.from("candidates").update({ status: "hired" }).eq("id", c.id),
-  ]);
-  const { count } = await supabase
-    .from("va_role_candidates")
-    .select("id", { count: "exact", head: true })
-    .eq("role_id", r.id)
-    .eq("stage", "hired");
-  const filled = (count ?? 0) >= r.headcount;
-  if (filled) await supabase.from("va_roles").update({ status: "filled" }).eq("id", r.id);
-  else if (["open", "sourcing", "interviewing"].includes(r.status)) await supabase.from("va_roles").update({ status: "offer" }).eq("id", r.id);
 
   const clientName = (await clientNames([r.client_id])).get(r.client_id) ?? "the client";
   await logActivity({

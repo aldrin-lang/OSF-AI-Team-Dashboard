@@ -6,6 +6,7 @@ import { requireActor } from "@/lib/server/rbac";
 import { logActivity } from "@/lib/server/activity";
 import { notifyUsers } from "@/lib/server/notify";
 import { sendEmail } from "@/lib/server/email";
+import { claimSend, releaseSend } from "@/lib/server/send-claim";
 import { renderTemplate, buildClientVars } from "@/lib/email-render";
 import { getStages } from "@/lib/data/queries";
 import type { Client, ClientEmail, ClientLine, EmailTemplate, Profile } from "@/lib/types";
@@ -101,13 +102,19 @@ export async function sendClientEmail(input: { id: string; clientId: string }) {
     .replace(/</g, "&lt;")
     .replace(/\n/g, "<br/>")}</div>`;
 
+  if (!(await claimSend(supabase, "client_emails", input.id, "draft"))) {
+    return { ok: false, error: "This email was already sent, or someone is sending it right now." };
+  }
   const res = await sendEmail({ to: email.to_email, subject: email.subject, html, text: email.body });
-  if (!res.ok) return { ok: false, error: "Email provider rejected the send" };
-  if (res.skipped) return { ok: false, error: "Email sending isn't set up yet (RESEND_API_KEY / EMAIL_FROM). The draft was not sent." };
+  if (res.skipped || !res.ok) {
+    await releaseSend(supabase, "client_emails", input.id);
+    if (res.skipped) return { ok: false, error: "Email sending isn't set up yet (RESEND_API_KEY / EMAIL_FROM). The draft was not sent." };
+    return { ok: false, error: "Email provider rejected the send" };
+  }
 
   await supabase
     .from("client_emails")
-    .update({ status: "sent", sent_by: actor.id, sent_at: new Date().toISOString() })
+    .update({ status: "sent", sent_by: actor.id, sent_at: new Date().toISOString(), send_claimed_at: null })
     .eq("id", input.id);
 
   await logActivity({

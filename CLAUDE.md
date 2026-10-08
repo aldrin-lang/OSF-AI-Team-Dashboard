@@ -9,7 +9,7 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - Never read or print `.env.local`; never put secrets in the repo, chat or commits.
 - Anything live (applying a migration to Supabase, deploying, pushing, editing GHL workflows, running a backfill, switching on lead allocation) needs the owner's explicit "go" for that step.
 - GHL access is read-only from this codebase (GET only).
-- DB changes: new migration file only. Logic that must be correct under concurrency (e.g. lead allocation) lives in SQL (`allocate_lead`).
+- DB changes: new migration file only. Logic that must be correct under concurrency lives in SQL (`allocate_lead`, `convert_lead`, `hire_candidate`). Sending an email from a draft row goes through `claimSend`/`releaseSend` (`src/lib/server/send-claim.ts`).
 
 ## Map
 - `src/lib/leads-core.ts` — pure parsing/classification/phone analysis (tested by `scripts/test-leads-core.mjs`).
