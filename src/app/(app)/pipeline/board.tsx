@@ -104,7 +104,7 @@ export function Board({ stages, cards: initial }: { stages: Stage[]; cards: Card
         }}
         onDragEnd={onEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="stagger flex gap-4 overflow-x-auto pb-4">
           {stages.map((st, i) => (
             <Column
               key={st.id}
@@ -151,7 +151,7 @@ function Column({
           {cards.length}
         </span>
       </div>
-      <div className="flex flex-1 flex-col gap-2 px-3 pb-3">
+      <div className="stagger flex flex-1 flex-col gap-2 px-3 pb-3">
         {cards.length === 0 && (
           <p className="rounded-xl border border-dashed border-line py-7 text-center text-xs text-ink-faint">
             Drop here

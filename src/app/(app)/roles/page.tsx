@@ -17,6 +17,8 @@ import { cn, formatDate, relativeTime } from "@/lib/utils";
 import type { RoleCandidateStage, VaRole } from "@/lib/types";
 import { createRole } from "./actions";
 import { allRows } from "@/lib/server/paged";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { Tabs } from "@/components/motion/tabs";
 
 export const metadata = { title: "Open roles · OSF AI Team Dashboard" };
 
@@ -83,7 +85,7 @@ export default async function RolesPage(props: PageProps<"/roles">) {
           { n: all.filter((r) => r.status === "filled" && r.updated_at >= monthStart).length, l: "Filled this month" },
         ].map((t) => (
           <div key={t.l} className="glass rounded-2xl px-3 py-3">
-            <p className="text-2xl font-semibold text-ink">{t.n}</p>
+            <p className="text-2xl font-semibold text-ink"><AnimatedNumber value={t.n} /></p>
             <p className="text-xs text-ink-faint">{t.l}</p>
           </div>
         ))}
@@ -155,20 +157,11 @@ export default async function RolesPage(props: PageProps<"/roles">) {
         </details>
       )}
 
-      <div className="flex flex-wrap gap-1.5">
-        {Object.entries(VIEWS).map(([k, v]) => (
-          <Link
-            key={k}
-            href={k === "active" ? "/roles" : `/roles?view=${k}`}
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-medium",
-              view === k ? "bg-brand-500 text-white" : "bg-fill text-ink-muted hover:text-ink",
-            )}
-          >
-            {v.label}
-          </Link>
-        ))}
-      </div>
+      <Tabs
+        variant="pill"
+        active={view}
+        items={Object.entries(VIEWS).map(([k, v]) => ({ key: k, href: k === "active" ? "/roles" : `/roles?view=${k}`, label: v.label }))}
+      />
 
       {roles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line-strong px-4 py-12 text-center text-sm text-ink-faint">
@@ -204,6 +197,7 @@ export default async function RolesPage(props: PageProps<"/roles">) {
                 </div>
                 {canEdit && (
                   <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-fill">
+                    <div className="bar-grow flex h-full w-full">
                     {(["shortlisted", "interview", "offered", "hired"] as const).map((k) =>
                       p[k] ? (
                         <span
@@ -214,6 +208,7 @@ export default async function RolesPage(props: PageProps<"/roles">) {
                         />
                       ) : null,
                     )}
+                    </div>
                   </div>
                 )}
                 {canEdit && (

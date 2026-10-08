@@ -2,6 +2,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AnimatedNumber } from "@/components/motion/animated-number";
 
 type Accent = "brand" | "violet" | "cyan" | "orange" | "emerald" | "rose";
 
@@ -90,7 +91,9 @@ export function StatTile({
           </span>
         )}
       </div>
-      <p className="mt-3 text-[26px] font-semibold leading-none tracking-tight text-ink">{value}</p>
+      <p className="mt-3 text-[26px] font-semibold leading-none tracking-tight text-ink">
+        {typeof value === "string" || typeof value === "number" ? <AnimatedNumber value={value} /> : value}
+      </p>
       <p className="mt-1.5 text-xs text-ink-muted">{label}</p>
       {hint && <p className="mt-0.5 text-[11px] text-ink-faint">{hint}</p>}
     </div>

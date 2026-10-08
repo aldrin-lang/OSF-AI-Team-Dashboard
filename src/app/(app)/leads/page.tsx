@@ -15,6 +15,8 @@ import { SettersPanel } from "./setters-panel";
 import { LeadRowControls } from "./lead-row-controls";
 import type { Lead, Setter } from "@/lib/types";
 import { allRows } from "@/lib/server/paged";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { Tabs } from "@/components/motion/tabs";
 
 export const metadata = { title: "Leads · AI Receptionist Ops" };
 
@@ -100,15 +102,15 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
 
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="glass rounded-2xl px-3 py-3">
-          <p className="text-2xl font-semibold text-ink">{open.length}</p>
+          <p className="text-2xl font-semibold text-ink"><AnimatedNumber value={open.length} /></p>
           <p className="text-xs text-ink-faint">Open leads</p>
         </div>
         <div className="glass rounded-2xl px-3 py-3">
-          <p className="text-2xl font-semibold text-ink">{untouched}</p>
+          <p className="text-2xl font-semibold text-ink"><AnimatedNumber value={untouched} /></p>
           <p className="text-xs text-ink-faint">Not touched yet</p>
         </div>
         <div className="glass rounded-2xl px-3 py-3">
-          <p className={`text-2xl font-semibold ${unassigned ? "text-accent-600" : "text-ink"}`}>{unassigned}</p>
+          <p className={`text-2xl font-semibold ${unassigned ? "text-accent-600" : "text-ink"}`}><AnimatedNumber value={unassigned} /></p>
           <p className="text-xs text-ink-faint">Unassigned</p>
         </div>
       </div>
@@ -123,21 +125,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
         syncConfigured={ghlConfigFromEnv() !== null}
       />
 
-      <div className="flex gap-2 border-b border-line text-sm">
-        {tabs.map((t) => (
-          <Link
-            key={t.key}
-            href={href({ view: t.key })}
-            className={`-mb-px border-b-2 px-3 py-2 font-medium ${
-              view === t.key
-                ? "border-brand-500 text-ink"
-                : "border-transparent text-ink-faint hover:text-ink-muted"
-            }`}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </div>
+      <Tabs active={view} items={tabs.map((t) => ({ key: t.key, href: href({ view: t.key }), label: t.label }))} />
 
       <form method="get" className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="view" value={view} />

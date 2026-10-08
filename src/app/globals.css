@@ -237,3 +237,105 @@ body > * {
   from { transform: translateX(100%); }
   to { transform: none; }
 }
+
+/* ===========================================================================
+   Motion kit — the "premium" feel. Everything here is short, soft and only
+   plays when something first appears (a refresh of the same page doesn't
+   replay it). fill-mode is "backwards" on purpose: once an entrance is done
+   no transform is left behind, so hover effects, sticky headers and pop-ups
+   behave exactly as before.
+   =========================================================================== */
+:root {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --rise-step: 55ms;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: none; }
+}
+@keyframes grow-y {
+  from { transform: scaleY(0); }
+  to { transform: none; }
+}
+@keyframes donut-draw {
+  from { stroke-dasharray: 0 var(--donut-c); }
+}
+@keyframes shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+/* 1. Page entrance: the page's sections rise in one after another */
+.page-enter > * > * {
+  animation: rise 0.55s var(--ease-out-soft) backwards;
+}
+/* 2. Cards and tiles in any grid follow the same rhythm */
+.page-enter .grid > *,
+.stagger > * {
+  animation: rise 0.5s var(--ease-out-soft) backwards;
+}
+/* 3. Table rows slide in gently (first screenful only) */
+.page-enter tbody > tr:nth-child(-n + 14) {
+  animation: rise 0.45s var(--ease-out-soft) backwards;
+}
+.page-enter > * > *:nth-child(2),  .page-enter .grid > *:nth-child(2),  .stagger > *:nth-child(2),  .page-enter tbody > tr:nth-child(2)  { animation-delay: calc(var(--rise-step) * 1); }
+.page-enter > * > *:nth-child(3),  .page-enter .grid > *:nth-child(3),  .stagger > *:nth-child(3),  .page-enter tbody > tr:nth-child(3)  { animation-delay: calc(var(--rise-step) * 2); }
+.page-enter > * > *:nth-child(4),  .page-enter .grid > *:nth-child(4),  .stagger > *:nth-child(4),  .page-enter tbody > tr:nth-child(4)  { animation-delay: calc(var(--rise-step) * 3); }
+.page-enter > * > *:nth-child(5),  .page-enter .grid > *:nth-child(5),  .stagger > *:nth-child(5),  .page-enter tbody > tr:nth-child(5)  { animation-delay: calc(var(--rise-step) * 4); }
+.page-enter > * > *:nth-child(6),  .page-enter .grid > *:nth-child(6),  .stagger > *:nth-child(6),  .page-enter tbody > tr:nth-child(6)  { animation-delay: calc(var(--rise-step) * 5); }
+.page-enter > * > *:nth-child(7),  .page-enter .grid > *:nth-child(7),  .stagger > *:nth-child(7),  .page-enter tbody > tr:nth-child(7)  { animation-delay: calc(var(--rise-step) * 6); }
+.page-enter > * > *:nth-child(8),  .page-enter .grid > *:nth-child(8),  .stagger > *:nth-child(8),  .page-enter tbody > tr:nth-child(8)  { animation-delay: calc(var(--rise-step) * 7); }
+.page-enter > * > *:nth-child(n + 9), .page-enter .grid > *:nth-child(n + 9), .stagger > *:nth-child(n + 9), .page-enter tbody > tr:nth-child(n + 9) { animation-delay: calc(var(--rise-step) * 8); }
+
+/* 4. Bars fill from the left / rise from the bottom */
+.bar-grow {
+  transform-origin: left center;
+  animation: grow-x 0.9s var(--ease-out-soft) 0.15s backwards;
+}
+.bar-rise {
+  transform-origin: center bottom;
+  animation: grow-y 0.8s var(--ease-out-soft) backwards;
+}
+/* 5. Donut segments draw themselves */
+.donut-seg {
+  animation: donut-draw 1s var(--ease-out-soft) 0.15s backwards;
+}
+
+/* 6. Loading skeletons: visible at once (no entrance delay), soft shimmer */
+.skeleton {
+  background-color: var(--color-fill-strong);
+  background-image: linear-gradient(100deg, transparent 30%, var(--glass-highlight) 50%, transparent 70%);
+  background-size: 200% 100%;
+}
+.glass.skeleton {
+  background-color: var(--color-surface);
+  background-image: linear-gradient(100deg, transparent 30%, var(--color-fill-strong) 50%, transparent 70%);
+}
+.page-enter > [aria-busy="true"] > *,
+.page-enter > [aria-busy="true"] .grid > * {
+  animation: none !important;
+}
+.page-enter .skeleton,
+.skeleton {
+  animation: shimmer 1.4s ease-in-out infinite, fade-in 0.15s ease backwards !important;
+  animation-delay: 0s !important;
+}
+
+/* 7. Calm, consistent hover/press feedback */
+tbody > tr { transition: background-color 0.15s ease; }
+a, button { -webkit-tap-highlight-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter > * > *, .page-enter .grid > *, .stagger > *, .page-enter tbody > tr,
+  .bar-grow, .bar-rise, .donut-seg, .skeleton {
+    animation: none !important;
+  }
+}

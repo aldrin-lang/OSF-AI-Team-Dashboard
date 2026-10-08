@@ -1,4 +1,5 @@
 import * as React from "react";
+import { AnimatedNumber } from "@/components/motion/animated-number";
 
 const PALETTE = [
   "#2b7fff", "#22d3ee", "#a78bfa", "#f2691f", "#34d399", "#f472b6", "#facc15", "#60a5fa",
@@ -50,14 +51,17 @@ export function Donut({
                 strokeDasharray={`${dash} ${c - dash}`}
                 strokeDashoffset={-starts[i]}
                 strokeLinecap="round"
-                style={{ filter: "drop-shadow(0 0 6px rgba(43,127,255,0.25))" }}
+                className="donut-seg"
+                style={{ filter: "drop-shadow(0 0 6px rgba(43,127,255,0.25))", ["--donut-c" as string]: `${c}`, animationDelay: `${0.15 + i * 0.08}s` }}
               />
             );
             return seg;
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-semibold text-ink">{centerValue ?? total}</span>
+          <span className="text-2xl font-semibold text-ink">
+            {centerValue == null ? <AnimatedNumber value={total} /> : typeof centerValue === "string" || typeof centerValue === "number" ? <AnimatedNumber value={centerValue} /> : centerValue}
+          </span>
           {centerLabel && <span className="text-[11px] text-ink-faint">{centerLabel}</span>}
         </div>
       </div>

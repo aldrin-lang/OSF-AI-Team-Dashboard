@@ -11,6 +11,8 @@ import { cn, formatDate, initials } from "@/lib/utils";
 import type { PlacementStatus, VaPlacement } from "@/lib/types";
 import { savePlacementDetails } from "./actions";
 import { allRows } from "@/lib/server/paged";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { Tabs } from "@/components/motion/tabs";
 
 export const metadata = { title: "VAs · OSF AI Team Dashboard" };
 
@@ -96,22 +98,18 @@ export default async function VasPage(props: PageProps<"/vas">) {
           { n: atRisk, l: "At risk", warn: atRisk > 0 },
         ].map((t) => (
           <div key={t.l} className="glass rounded-2xl px-3 py-3">
-            <p className={cn("text-2xl font-semibold text-ink", t.warn && "text-rose-500")}>{t.n}</p>
+            <p className={cn("text-2xl font-semibold text-ink", t.warn && "text-rose-500")}><AnimatedNumber value={t.n} /></p>
             <p className="text-xs text-ink-faint">{t.l}</p>
           </div>
         ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {(["active", "past", "all"] as const).map((v) => (
-          <Link
-            key={v}
-            href={href({ view: v })}
-            className={cn("rounded-full px-3 py-1 text-xs font-medium", view === v ? "bg-brand-500 text-white" : "bg-fill text-ink-muted hover:text-ink")}
-          >
-            {v === "active" ? "Active" : v === "past" ? "Past" : "All"}
-          </Link>
-        ))}
+        <Tabs
+          variant="pill"
+          active={view}
+          items={(["active", "past", "all"] as const).map((v) => ({ key: v, href: href({ view: v }), label: v === "active" ? "Active" : v === "past" ? "Past" : "All" }))}
+        />
         <form className="ml-auto" action="/vas">
           {view !== "active" && <input type="hidden" name="view" value={view} />}
           <Input name="q" defaultValue={term} placeholder="Search VA, client, role" className="h-8 w-56" />

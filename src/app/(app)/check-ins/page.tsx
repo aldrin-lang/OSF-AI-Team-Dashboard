@@ -16,6 +16,8 @@ import { CheckinComposer } from "./composer";
 import { checkInNow, closeCheckin, runDueNow, saveReply, updateCadence } from "./actions";
 import type { Checkin, Client, VaPlacement } from "@/lib/types";
 import { allRows } from "@/lib/server/paged";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { Tabs } from "@/components/motion/tabs";
 
 export const metadata = { title: "Check-ins · OSF AI Team Dashboard" };
 
@@ -98,26 +100,25 @@ export default async function CheckinsPage(props: PageProps<"/check-ins">) {
           { n: atRisk, l: "At risk", hot: atRisk > 0 },
         ].map((t) => (
           <div key={t.l} className="glass rounded-2xl px-3 py-3">
-            <p className={`text-2xl font-semibold ${t.hot ? "text-rose-600" : "text-ink"}`}>{t.n}</p>
+            <p className={`text-2xl font-semibold ${t.hot ? "text-rose-600" : "text-ink"}`}><AnimatedNumber value={t.n} /></p>
             <p className="text-xs text-ink-faint">{t.l}</p>
           </div>
         ))}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto border-b border-line text-sm">
-        {tabs.map((t) => (
-          <Link
-            key={t.key}
-            href={`/check-ins?view=${t.key}`}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 font-medium ${
-              view === t.key ? "border-brand-500 text-ink" : "border-transparent text-ink-faint hover:text-ink-muted"
-            }`}
-          >
-            {VIEWS[t.key]}
-            {t.n ? <span className="ml-1.5 rounded-full bg-fill px-1.5 text-xs">{t.n}</span> : null}
-          </Link>
-        ))}
-      </div>
+      <Tabs
+        active={view}
+        items={tabs.map((t) => ({
+          key: t.key,
+          href: `/check-ins?view=${t.key}`,
+          label: (
+            <>
+              {VIEWS[t.key]}
+              {t.n ? <span className="ml-1.5 rounded-full bg-fill px-1.5 text-xs">{t.n}</span> : null}
+            </>
+          ),
+        }))}
+      />
 
       {view === "send" && (
         <List empty="Nothing to send. New check-ins are drafted every morning when they're due.">
@@ -213,7 +214,7 @@ export default async function CheckinsPage(props: PageProps<"/check-ins">) {
 
 function List({ empty, children }: { empty: string; children: React.ReactNode[] }) {
   if (!children.length) return <EmptyState>{empty}</EmptyState>;
-  return <div className="space-y-4">{children}</div>;
+  return <div className="stagger space-y-4">{children}</div>;
 }
 
 function Head({ c }: { c: Row }) {

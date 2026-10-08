@@ -218,7 +218,7 @@ export default async function RolePage(props: PageProps<"/roles/[id]">) {
                 <div key={c.id} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2">
                   <div className="w-14 shrink-0">
                     <div className="h-1.5 overflow-hidden rounded-full bg-fill">
-                      <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-emerald-400" style={{ width: `${fit}%` }} />
+                      <div className="bar-grow h-full rounded-full bg-gradient-to-r from-brand-400 to-emerald-400" style={{ width: `${fit}%` }} />
                     </div>
                     <p className="mt-0.5 text-center text-[10px] font-semibold text-ink-muted">{fit}% fit</p>
                   </div>

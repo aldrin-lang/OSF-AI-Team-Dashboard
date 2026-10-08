@@ -1002,7 +1002,7 @@ function DashboardPanel({ d, onOpen }: { d: SourciDashboard; onOpen: (href: stri
                 <span className="font-semibold tabular-nums text-slate-100">{b.value}</span>
               </div>
               <div className="mt-1 h-2 rounded bg-white/[0.06]">
-                <div className="h-2 rounded bg-cyan-300" style={{ width: `${Math.max(2, (b.value / max) * 100)}%` }} />
+                <div className="bar-grow h-2 rounded bg-cyan-300" style={{ width: `${Math.max(2, (b.value / max) * 100)}%` }} />
               </div>
             </div>
           ))}
@@ -1063,7 +1063,7 @@ function ChartPanel({ c }: { c: SourciChart }) {
                 <span className="font-semibold tabular-nums text-slate-100">{b.value}</span>
               </div>
               <div className="mt-1 h-2.5 rounded bg-white/[0.06]">
-                <div className="h-2.5 rounded bg-cyan-300" style={{ width: `${Math.max(2, (b.value / max) * 100)}%` }} />
+                <div className="bar-grow h-2.5 rounded bg-cyan-300" style={{ width: `${Math.max(2, (b.value / max) * 100)}%` }} />
               </div>
             </div>
           ))}

@@ -14,6 +14,7 @@ import { createInvoice, runRemindersNow } from "./actions";
 import { ReminderCard } from "./reminder-card";
 import { HEALTH } from "./health";
 import type { Invoice, PaymentReminder } from "@/lib/types";
+import { Tabs } from "@/components/motion/tabs";
 
 export const metadata = { title: "Payments · OSF AI Team Dashboard" };
 
@@ -158,24 +159,23 @@ export default async function PaymentsPage(props: PageProps<"/payments">) {
         </details>
       )}
 
-      <div className="flex gap-2 overflow-x-auto border-b border-line text-sm">
-        {(Object.keys(VIEWS) as View[]).map((k) => (
-          <Link
-            key={k}
-            href={`/payments?view=${k}`}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 font-medium ${
-              view === k ? "border-brand-500 text-ink" : "border-transparent text-ink-faint hover:text-ink-muted"
-            }`}
-          >
-            {VIEWS[k]}
-            {counts[k] ? (
-              <span className={`ml-1.5 rounded-full px-1.5 text-xs ${k === "overdue" ? "bg-rose-50 text-rose-600" : "bg-fill"}`}>
-                {counts[k]}
-              </span>
-            ) : null}
-          </Link>
-        ))}
-      </div>
+      <Tabs
+        active={view}
+        items={(Object.keys(VIEWS) as View[]).map((k) => ({
+          key: k,
+          href: `/payments?view=${k}`,
+          label: (
+            <>
+              {VIEWS[k]}
+              {counts[k] ? (
+                <span className={`ml-1.5 rounded-full px-1.5 text-xs ${k === "overdue" ? "bg-rose-50 text-rose-600" : "bg-fill"}`}>
+                  {counts[k]}
+                </span>
+              ) : null}
+            </>
+          ),
+        }))}
+      />
 
       {view === "reminders" ? (
         reminders.length === 0 ? (

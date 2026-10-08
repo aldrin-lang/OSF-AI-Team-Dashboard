@@ -4,6 +4,7 @@ import { requireArea } from "@/lib/auth";
 import Link from "next/link";
 import { getAdminSupabase } from "@/lib/supabase/server";
 import { allRows } from "@/lib/server/paged";
+import { AnimatedNumber } from "@/components/motion/animated-number";
 import { getProfiles, getStages, profileMap } from "@/lib/data/queries";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/primitives";
@@ -109,7 +110,7 @@ export default async function ReportsPage() {
                 <tr key={r.stage.id} className="border-t border-line">
                   <td className="py-2 text-ink-muted">{r.stage.name}</td>
                   <td className="py-2">
-                    <span className="inline-block h-2 rounded bg-slate-200 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
+                    <span className="bar-grow inline-block h-2 rounded bg-slate-200 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
                     <span className="ml-2">{r.count}</span>
                   </td>
                   <td className="py-2 text-ink-muted">{r.avg}d</td>
@@ -134,7 +135,7 @@ export default async function ReportsPage() {
                 {months.map(([m, n]) => (
                   <li key={m} className="flex items-center gap-2">
                     <span className="w-16 text-ink-muted">{m}</span>
-                    <span className="inline-block h-3 rounded bg-emerald-400" style={{ width: `${n * 18}px` }} />
+                    <span className="bar-grow inline-block h-3 rounded bg-emerald-400" style={{ width: `${n * 18}px` }} />
                     <span>{n}</span>
                   </li>
                 ))}
@@ -156,7 +157,7 @@ export default async function ReportsPage() {
                     <span className="w-28 truncate text-ink-muted">
                       {id === "unassigned" ? "Unassigned" : pm.get(id)?.full_name ?? "—"}
                     </span>
-                    <span className="inline-block h-3 rounded bg-brand-400" style={{ width: `${n * 18}px` }} />
+                    <span className="bar-grow inline-block h-3 rounded bg-brand-400" style={{ width: `${n * 18}px` }} />
                     <span>{n}</span>
                   </li>
                 ))}
@@ -183,7 +184,7 @@ function Kpi({ label, value, sub }: { label: string; value: string | number; sub
   return (
     <Card className="px-4 py-3">
       <p className="text-xs text-ink-muted">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
+      <p className="mt-1 text-xl font-semibold text-ink"><AnimatedNumber value={value} /></p>
       {sub && <p className="text-xs text-ink-faint">{sub}</p>}
     </Card>
   );

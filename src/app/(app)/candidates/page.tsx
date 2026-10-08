@@ -15,6 +15,8 @@ import { aiConfigured } from "@/lib/server/ai";
 import { addCandidate } from "./actions";
 import type { Candidate } from "@/lib/types";
 import { allRows } from "@/lib/server/paged";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { Tabs } from "@/components/motion/tabs";
 
 export const metadata = { title: "Candidates · OSF AI Team Dashboard" };
 
@@ -76,7 +78,7 @@ export default async function CandidatesPage(props: PageProps<"/candidates">) {
           { n: all.filter((c) => c.status === "hired").length, l: "Hired" },
         ].map((t) => (
           <div key={t.l} className="glass rounded-2xl px-3 py-3">
-            <p className="text-2xl font-semibold text-ink">{t.n}</p>
+            <p className="text-2xl font-semibold text-ink"><AnimatedNumber value={t.n} /></p>
             <p className="text-xs text-ink-faint">{t.l}</p>
           </div>
         ))}
@@ -133,19 +135,7 @@ export default async function CandidatesPage(props: PageProps<"/candidates">) {
         </div>
       </details>
 
-      <div className="flex gap-2 border-b border-line text-sm">
-        {Object.entries(VIEWS).map(([k, v]) => (
-          <Link
-            key={k}
-            href={href({ view: k })}
-            className={`-mb-px border-b-2 px-3 py-2 font-medium ${
-              view === k ? "border-brand-500 text-ink" : "border-transparent text-ink-faint hover:text-ink-muted"
-            }`}
-          >
-            {v.label}
-          </Link>
-        ))}
-      </div>
+      <Tabs active={view} items={Object.entries(VIEWS).map(([k, v]) => ({ key: k, href: href({ view: k }), label: v.label }))} />
 
       <form method="get" className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="view" value={view} />
