@@ -58,8 +58,8 @@ type Done = Extract<SourciAction, { type: "done" }>;
 const IDLE_OFF_MS = 10 * 60_000;
 
 // Barge-in: words that mean "stop, let me talk" even on their own.
-const CUT_IN = new Set(["stop", "wait", "sorry", "hold", "hang", "no", "actually", "cancel", "pause", "hey"]);
-const ONLY_CUT_IN = /^\s*(stop|wait|sorry|hold on|hang on|no|actually|cancel|pause|hey( donna| sourci)?)[.!,]*\s*$/i;
+const CUT_IN = new Set(["stop", "wait", "sorry", "hold", "hang", "no", "actually", "cancel", "pause", "hey", "donna", "okay", "ok", "yeah", "yes", "alright", "enough", "next", "thanks", "excuse", "listen", "um", "erm"]);
+const ONLY_CUT_IN = /^\s*(stop|wait|sorry|hold on|hang on|no|actually|cancel|pause|okay|ok|alright|enough|um|erm|listen|excuse me|hey( donna| sourci)?|donna)[.!,]*\s*$/i;
 const words = (t: string) => t.toLowerCase().match(/[a-z0-9']+/g) ?? [];
 /**
  * Is this the user talking over Donna, or the mic hearing Donna's own voice?
@@ -69,9 +69,13 @@ function isUserSpeech(heard: string, said: Set<string>): boolean {
   const w = words(heard);
   if (!w.length) return false;
   const fresh = w.filter((x) => !said.has(x));
-  if (w.length <= 3 && fresh.some((x) => CUT_IN.has(x))) return true;
-  return fresh.length >= 4 || (fresh.length >= 3 && fresh.length / w.length >= 0.5);
+  // Easy to interrupt: one "stop/wait/okay/Donna…" or two new words is enough.
+  if (fresh.some((x) => CUT_IN.has(x))) return true;
+  return fresh.length >= 3 || (fresh.length >= 2 && fresh.length / w.length >= 0.5);
 }
+
+/** The first hint of the user's voice: any word Donna isn't saying herself. */
+const hasFreshWord = (heard: string, said: Set<string>) => words(heard).some((x) => !said.has(x));
 
 /**
  * Donna: the team's AI, built into the CRM. A glowing orb in the corner:
@@ -197,15 +201,28 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
       let from = -1;
       let text = "";
       let quiet: ReturnType<typeof setTimeout> | undefined;
+      let unduck: ReturnType<typeof setTimeout> | undefined;
       rec.onresult = (e) => {
         if (from < 0) {
           for (let i = e.resultIndex; i < e.results.length; i++) {
-            if (isUserSpeech(e.results[i][0].transcript, said)) {
+            const heard = e.results[i][0].transcript;
+            if (isUserSpeech(heard, said)) {
               from = i;
               break;
             }
+            // Sounds like you might be talking: drop her volume straight away,
+            // and bring it back if it was nothing.
+            const a = audioRef.current;
+            if (a && hasFreshWord(heard, said)) {
+              a.volume = Math.min(a.volume, 0.3);
+              clearTimeout(unduck);
+              unduck = setTimeout(() => {
+                if (audioRef.current === a && from < 0) a.volume = 1;
+              }, 1200);
+            }
           }
           if (from < 0) return;
+          clearTimeout(unduck);
           stopSpeaking(); // cut Donna off mid-sentence
           setStatus("listening");
         }
@@ -214,11 +231,12 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
         text = t.trim();
         setHeard(text);
         clearTimeout(quiet);
-        quiet = setTimeout(() => rec.stop(), 1300); // you've finished talking
+        quiet = setTimeout(() => rec.stop(), 1000); // you've finished talking
       };
       rec.onerror = () => {};
       rec.onend = () => {
         clearTimeout(quiet);
+        clearTimeout(unduck);
         if (bargeRef.current === rec) bargeRef.current = null;
         if (from < 0) return;
         if (text && !ONLY_CUT_IN.test(text)) askRef.current?.(text);
@@ -331,7 +349,7 @@ export function Sourci({ demo }: { demo?: SourciDemo } = {}) {
   );
 
   const remember = (role: SourciTurn["role"], content: string) => {
-    history.current = [...history.current, { role, content }].slice(-8);
+    history.current = [...history.current, { role, content }].slice(-10);
     try {
       sessionStorage.setItem("sourci-history", JSON.stringify(history.current));
     } catch {}

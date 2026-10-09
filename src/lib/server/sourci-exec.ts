@@ -17,6 +17,7 @@ import { sendReminder } from "@/lib/server/payments";
 import { sendCheckinEmail } from "@/lib/server/checkins";
 import { CURRENCIES } from "@/lib/ops-core";
 import { createSheetFrom } from "@/lib/server/sheets";
+import { DRAFTS, isDraftType } from "@/lib/server/drafts";
 import { fitScore, hireCandidate } from "@/lib/server/staffing";
 import type { Candidate } from "@/lib/types";
 
@@ -683,6 +684,38 @@ export async function executeProposal(p: SourciProposal, me: Profile): Promise<E
         else failed.push(res.error ?? "failed");
       }
       return { ok: sent > 0, message: `${sent} reminder${sent === 1 ? "" : "s"} sent.${failed.length ? ` ${failed.length} couldn't go: ${failed[0]}` : ""}`, stamp: "SENT", title: "Payment reminders", href: "/payments" };
+    }
+
+    case "revise_draft": {
+      if (!isDraftType(p.draftType) || !UUID.test(p.id)) throw new Error("Bad draft");
+      const d = DRAFTS[p.draftType];
+      need(d.area);
+      if (d.managerOnly && me.role === "member") throw new Error(`Only managers can change ${d.label}s.`);
+      const subject = clip(p.subject, 200);
+      const body = typeof p.body === "string" ? p.body.trim().slice(0, 8000) : "";
+      if (!subject || !body) throw new Error("The draft needs a subject and a message");
+      // keep the old text so "undo" can put it back
+      const { data: old } = await db.from(d.table).select(`subject, ${d.bodyCol}`).eq("id", p.id).eq("status", d.openStatus).maybeSingle();
+      if (!old) throw new Error("That draft isn't waiting any more (already sent or removed).");
+      const { data: saved, error } = await db
+        .from(d.table)
+        .update({ subject, [d.bodyCol]: body })
+        .eq("id", p.id)
+        .eq("status", d.openStatus)
+        .is("send_claimed_at", null) // not while someone is sending it
+        .select("id");
+      if (error) throw new Error(error.message);
+      if (!saved?.length) throw new Error("Couldn't save it: the draft is being sent or was just changed. Have a look on screen.");
+      const prev = old as unknown as Record<string, string>;
+      const who = clip(p.who, 120);
+      return {
+        ok: true,
+        message: `Done. The ${d.label} for ${who || "them"} has the new wording. It hasn't been sent, so give it a read first. Say "undo" to put the old one back.`,
+        stamp: "REWRITTEN",
+        title: `${d.label[0].toUpperCase()}${d.label.slice(1)} · ${who}`,
+        href: d.href,
+        undo: { kind: "revise_draft", draftType: p.draftType, id: p.id, subject: prev.subject, body: prev[d.bodyCol], who },
+      };
     }
 
     case "send_checkins": {

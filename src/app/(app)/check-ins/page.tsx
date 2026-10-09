@@ -127,6 +127,7 @@ export default async function CheckinsPage(props: PageProps<"/check-ins">) {
               <CardBody className="space-y-3">
                 <Head c={c} />
                 <CheckinComposer
+                  key={`${c.subject}\u0000${c.message}`}
                   id={c.id}
                   subject={c.subject ?? ""}
                   message={c.message ?? ""}

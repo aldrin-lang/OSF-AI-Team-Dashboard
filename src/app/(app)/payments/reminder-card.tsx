@@ -48,7 +48,8 @@ export function ReminderCard({
   return (
     <div className="space-y-3 rounded-xl border border-line p-3">
       {head}
-      <form action={sendReminderAction} className="space-y-2">
+      {/* keyed by the text, so a draft rewritten elsewhere (e.g. by Donna) shows straight away */}
+      <form key={`${r.subject}\u0000${r.body}`} action={sendReminderAction} className="space-y-2">
         <input type="hidden" name="id" value={r.id} />
         <input type="hidden" name="invoice_id" value={r.invoice_id} />
         <input type="hidden" name="back" value={back} />

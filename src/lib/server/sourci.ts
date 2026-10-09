@@ -15,6 +15,9 @@ import { bestMatches } from "@/lib/fuzzy";
 import { SERVICE_INFO, leadServicesFor, pipelinesFor, type Service } from "@/lib/service";
 import type { SourciAction, SourciCard, SourciChart, SourciConfirm, SourciDashboard, SourciPipeline, SourciProposal, SourciReply, SourciTurn } from "@/lib/sourci-types";
 import { allRows } from "@/lib/server/paged";
+import { DRAFTS, DRAFT_TYPES, draftSelect, draftWho, isDraftType, type DraftType } from "@/lib/server/drafts";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Donna — the dashboard voice assistant. Reads data, opens pages, draws charts
@@ -380,6 +383,22 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       name: "propose_send_reminders",
       description: "Prepare sending ALL payment reminder drafts that are waiting (by email to the clients). The user must confirm.",
       parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_drafts",
+      description: "Read email drafts waiting to be sent, with their full subject and text: payment reminders, check-ins, client emails. Use before rewriting a draft, or when the user asks what an email says. search = client name, person, invoice number or a word from the subject (empty = all).",
+      parameters: { type: "object", properties: { type: { type: "string", enum: ["any", "payment_reminder", "checkin", "client_email"] }, search: { type: "string" } }, required: ["type", "search"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_revise_draft",
+      description: "Rewrite one waiting email draft (payment reminder, check-in or client email) the way the user asked: shorter, friendlier, firmer, fix the date, add a line, etc. First call find_drafts to get its id and current text, then write the COMPLETE new subject and body yourself (plain text, keep the greeting and sign-off unless told otherwise, keep facts like amounts, invoice numbers and dates correct). It only saves the new text for the user to check; it never sends. The user must confirm.",
+      parameters: { type: "object", properties: { type: { type: "string", enum: ["payment_reminder", "checkin", "client_email"] }, draft_id: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["type", "draft_id", "subject", "body"], additionalProperties: false },
     },
   },
   {
@@ -1648,6 +1667,47 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       });
     }
 
+    case "find_drafts": {
+      const wanted = isDraftType(args.type) ? [args.type] : [...DRAFT_TYPES];
+      const types = wanted.filter((t) => areas.includes(DRAFTS[t].area));
+      if (!types.length) return { data: { error: "No access to those drafts for this user's department" } };
+      const q = clean(args.search, 80).toLowerCase();
+      const found: { id: string; type: DraftType; for: string; subject: string; text: string }[] = [];
+      for (const t of types) {
+        const d = DRAFTS[t];
+        const { data } = await db.from(d.table).select(draftSelect(t)).eq("status", d.openStatus).order("created_at", { ascending: false }).limit(30);
+        for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
+          const who = draftWho(t, r);
+          const subject = String(r.subject ?? "");
+          const text = String(r[d.bodyCol] ?? "");
+          if (q && !`${who} ${subject}`.toLowerCase().includes(q)) continue;
+          found.push({ id: r.id as string, type: t, for: who, subject, text: text.slice(0, 3000) });
+        }
+      }
+      if (!found.length) return { data: { drafts: [], note: q ? `No waiting drafts match "${q}"` : "No drafts waiting" } };
+      return { data: { drafts: found.slice(0, 8), more: Math.max(0, found.length - 8) } };
+    }
+
+    case "propose_revise_draft": {
+      if (!isDraftType(args.type)) return { data: { error: "Unknown draft type" } };
+      const t = args.type;
+      const d = DRAFTS[t];
+      need(d.area);
+      const id = String(args.draft_id ?? "");
+      if (!UUID_RE.test(id)) return { data: { error: "Call find_drafts first to get the draft's id" } };
+      const { data: row } = await db.from(d.table).select(draftSelect(t)).eq("id", id).eq("status", d.openStatus).maybeSingle();
+      if (!row) return { data: { error: "That draft isn't waiting any more (already sent, skipped or removed)" } };
+      const subject = String(args.subject ?? "").trim().slice(0, 200);
+      const body = String(args.body ?? "").trim().slice(0, 8000);
+      if (!subject || !body) return { data: { error: "The new draft needs a subject and a message" } };
+      const who = draftWho(t, row as unknown as Record<string, unknown>);
+      return proposeOut({
+        title: `Rewrite ${d.label}`,
+        preview: [{ label: "For", value: who }, { label: "Subject", value: subject }, { label: "Message", value: body }],
+        proposal: { kind: "revise_draft", draftType: t, id, subject, body, who },
+      });
+    }
+
     case "propose_send_checkins": {
       need("checkins");
       const { data } = await db.from("checkins").select("id, contact_email, kind, contact_name, clients(name)").eq("status", "due").not("contact_email", "is", null).limit(25);
@@ -2428,6 +2488,7 @@ function proposeOut(confirmIn: SourciConfirm): ToolOut {
     bulk_convert: "Shall I convert them?",
     bulk_rescreen: "Shall I run it?",
     notifications_read: "Shall I clear them?",
+    revise_draft: "Shall I save the new version?",
   };
   return {
     data: { prepared: confirm.title, waiting_for_user_confirmation: true, preview: confirm.preview },
@@ -2534,13 +2595,20 @@ async function buildChart(metric: string, period: Period, areas: Area[], db: Db)
 function systemPrompt(name: string, path: string, memory: string[] = [], service: Service = "all") {
   return `You are Donna, the AI assistant built into OutsourceForce's team dashboard (Philippine virtual assistants and AI receptionists for small businesses in the UK, Ireland, Australia, New Zealand and Canada). You can look things up, show things on screen and prepare changes.
 
-Personality: the best secretary anyone ever had. You know the business inside out, you're usually a step ahead of what they're about to ask, and you're quietly confident about it. Warm, sharp, loyal to the team, with a dry wit you use sparingly (a light remark now and then, never at the expense of the answer). Polished woman's voice, British/Irish English. You're inspired by a famous TV legal secretary, but you are your own Donna: don't quote TV catchphrases or claim to be a TV character. Sound human: contractions, varied openers, natural rhythm. Never robotic or salesy: no "Certainly!", "As an AI", "I have prepared", "Great question". Use their first name now and then, not every time.
+Personality: the best secretary anyone ever had, and good fun to work with. You know the business inside out, you're usually a step ahead, and you're quietly confident about it. Warm, friendly and on their side. Polished woman's voice, British/Irish English. You're inspired by a famous TV legal secretary, but you are your own Donna: don't quote TV catchphrases or claim to be a TV character.
+Be CONVERSATIONAL, like a sharp colleague at the next desk, not a search box:
+- React like a person first when it fits ("Ooh, busy morning.", "Right, that one's overdue again.", "Ha, Dean's on a roll."), then answer.
+- Humour: a light, playful line in most replies (gentle teasing about the workload, a wry aside about a slow payer, celebrating a win). Keep it kind and work-safe: never about a client's looks, nationality or a person's mistakes in a mean way, never instead of the answer, and skip it when something is urgent or bad news.
+- Remember what was just said and build on it ("Same client as before?", "Want the same tone as the last one?"). Ask a quick follow-up when it genuinely helps.
+- Small talk is fine: answer it in one friendly line, then steer back to the work ("I'm grand, thanks. Now, shall we tackle those 17 leads?"). You're here for the CRM: leads, clients, VAs, roles, candidates, payments, check-ins, emails, tasks and sheets. For anything unrelated, one playful line and bring it back to the work.
+- Sound human: contractions, varied openers, natural rhythm. Never robotic or salesy: no "Certainly!", "As an AI", "I have prepared", "Great question". Use their first name now and then, not every time.
 Lead with the answer, then ONE insight that matters (what stands out, what's urgent, a risk or a win), then ONE specific offer for the next step ("Want me to share them out between Dean and Scott?"). Use real names and numbers from the tools. If the obvious next step is risky or costly, say so in a few words.
 Be proactive: when they finish something, suggest the logical follow-up. When they ask what to do, focus on or prioritise, call recommendations.
 
 Your answers are SPOKEN aloud, so:
-- Reply in one to three short sentences (under about 40 words): the answer, one insight, and an offer of a next step. The details are on screen, so never read out lists or tables. No markdown, no lists, no emojis, no URLs.
+- Reply in one to three short sentences (under about 50 words). The details are on screen, so never read out lists or tables. No markdown, no lists, no emojis, no URLs.
 - Round numbers and amounts ("about twelve hundred pounds"). Never read out long lists; give the top two or three.
+- WRITING EMAILS: you write the email text yourself (it goes in the tool, shown on screen), and only describe it in a sentence when you speak ("Done, shorter and a bit warmer. Have a read?").
 
 How to work:
 - Use the tools for every fact. Never invent data. If something isn't available, say so briefly.
@@ -2550,7 +2618,7 @@ How to work:
 - "Graph for each department": show_chart department_overview.
 - CHANGES: to change anything (lead status/setter/note, new client, client note, task, invoice paid/void, candidate status, email, team reminder) call the matching propose_ tool. It does NOT change anything; it shows a confirmation card. Then ask a short yes/no question, e.g. "Want me to create it?" or "Shall I send it?". Never say it is done.
 - For several leads at once ("assign all unassigned leads to Dean", "mark all no-answer leads lost") use propose_bulk_leads; to show a group of leads use list_leads.
-- For ANY other "show me / which / how many" question use search_records with filters; for ANY other change to one or many records use propose_bulk_update. Pipeline stage moves: propose_move_stage. New invoice: propose_create_invoice. New concern: propose_create_concern. Send all waiting payment reminders: propose_send_reminders. Send all due check-ins: propose_send_checkins. Won lead → client (VA or AI pipeline): propose_convert_lead.
+- For ANY other "show me / which / how many" question use search_records with filters; for ANY other change to one or many records use propose_bulk_update. Pipeline stage moves: propose_move_stage. New invoice: propose_create_invoice. New concern: propose_create_concern. Send all waiting payment reminders: propose_send_reminders. Change the wording of a waiting email draft (payment reminder, check-in, client email; "revise / rewrite / make it shorter / friendlier"): find_drafts, then write the whole new version yourself and call propose_revise_draft. On the Payments or Check-ins page, "this email" means the draft shown there. Send all due check-ins: propose_send_checkins. Won lead → client (VA or AI pipeline): propose_convert_lead.
 - "What needs me today / what did I miss / morning briefing": today_briefing. Saved daily report: daily_report.
 - SHEETS (the team's trackers inside the CRM, like Google Sheets): sheets_overview lists them; read_sheet answers questions about one; propose_sheet_row logs a row ("log 40 calls and 3 bookings for me today in Daily KPIs"); propose_create_sheet starts a new one from a template.
 - VA STAFFING: roles_summary = open roles (client job orders). role_matches = best candidates for a role. propose_open_role when a client wants a VA. propose_shortlist to put candidates on a role. propose_hire to hire someone on a role (creates the placement). vas_summary = every placed VA across clients.
@@ -2578,7 +2646,7 @@ export async function askSourci(input: { text: string; path: string; history: So
   const actions: SourciAction[] = [];
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt(input.userName, input.path, input.memory ?? [], input.service ?? "all") },
-    ...input.history.slice(-6).map((t) => ({ role: t.role, content: t.content.slice(0, 1000) }) as OpenAI.Chat.Completions.ChatCompletionMessageParam),
+    ...input.history.slice(-10).map((t) => ({ role: t.role, content: t.content.slice(0, 1000) }) as OpenAI.Chat.Completions.ChatCompletionMessageParam),
     {
       role: "user",
       content:

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const history: SourciTurn[] = Array.isArray(body.history)
     ? (body.history as SourciTurn[])
         .filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
-        .slice(-6)
+        .slice(-10) // enough back-and-forth to hold a conversation
     : [];
 
   try {
