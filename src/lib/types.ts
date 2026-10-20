@@ -473,6 +473,25 @@ export interface PaymentReminder {
   created_at: string;
 }
 
+/** Reports › Team numbers: a copy of the ops Google Sheets (see migration 20261021000001). */
+export interface OpsNumberCell {
+  k: string; // day (YYYY-MM-DD) for daily_numbers, KPI name for accounts
+  v: string;
+  n?: string; // the cell's note in the sheet
+}
+export interface OpsNumber {
+  id: string;
+  source: "daily_numbers" | "accounts";
+  section: string;
+  label: string;
+  sub_label: string;
+  owner: string | null;
+  target: string | null;
+  position: number;
+  cells: OpsNumberCell[];
+  imported_at: string;
+}
+
 export interface DailyReport {
   id: string;
   report_date: string;

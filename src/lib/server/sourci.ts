@@ -8,6 +8,7 @@ import { OPEN_STATUSES } from "@/lib/leads-ingest";
 import { CANDIDATE_STATUS, LEAD_STATUS } from "@/lib/labels";
 import { addDays, dublinDate, dublinDayBounds, formatMoney } from "@/lib/ops-core";
 import type { Area } from "@/lib/areas";
+import type { OpsNumber } from "@/lib/types";
 import { SHEET_TEMPLATES, formatCell, parseCell, type SheetColumn, type CellValue } from "@/lib/sheets";
 import { clientNames, matchCandidates } from "@/lib/server/staffing";
 import { ROLE_STATUS } from "@/lib/labels";
@@ -51,6 +52,8 @@ const PAGES: Record<string, { href: string; label: string; area: Area | null }> 
   candidates: { href: "/candidates", label: "Candidates", area: "candidates" },
   reports: { href: "/reports", label: "Reports", area: "reports" },
   daily_report: { href: "/reports/daily", label: "Daily report", area: "reports" },
+  team_numbers: { href: "/reports/team", label: "Team numbers", area: "reports" },
+  accounts_numbers: { href: "/reports/team?view=accounts", label: "Accounts numbers", area: "reports" },
   my_desk: { href: "/my-desk", label: "My desk", area: null },
   sheets: { href: "/sheets", label: "Sheets", area: null },
   open_roles: { href: "/roles", label: "Open roles", area: "candidates" },
@@ -428,6 +431,25 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "team_numbers",
+      description:
+        "The team's numbers from their Google Sheets (Reports › Team numbers). source 'daily' = OSF Mastersheet daily numbers per department and person (Consult Call, Client Interviews (Jenz), Recruitment (Roel), Operations (Kris/Joseph), Collections (Maria)) with daily targets; source 'accounts' = monthly OSF VA MOM figures (campaigns invoiced/retained/new/discontinued/paused, invoices, collected, collection rate, VA salary, gross margin, unpaid, hiring fees, AI subs, ads spent, CPL, net profit). Cell notes are included.",
+      parameters: {
+        type: "object",
+        properties: {
+          source: { type: "string", enum: ["daily", "accounts"] },
+          query: { type: "string", description: "Optional words to narrow it: a department, person, metric or KPI (e.g. 'Recruitment', 'Roel', 'Endorsed', 'Collection Rate')" },
+          from: { type: "string", description: "daily: first day YYYY-MM-DD (default 10 days before 'to'); accounts: first month YYYY-MM (default 12 months before 'to')" },
+          to: { type: "string", description: "daily: last day YYYY-MM-DD (default latest); accounts: last month YYYY-MM (default latest)" },
+        },
+        required: ["source", "query", "from", "to"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "sheets_overview",
       description: "List the team sheets (trackers) this user can open, newest first.",
       parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
@@ -439,6 +461,23 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       name: "read_sheet",
       description: "Read one sheet by name: its columns, totals and the latest rows. Use for questions like 'how many calls did we log today in Daily KPIs'.",
       parameters: { type: "object", properties: { sheet: { type: "string" } }, required: ["sheet"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_sheet",
+      description: "Search EVERY row of one sheet (read_sheet only shows the latest rows). Use for a client, person, metric or status anywhere in a sheet, e.g. 'which rows in Experiments mention TikTok', 'what did we log for Dean in Daily KPIs'. Words must all appear in the row (or in the given column).",
+      parameters: {
+        type: "object",
+        properties: {
+          sheet: { type: "string" },
+          query: { type: "string", description: "Words to find, e.g. a client name, a person, 'paused', 'Endorsed'" },
+          column: { type: "string", description: "Optional column name to search in only" },
+        },
+        required: ["sheet", "query"],
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -1777,6 +1816,34 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
       };
     }
 
+    case "search_sheet": {
+      const sheet = await findSheet(db, clean(args.sheet, 80));
+      if ("error" in sheet) return { data: sheet };
+      if ("ask" in sheet) return { data: { ask_which: sheet.ask } };
+      const words = clean(args.query, 120).toLowerCase().split(/\s+/).filter(Boolean);
+      if (!words.length) return { data: { error: "What should I look for in the sheet?" } };
+      const [{ data: cols }, rows, people] = await Promise.all([
+        db.from("sheet_columns").select("*").eq("sheet_id", sheet.id).order("position"),
+        allRows<{ cells: Record<string, CellValue> | null }>((a, b) => db.from("sheet_rows").select("cells").eq("sheet_id", sheet.id).order("position").order("id").range(a, b)),
+        teamNames(),
+      ]);
+      const columns = (cols as SheetColumn[]) ?? [];
+      const colName = clean(args.column, 80).toLowerCase();
+      const only = colName ? columns.find((c) => c.name.toLowerCase() === colName) ?? columns.find((c) => c.name.toLowerCase().includes(colName)) : undefined;
+      if (colName && !only) return { data: { error: `No column called "${args.column}"`, columns: columns.map((c) => c.name) } };
+      const asText = (cells: Record<string, CellValue>) =>
+        Object.fromEntries(columns.map((c) => [c.name, formatCell(c, cells[c.id], people).slice(0, 300)]).filter(([, v]) => v));
+      const hits = rows
+        .map((r) => asText(r.cells ?? {}))
+        .filter((t) => {
+          const hay = (only ? String(t[only.name] ?? "") : Object.values(t).join(" ")).toLowerCase();
+          return words.every((w) => hay.includes(w));
+        });
+      return {
+        data: { sheet: sheet.name, columns: columns.map((c) => c.name), rows_searched: rows.length, matches: hits.length, rows: hits.slice(0, 40), more: hits.length > 40 ? `${hits.length - 40} more matches - ask a narrower question` : undefined },
+      };
+    }
+
     case "propose_sheet_row": {
       const sheet = await findSheet(db, clean(args.sheet, 80));
       if ("error" in sheet) return { data: sheet };
@@ -2144,6 +2211,50 @@ async function runTool(name: string, args: Record<string, unknown>, areas: Area[
           ? `${hi}good news, nothing needs you right now. Enjoy the quiet.`
           : `${hi}${num(items.length)} ${items.length === 1 ? "thing" : "things"} on your plate today${alerts.length ? `, starting with ${alerts[0].title.toLowerCase()}` : ""}. It's all on screen.`,
       };
+    }
+
+    case "team_numbers": {
+      need("reports");
+      const daily = args.source !== "accounts";
+      const rows = (await allRows((a, b) =>
+        db.from("ops_numbers").select("section, label, sub_label, owner, target, cells").eq("source", daily ? "daily_numbers" : "accounts").order("position").order("id").range(a, b),
+      )) as Pick<OpsNumber, "section" | "label" | "sub_label" | "owner" | "target" | "cells">[];
+      if (!rows.length) return { data: { error: "No team numbers imported yet" } };
+      const words = clean(args.query, 120).toLowerCase().split(/\s+/).filter(Boolean);
+      const hit = (t: string) => words.every((w) => t.toLowerCase().includes(w));
+      const link = { type: "navigate" as const, href: daily ? "/reports/team" : "/reports/team?view=accounts", label: "Team numbers" };
+      if (daily) {
+        const days = [...new Set(rows.flatMap((r) => r.cells.map((c) => c.k)))].sort();
+        const to = /^\d{4}-\d{2}-\d{2}$/.test(String(args.to ?? "")) ? String(args.to) : days[days.length - 1];
+        const from = /^\d{4}-\d{2}-\d{2}$/.test(String(args.from ?? "")) ? String(args.from) : days.filter((d) => d <= to).slice(-10)[0] ?? to;
+        const out = rows
+          .filter((r) => hit(`${r.section} ${r.owner ?? ""} ${r.label} ${r.sub_label}`))
+          .map((r) => ({
+            department: r.section, person: r.owner, metric: r.label, quarter: r.sub_label || undefined, daily_target: r.target,
+            days: r.cells.filter((c) => c.k >= from && c.k <= to).map((c) => (c.n ? { day: c.k, value: c.v, note: c.n.slice(0, 400) } : { day: c.k, value: c.v })),
+          }))
+          .filter((r) => r.days.length);
+        return { data: { from, to, metrics: out.slice(0, 40), more: out.length > 40 ? "Narrow the question to see the rest" : undefined }, actions: [link] };
+      }
+      const monthOf = (r: { section: string; label: string }) => {
+        const mi = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].indexOf(r.label.toLowerCase());
+        const y = r.section.replace(/\D/g, "");
+        return mi < 0 ? `${y}-99` : `${y}-${String(mi + 1).padStart(2, "0")}`; // "Full year" sorts after December
+      };
+      const months = rows.map(monthOf).filter((m) => !m.endsWith("-99")).sort();
+      const to = /^\d{4}-\d{2}$/.test(String(args.to ?? "")) ? String(args.to) : months[months.length - 1];
+      const from = /^\d{4}-\d{2}$/.test(String(args.from ?? "")) ? String(args.from) : [...new Set(months)].filter((m) => m <= to).slice(-12)[0] ?? to;
+      const out = rows
+        .filter((r) => {
+          const m = monthOf(r);
+          return m.endsWith("-99") ? m.slice(0, 4) >= from.slice(0, 4) && m.slice(0, 4) <= to.slice(0, 4) : m >= from && m <= to;
+        })
+        .map((r) => ({
+          year: r.section, month: r.label, breakdown: r.sub_label || undefined,
+          kpis: r.cells.filter((c) => !words.length || hit(c.k)).map((c) => (c.n ? { kpi: c.k, value: c.v, note: c.n.slice(0, 400) } : { kpi: c.k, value: c.v })),
+        }))
+        .filter((r) => r.kpis.length);
+      return { data: { from, to, months: out }, actions: [link] };
     }
 
     case "daily_report": {
@@ -2619,8 +2730,8 @@ How to work:
 - CHANGES: to change anything (lead status/setter/note, new client, client note, task, invoice paid/void, candidate status, email, team reminder) call the matching propose_ tool. It does NOT change anything; it shows a confirmation card. Then ask a short yes/no question, e.g. "Want me to create it?" or "Shall I send it?". Never say it is done.
 - For several leads at once ("assign all unassigned leads to Dean", "mark all no-answer leads lost") use propose_bulk_leads; to show a group of leads use list_leads.
 - For ANY other "show me / which / how many" question use search_records with filters; for ANY other change to one or many records use propose_bulk_update. Pipeline stage moves: propose_move_stage. New invoice: propose_create_invoice. New concern: propose_create_concern. Send all waiting payment reminders: propose_send_reminders. Change the wording of a waiting email draft (payment reminder, check-in, client email; "revise / rewrite / make it shorter / friendlier"): find_drafts, then write the whole new version yourself and call propose_revise_draft. On the Payments or Check-ins page, "this email" means the draft shown there. Send all due check-ins: propose_send_checkins. Won lead → client (VA or AI pipeline): propose_convert_lead.
-- "What needs me today / what did I miss / morning briefing": today_briefing. Saved daily report: daily_report.
-- SHEETS (the team's trackers inside the CRM, like Google Sheets): sheets_overview lists them; read_sheet answers questions about one; propose_sheet_row logs a row ("log 40 calls and 3 bookings for me today in Daily KPIs"); propose_create_sheet starts a new one from a template.
+- "What needs me today / what did I miss / morning briefing": today_briefing. Saved daily report: daily_report. The team's own sheet numbers (daily numbers per department/person vs target, and monthly Accounts figures like collection rate, invoiced, paused, discontinued): team_numbers.
+- SHEETS (the team's trackers inside the CRM, like Google Sheets): sheets_overview lists them; read_sheet answers questions about one (latest rows only); search_sheet finds a client, person or metric in ANY row of a sheet; propose_sheet_row logs a row ("log 40 calls and 3 bookings for me today in Daily KPIs"); propose_create_sheet starts a new one from a template.
 - VA STAFFING: roles_summary = open roles (client job orders). role_matches = best candidates for a role. propose_open_role when a client wants a VA. propose_shortlist to put candidates on a role. propose_hire to hire someone on a role (creates the placement). vas_summary = every placed VA across clients.
 - Names are often misheard. If a name finds nothing, call resolve_name (and consider the "also heard" alternatives) before giving up. If the audio was clearly garbled, just ask "Sorry, say that again?".
 - If they tell you something lasting about themselves or the team ("call me…", "Dean handles…", "I prefer…"), call remember. "Forget that" = forget.

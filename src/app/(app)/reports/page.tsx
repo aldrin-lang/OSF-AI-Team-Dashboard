@@ -66,6 +66,12 @@ export default async function ReportsPage() {
     perManager.set(key, (perManager.get(key) ?? 0) + 1);
   }
 
+  // bars are a share of the biggest one so a large count can't push past the card
+  const maxStage = Math.max(1, ...perStage.map((r) => r.count));
+  const maxMonth = Math.max(1, ...months.map(([, n]) => n));
+  const maxManager = Math.max(1, ...perManager.values());
+  const pct = (n: number, max: number) => `${Math.max((n / max) * 70, n ? 3 : 0)}%`;
+
   const setupTotal = clients.reduce((a, c) => a + (c.setup_fee ?? 0), 0);
   const feePaid = clients.filter((c) => c.hiring_fee_status === "paid").length;
   const feePending = clients.filter((c) => c.hiring_fee_status === "pending").length;
@@ -78,9 +84,14 @@ export default async function ReportsPage() {
         title="Reports"
         subtitle="AI receptionist onboarding"
         actions={
-          <Link href="/reports/daily" className="text-sm font-medium text-brand-600 hover:underline">
-            Daily report →
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/reports/team" className="text-sm font-medium text-brand-600 hover:underline">
+              Team numbers →
+            </Link>
+            <Link href="/reports/daily" className="text-sm font-medium text-brand-600 hover:underline">
+              Daily report →
+            </Link>
+          </div>
         }
       />
 
@@ -110,7 +121,7 @@ export default async function ReportsPage() {
                 <tr key={r.stage.id} className="border-t border-line">
                   <td className="py-2 text-ink-muted">{r.stage.name}</td>
                   <td className="py-2">
-                    <span className="bar-grow inline-block h-2 rounded bg-slate-200 align-middle" style={{ width: `${Math.max(r.count * 14, r.count ? 8 : 0)}px` }} />
+                    <span className="bar-grow inline-block h-2 rounded bg-slate-200 align-middle" style={{ width: pct(r.count, maxStage) }} />
                     <span className="ml-2">{r.count}</span>
                   </td>
                   <td className="py-2 text-ink-muted">{r.avg}d</td>
@@ -134,8 +145,8 @@ export default async function ReportsPage() {
               <ul className="space-y-1 text-sm">
                 {months.map(([m, n]) => (
                   <li key={m} className="flex items-center gap-2">
-                    <span className="w-16 text-ink-muted">{m}</span>
-                    <span className="bar-grow inline-block h-3 rounded bg-emerald-400" style={{ width: `${n * 18}px` }} />
+                    <span className="w-16 shrink-0 text-ink-muted">{m}</span>
+                    <span className="bar-grow inline-block h-3 rounded bg-emerald-400" style={{ width: pct(n, maxMonth) }} />
                     <span>{n}</span>
                   </li>
                 ))}
@@ -154,10 +165,10 @@ export default async function ReportsPage() {
                 .sort((a, b) => b[1] - a[1])
                 .map(([id, n]) => (
                   <li key={id} className="flex items-center gap-2">
-                    <span className="w-28 truncate text-ink-muted">
+                    <span className="w-28 shrink-0 truncate text-ink-muted">
                       {id === "unassigned" ? "Unassigned" : pm.get(id)?.full_name ?? "—"}
                     </span>
-                    <span className="bar-grow inline-block h-3 rounded bg-brand-400" style={{ width: `${n * 18}px` }} />
+                    <span className="bar-grow inline-block h-3 rounded bg-brand-400" style={{ width: pct(n, maxManager) }} />
                     <span>{n}</span>
                   </li>
                 ))}
