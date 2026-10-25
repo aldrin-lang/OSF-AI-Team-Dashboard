@@ -65,6 +65,16 @@ t("menu: areas decide departments; sheet tabs follow pages", () => {
   assert.equal(findActive(menu, "/d/accounts/acc-pnl")?.tab.label, "P&L");
   assert.equal(findActive(menu, "/settings"), null);
 });
+t("menu: sheets shared with a department become its editable sub-tabs, before read-only copies", () => {
+  const menu = buildMenu(["payments"], [{ key: "acc-pnl", department: "accounts", label: "P&L", position: 5 }], [
+    { id: "s1", name: "Client VA Payments", departments: ["accounts"] },
+    { id: "s2", name: "Ops notes", departments: ["operations"] },
+  ]);
+  // a sheet the person can open shows under its department even without that department's pages
+  assert.deepEqual(menu.map((d) => d.key), ["va-managers", "accounts"]);
+  assert.deepEqual(menu[1].tabs.map((x) => x.href), ["/d/accounts", "/sheets/s1", "/d/accounts/acc-pnl"]);
+  assert.equal(findActive(menu, "/sheets/s1")?.tab.label, "Client VA Payments");
+});
 t("menu: client pages belong to VA Managers › Clients", () => {
   const menu = buildMenu(["clients"], []);
   assert.equal(findActive(menu, "/clients/abc")?.tab.label, "Clients");

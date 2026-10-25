@@ -115,6 +115,15 @@ export function SheetGrid({
     return list;
   }, [rows, orderedCols, query, sort, peopleMap]);
 
+  // Big sheets (thousands of rows) draw in batches so the page opens straight away; the rest follows.
+  const [drawn, setDrawn] = useState(400);
+  useEffect(() => {
+    if (drawn >= visibleRows.length) return;
+    const t = setTimeout(() => setDrawn((n) => n + 800), 60);
+    return () => clearTimeout(t);
+  }, [drawn, visibleRows.length]);
+  const drawnRows = drawn >= visibleRows.length ? visibleRows : visibleRows.slice(0, drawn);
+
   // ---------------------------------------------------------------- data I/O
   const sb = useCallback(async () => {
     if (!sbRef.current) sbRef.current = await getBrowserSupabase();
@@ -593,7 +602,7 @@ export function SheetGrid({
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row, r) => (
+            {drawnRows.map((row, r) => (
               <tr key={row.id} className="group/row">
                 <td className={cn("sticky left-0 z-10 border-b border-r border-line bg-surface px-2 text-center text-[11px] text-ink-faint", checked.has(row.id) && "bg-brand-500/10")}>
                   <span className={cn("group-hover/row:hidden", checked.has(row.id) && "hidden")}>{r + 1}</span>

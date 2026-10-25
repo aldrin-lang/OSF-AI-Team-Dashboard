@@ -12,7 +12,7 @@ import { Sourci } from "@/components/sourci";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { getService } from "@/lib/server/service";
-import { getMirrorTabs } from "@/lib/server/mirror";
+import { getDeptSheets, getMirrorTabs } from "@/lib/server/mirror";
 import { buildMenu } from "@/lib/departments";
 import { DeptTabs } from "@/components/dept-tabs";
 import { initials } from "@/lib/utils";
@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   const areas = await getMyAreas();
   const service = await getService();
-  const menu = buildMenu(areas, await getMirrorTabs());
+  const menu = buildMenu(areas, await getMirrorTabs(), await getDeptSheets());
   const { count } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })

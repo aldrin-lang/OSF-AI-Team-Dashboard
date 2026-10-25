@@ -6,8 +6,9 @@ import sys, os, json, re, datetime, math
 import openpyxl
 from openpyxl.utils import get_column_letter
 
-SRC_DIR, OUT = sys.argv[1], sys.argv[2]
-os.makedirs(OUT, exist_ok=True)
+SRC_DIR, OUT = (sys.argv[1], sys.argv[2]) if len(sys.argv) > 2 else ('', '')
+if OUT:
+    os.makedirs(OUT, exist_ok=True)
 
 MASTER = '1NpuXpWbA0OVUNFE5eKHZut0-6F4qE6kw6hODsmv9IDM'
 ACC = '1ZO7ykIuKMzl2BLXo7kXbp5Q5cLfSmJJa_8JM6NvMTXU'
@@ -315,35 +316,40 @@ def convert(t, position, wb, file_id):
     json.dump(out, open(os.path.join(OUT, key + '.json'), 'w'))
     return len(row_pos), len(cols), len(parts), notes_seen
 
-books = {}
-def book(fid):
-    if fid not in books:
-        books[fid] = openpyxl.load_workbook(os.path.join(SRC_DIR, fid + '.xlsx'), data_only=True)
-    return books[fid]
+def main():
+    books = {}
+    def book(fid):
+        if fid not in books:
+            books[fid] = openpyxl.load_workbook(os.path.join(SRC_DIR, fid + '.xlsx'), data_only=True)
+        return books[fid]
 
-tabs = []
-for t in TABS:
-    if t == 'ROEL':
-        wb = book(ROEL)
-        for ws in wb.worksheets:
-            if ws.sheet_state != 'visible':
+    tabs = []
+    for t in TABS:
+        if t == 'ROEL':
+            wb = book(ROEL)
+            for ws in wb.worksheets:
+                if ws.sheet_state != 'visible':
+                    continue
+                tabs.append(['rec-' + slug(ws.title), 'recruitment', 'candidates', ws.title, ROEL, ws.title])
+        else:
+            tabs.append(t)
+    ok = 0
+    skipped = []
+    for i, t in enumerate(tabs):
+        try:
+            n, w, p, notes = convert(t, i, book(t[4]), t[4])
+            if n == 0:
+                os.remove(os.path.join(OUT, t[0] + '.json'))
+                skipped.append(t[0])
+                print(f'SKIP {t[0]:<34} empty tab')
                 continue
-            tabs.append(['rec-' + slug(ws.title), 'recruitment', 'candidates', ws.title, ROEL, ws.title])
-    else:
-        tabs.append(t)
-ok = 0
-skipped = []
-for i, t in enumerate(tabs):
-    try:
-        n, w, p, notes = convert(t, i, book(t[4]), t[4])
-        if n == 0:
-            os.remove(os.path.join(OUT, t[0] + '.json'))
-            skipped.append(t[0])
-            print(f'SKIP {t[0]:<34} empty tab')
-            continue
-        ok += 1
-        print(f'OK   {t[0]:<34} {n:>5} rows x {w:>3} cols, {p} part(s), {notes} notes')
-    except Exception as e:
-        print(f'FAIL {t[0]:<34} {type(e).__name__}: {str(e)[:120]}')
-json.dump([t[0] for t in tabs if t[0] not in skipped and os.path.exists(os.path.join(OUT, t[0] + '.json'))], open(os.path.join(OUT, '_keys.json'), 'w'))
-print(f'{ok} of {len(tabs)} tabs converted')
+            ok += 1
+            print(f'OK   {t[0]:<34} {n:>5} rows x {w:>3} cols, {p} part(s), {notes} notes')
+        except Exception as e:
+            print(f'FAIL {t[0]:<34} {type(e).__name__}: {str(e)[:120]}')
+    json.dump([t[0] for t in tabs if t[0] not in skipped and os.path.exists(os.path.join(OUT, t[0] + '.json'))], open(os.path.join(OUT, '_keys.json'), 'w'))
+    print(f'{ok} of {len(tabs)} tabs converted')
+
+
+if __name__ == '__main__':
+    main()

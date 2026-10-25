@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { requireArea } from "@/lib/auth";
-import { getMirror } from "@/lib/server/mirror";
+import { getDeptSheets, getMirror, getSheetRows } from "@/lib/server/mirror";
 import { bucketOf, euro, parsePayRuns, pct, reminderEmail, type PayBucket, type PayLine, type PayStatus } from "@/lib/mirror";
 import { relativeTime, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
@@ -27,19 +27,29 @@ const LIST_LABEL: Record<List, string> = { remind: "Needs a reminder", check: "N
  */
 export async function Collections({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   await requireArea("payments");
-  const grid = await getMirror(PAYMENTS_KEY);
-  const runs = grid ? parsePayRuns(grid.rows).filter((r) => r.lines.length) : [];
+  // Maria now edits "Client VA Payments" in the dashboard; the old read-only copy is only a fallback
+  const sheet = (await getDeptSheets()).find((s) => s.departments.includes("accounts") && /^\s*client va payments\s*$/i.test(s.name));
+  const edited = sheet ? await getSheetRows(sheet.id) : null;
+  const grid = edited ? null : await getMirror(PAYMENTS_KEY);
+  const source = edited ? edited.rows : grid?.rows ?? [];
+  const runs = parsePayRuns(source).filter((r) => r.lines.length);
 
   const header = (
     <PageHeader
       title="Collections"
       subtitle={
-        grid
-          ? `From ${grid.meta.source_name} · updated ${relativeTime(grid.meta.synced_at)}`
-          : "From Customer Payments › Client VA Payments"
+        edited
+          ? `From the Accounts sheet "Client VA Payments" · last edit ${relativeTime(edited.updatedAt)}`
+          : grid
+            ? `From ${grid.meta.source_name} · updated ${relativeTime(grid.meta.synced_at)}`
+            : "From Accounts › Client VA Payments"
       }
       actions={
-        grid?.meta.source_url ? (
+        sheet ? (
+          <Link href={`/sheets/${sheet.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline">
+            Edit Client VA Payments →
+          </Link>
+        ) : grid?.meta.source_url ? (
           <a href={grid.meta.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline">
             Open in Google Sheets <ExternalLink className="h-3.5 w-3.5" />
           </a>
@@ -51,7 +61,7 @@ export async function Collections({ searchParams }: { searchParams: Record<strin
     return (
       <div className="space-y-4">
         {header}
-        <EmptyState>The payments sheet hasn&apos;t been copied in yet.</EmptyState>
+        <EmptyState>No pay-runs found in Client VA Payments yet.</EmptyState>
       </div>
     );
   }

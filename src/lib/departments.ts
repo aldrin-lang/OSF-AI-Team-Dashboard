@@ -75,21 +75,36 @@ export type DeptMenu = { key: DepartmentKey; label: string; tabs: DeptTab[] };
 
 /** A synced sheet tab, as listed in the menu (no cells). */
 export type MirrorTabInfo = { key: string; department: string; label: string; position: number };
+/** An editable dashboard Sheet shared with a team department (sheets.visibility = "departments"). */
+export type DeptSheetInfo = { id: string; name: string; departments: string[] };
+
+/** Team departments (Admin › departments) → the menu department their shared sheets appear under. */
+const SHEET_DEPT: Record<string, DepartmentKey> = {
+  accounts: "accounts",
+  recruitment: "recruitment",
+  sales: "sales",
+  marketing: "marketing",
+  client_success: "va-managers",
+  operations: "va-managers",
+};
 
 /**
- * The menu for one person: their departments, each with the pages they can open
- * followed by the sheet tabs they can read (RLS already filtered those).
- * Sheet tabs follow the built-in pages, in the order set in the sync script.
+ * The menu for one person: their departments, each with the pages they can open, then the editable
+ * Sheets shared with that department (in the order they were made), then read-only sheet copies.
+ * RLS already filtered the sheets and copies to what this person can open.
  */
-export function buildMenu(areas: readonly Area[], mirrors: MirrorTabInfo[]): DeptMenu[] {
+export function buildMenu(areas: readonly Area[], mirrors: MirrorTabInfo[], sheets: DeptSheetInfo[] = []): DeptMenu[] {
   return DEPARTMENT_KEYS.map((key) => {
     const d = DEPARTMENTS[key];
     const pages = d.pages.filter((p) => areas.includes(p.area)).map((p) => ({ label: p.label, href: p.href, exact: p.exact, also: p.also }));
-    const sheets = mirrors
+    const editable = sheets
+      .filter((sh) => sh.departments.some((dk) => SHEET_DEPT[dk] === key))
+      .map((sh) => ({ label: sh.name, href: `/sheets/${sh.id}` }));
+    const copies = mirrors
       .filter((m) => m.department === key)
       .sort((a, b) => a.position - b.position || a.label.localeCompare(b.label))
       .map((m) => ({ label: m.label, href: `/d/${key}/${m.key}` }));
-    return { key, label: d.label, tabs: [...pages, ...sheets] };
+    return { key, label: d.label, tabs: [...pages, ...editable, ...copies] };
   }).filter((d) => d.tabs.length > 0);
 }
 
