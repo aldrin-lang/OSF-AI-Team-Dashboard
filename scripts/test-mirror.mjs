@@ -45,6 +45,12 @@ t("parsePayRuns splits pay-runs and works out status", () => {
   assert.equal(Math.round(runs[0].invoiced * 100), 181456);
   assert.equal(runs[1].lines[0].status, "Part paid");
 });
+t("parsePayRuns: an overpayment typo doesn't inflate collected", () => {
+  const typo = assembleRows([{ styles: [], rows: [head1, head2, [10, null, null, null, null, "1-15 May 2026"], line(11, "Daniel Strutt", "Kate", "€838.64", "83864", "INV-9")] }]);
+  const r = parsePayRuns(typo)[0];
+  assert.equal(r.received, 838.64);
+  assert.equal(r.lines[0].received, 83864);
+});
 t("validRows", () => {
   assert.equal(validRows([[1, "a"]]), true);
   assert.equal(validRows([["x"]]), false);
@@ -69,7 +75,8 @@ t("bucketOf: each line lands in one worklist", () => {
   const base = { row: 1, client: "Craig McKenzie", va: "Lovely", country: "UK", remark: "", invoice: 100, received: 0, datePaid: "", xero: "INV-2", notes: "", sheetStatus: "", status: "Unpaid" };
   assert.equal(bucketOf(base).bucket, "remind");
   assert.equal(bucketOf({ ...base, received: 100, datePaid: "20/10/2026", status: "Paid" }).bucket, "paid");
-  assert.match(bucketOf({ ...base, received: 100, status: "Paid" }).reason, /no date paid/);
+  assert.equal(bucketOf({ ...base, received: 100, status: "Paid" }).bucket, "paid"); // Maria doesn't fill Date Paid
+  assert.match(bucketOf({ ...base, received: 10000, status: "Paid" }).reason, /more than invoiced/);
   assert.match(bucketOf({ ...base, received: 40, status: "Part paid" }).reason, /Part paid/);
   assert.match(bucketOf({ ...base, invoice: 0, status: "Not invoiced" }).reason, /no reason written/);
   assert.match(bucketOf({ ...base, sheetStatus: "PAID" }).reason, /no amount received/);

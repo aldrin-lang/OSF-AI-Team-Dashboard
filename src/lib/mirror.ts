@@ -164,7 +164,8 @@ export function parsePayRuns(rows: MirrorRow[]): PayRun[] {
       status,
     });
     run.invoiced += invoice;
-    run.received += received;
+    // a typo like 83864 for 838.64 must not inflate the total; it is flagged under "Needs checking" instead
+    run.received += invoice > 0 ? Math.min(received, invoice) : received;
   }
   return runs;
 }
@@ -184,7 +185,6 @@ export function bucketOf(l: PayLine): { bucket: PayBucket; reason: string } {
   if (l.status === "Not invoiced") return { bucket: "check", reason: "Not invoiced yet" + (l.remark || l.notes ? "" : " (no reason written)") };
   if (l.status === "Part paid") return { bucket: "check", reason: `Part paid: ${euro(l.received)} of ${euro(l.invoice)}` };
   if (l.received > l.invoice + 0.5) return { bucket: "check", reason: `Paid more than invoiced (${euro(l.received)} of ${euro(l.invoice)})` };
-  if (l.status === "Paid" && !l.datePaid) return { bucket: "check", reason: "Paid, but no date paid" };
   if (l.status === "Paid" && sheetSaysUnpaid) return { bucket: "check", reason: `Amount received, but status says "${l.sheetStatus}"` };
   if (l.status === "Unpaid" && l.datePaid) return { bucket: "check", reason: `Has a date paid (${l.datePaid}) but no amount received` };
   if (l.status === "Unpaid" && sheetSaysPaid) return { bucket: "check", reason: `Status says "${l.sheetStatus}", but no amount received` };
