@@ -13,7 +13,9 @@ const URL_RE = /^https?:\/\/\S+$/i;
  * The "paper" keeps the sheet's own light colours in dark mode, like a sheet embed.
  */
 export function SheetView({ grid, basePath, page, q }: { grid: MirrorGrid; basePath: string; page: number; q: string }) {
-  const { meta, rows } = grid;
+  const { meta } = grid;
+  const all = grid.rows; // merges point into this list (hidden rows included)
+  const rows = all.filter((r) => !r.hidden); // the sheet's hidden rows stay hidden here too
   const colCount = Math.max(meta.col_count, ...rows.map((r) => r.cells.length), 1);
   const frozen = Math.min(meta.frozen_rows, rows.length, 10);
   const head = rows.slice(0, frozen);
@@ -34,21 +36,16 @@ export function SheetView({ grid, basePath, page, q }: { grid: MirrorGrid; baseP
   const mergeAt = new Map<string, [number, number]>();
   const covered = new Set<string>();
   if (!query) {
-    const index = new Map(rows.map((r, i) => [r.num, i]));
     const visible = new Set([...head, ...shown].map((r) => r.num));
     for (const [r0, c0, rs, cs] of meta.merges) {
-      const top = rows[r0];
+      const top = all[r0];
       if (!top || !visible.has(top.num)) continue;
-      let span = 0;
-      for (let k = 0; k < rs; k++) {
-        const r = rows[r0 + k];
-        if (!r || !visible.has(r.num) || (k > 0 && index.get(r.num) !== r0 + k)) break;
-        span++;
-      }
-      mergeAt.set(`${top.num}:${c0}`, [Math.max(span, 1), cs]);
-      for (let k = 0; k < span; k++) {
-        for (let j = 0; j < cs; j++) if (k || j) covered.add(`${rows[r0 + k].num}:${c0 + j}`);
-      }
+      // the merged rows that are on screen, in order (hidden rows inside a merge are skipped)
+      const spanned = all.slice(r0, r0 + rs).filter((r) => !r.hidden && visible.has(r.num));
+      mergeAt.set(`${top.num}:${c0}`, [Math.max(spanned.length, 1), cs]);
+      spanned.forEach((r, k) => {
+        for (let j = 0; j < cs; j++) if (k || j) covered.add(`${r.num}:${c0 + j}`);
+      });
     }
   }
 

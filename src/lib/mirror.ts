@@ -1,7 +1,7 @@
 /**
  * Read-only copies of the team's Google Sheet tabs (sheet_mirror). Pure helpers
  * shared by the sync route and the pages. Cell shape sent by the sync script:
- *   row  = [sheetRowNumber, cell, cell, ...]
+ *   row  = [sheetRowNumber, cell, cell, ...]   (negative row number = row hidden in the sheet)
  *   cell = null (empty) | "text" | [text, styleIndex] | [text, styleIndex, note]
  * Style indexes point into the part's own `styles` list.
  */
@@ -18,7 +18,8 @@ export type MirrorRowRaw = [number, ...MirrorCellRaw[]];
 
 /** A cell ready to draw: text, its style and an optional cell note. */
 export type MirrorCell = { v: string; s: MirrorStyle | null; n: string };
-export type MirrorRow = { num: number; cells: MirrorCell[] };
+/** `hidden`: hidden in the sheet. The sheet view leaves it out; totals (Collections) still count it. */
+export type MirrorRow = { num: number; hidden: boolean; cells: MirrorCell[] };
 
 export type MirrorMeta = {
   key: string;
@@ -60,7 +61,7 @@ export function assembleRows(parts: { styles: unknown; rows: unknown }[]): Mirro
         }
         return { v: String(c), s: null, n: "" };
       });
-      out.push({ num: r[0], cells });
+      out.push({ num: Math.abs(r[0]), hidden: r[0] < 0, cells });
     }
   }
   return out;

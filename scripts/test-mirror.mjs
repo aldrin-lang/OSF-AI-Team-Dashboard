@@ -14,7 +14,7 @@ const rows = assembleRows([{ styles: [{ b: 1 }], rows: [
   head1, head2,
   [4600, null, null, null, null, ["1-15 October 2026", 0]],
   line(4601, "Lee Maher", "Von Andrew", "€900.24", "€900.24", "INV-1"),
-  line(4602, "Craig McKenzie", "Lovely", "€914.32", "", "INV-2", "chased twice"),
+  line(-4602, "Craig McKenzie", "Lovely", "€914.32", "", "INV-2", "chased twice"), // hidden in the sheet
   [4603, "GBP will wait for Josef", "UK", null, "Gary Logue", "Clarice", null, null, "10", "11", "10", "", "", "", "", "€0.00", "€0.00"],
   [4650, null, null, null, null, "16-31 October 2026"],
   line(4651, "Alex Serban", "Ronidel", "€675.18", "€300.00", "INV-3"),
@@ -25,6 +25,9 @@ t("assembleRows keeps row numbers, text, styles", () => {
   assert.equal(rows[2].num, 4600);
   assert.equal(rows[2].cells[4].v, "1-15 October 2026");
   assert.deepEqual(rows[2].cells[4].s, { b: 1 });
+  assert.equal(rows[4].num, 4602);
+  assert.equal(rows[4].hidden, true);
+  assert.equal(rows[3].hidden, false);
 });
 t("money parses sheet formats", () => {
   assert.equal(money("EUR €1,234.56"), 1234.56);
@@ -37,7 +40,7 @@ t("parsePayRuns splits pay-runs and works out status", () => {
   assert.equal(runs[0].label, "1-15 October 2026");
   assert.equal(runs[0].month, "October 2026");
   assert.deepEqual(runs[0].lines.map((l) => l.status), ["Paid", "Unpaid", "Not invoiced"]);
-  assert.equal(runs[0].lines[1].notes, "chased twice");
+  assert.equal(runs[0].lines[1].notes, "chased twice"); // hidden rows still count
   assert.equal(runs[0].lines[2].remark, "GBP will wait for Josef");
   assert.equal(Math.round(runs[0].invoiced * 100), 181456);
   assert.equal(runs[1].lines[0].status, "Part paid");
