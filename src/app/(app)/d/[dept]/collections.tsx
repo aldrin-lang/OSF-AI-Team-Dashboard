@@ -57,7 +57,9 @@ export async function Collections({ searchParams }: { searchParams: Record<strin
   }
 
   const recent = runs.slice(-8).reverse(); // newest first
-  const run = recent.find((r) => r.label === searchParams.run) ?? recent[0];
+  // open on the latest pay-run that has started collecting (the next one is often pre-filled and all unpaid)
+  const run = recent.find((r) => r.label === searchParams.run) ?? recent.find((r) => r.received > 0) ?? recent[0];
+  const notStarted = run.received === 0;
   const month = runs.filter((r) => r.month === run.month);
   const mInv = month.reduce((a, r) => a + r.invoiced, 0);
   const mGot = month.reduce((a, r) => a + r.received, 0);
@@ -126,7 +128,11 @@ export async function Collections({ searchParams }: { searchParams: Record<strin
       {list === "remind" &&
         (clients.length ? (
           <div className="space-y-3">
-            <p className="text-sm text-ink-muted">Unpaid in {run.label}. One email per client covers all of their unpaid lines.</p>
+            <p className="text-sm text-ink-muted">
+              {notStarted
+                ? `Nothing has been collected for ${run.label} yet, so every line shows here. Send reminders once these invoices are due.`
+                : `Unpaid in ${run.label}. One email per client covers all of their unpaid lines.`}
+            </p>
             {clients.map(([client, lines]) => {
               const email = reminderEmail(client, lines, run.label);
               return (
