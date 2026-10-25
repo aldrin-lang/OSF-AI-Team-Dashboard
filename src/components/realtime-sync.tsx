@@ -4,35 +4,41 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
-const TABLES = [
-  "clients",
-  "client_lines",
-  "checklist_items",
-  "concerns",
-  "comments",
-  "client_emails",
-  "tasks",
-  "activity_log",
-  "notifications",
-  "pipeline_stages",
-  "leads",
-  "lead_events",
-  "candidates",
-  "checkins",
-  "invoices",
-  "payment_reminders",
-  "setters",
-  "sheets",
-  "va_roles",
-  "va_role_candidates",
-  "va_placements",
-];
-
 /**
- * App-wide live sync. Subscribes to Postgres change events and refreshes the
- * current route (debounced) so every open session sees teammates' edits within
- * about a second — Google-Sheets style. RLS still gates what each user receives.
+ * Which pages each table's changes can affect. A change only refreshes the page you are on when it
+ * matters there (busy tables like leads or the activity log used to reload every open page).
  */
+const TABLES: Record<string, string[]> = {
+  clients: ["/", "/clients", "/pipeline", "/vas", "/check-ins", "/concerns", "/my-desk", "/d/accounts"],
+  client_lines: ["/clients"],
+  checklist_items: ["/clients", "/my-desk"],
+  concerns: ["/concerns", "/clients", "/my-desk"],
+  comments: ["/clients", "/concerns"],
+  client_emails: ["/clients"],
+  tasks: ["/clients", "/my-desk"],
+  activity_log: ["/clients"],
+  notifications: ["/notifications"],
+  pipeline_stages: ["/", "/pipeline", "/clients"],
+  leads: ["/leads"],
+  lead_events: ["/leads"],
+  candidates: ["/candidates", "/roles"],
+  checkins: ["/check-ins", "/vas", "/clients", "/my-desk"],
+  invoices: ["/payments"],
+  payment_reminders: ["/payments"],
+  setters: ["/leads"],
+  sheets: ["/sheets"],
+  va_roles: ["/roles", "/candidates"],
+  va_role_candidates: ["/roles", "/candidates"],
+  va_placements: ["/vas", "/clients", "/roles"],
+  client_payments: ["/d/accounts"],
+};
+const MIN_GAP_MS = 3000; // at most one refresh every 3 s, however many changes arrive
+const STALE_AFTER_MS = 60_000; // coming back to the tab only refreshes after a minute away
+
+function affects(table: string, path: string): boolean {
+  return (TABLES[table] ?? []).some((p) => (p === "/" ? path === "/" : path === p || path.startsWith(p + "/")));
+}
+
 export function RealtimeSync() {
   const router = useRouter();
   const [live, setLive] = useState(false);
@@ -40,11 +46,17 @@ export function RealtimeSync() {
   useEffect(() => {
     let cleanup = () => {};
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let last = 0;
+    let hiddenAt = 0;
 
-    const bump = () => {
-      if (document.hidden) return;
+    const refresh = () => {
+      last = Date.now();
+      router.refresh();
+    };
+    const bump = (table: string) => {
+      if (document.hidden || !affects(table, window.location.pathname)) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => router.refresh(), 600);
+      timer = setTimeout(refresh, Math.max(600, MIN_GAP_MS - (Date.now() - last)));
     };
 
     (async () => {
@@ -63,8 +75,8 @@ export function RealtimeSync() {
       });
 
       let ch = sb.channel("app-live", { config: { private: false } });
-      for (const table of TABLES) {
-        ch = ch.on("postgres_changes", { event: "*", schema: "public", table }, bump);
+      for (const table of Object.keys(TABLES)) {
+        ch = ch.on("postgres_changes", { event: "*", schema: "public", table }, () => bump(table));
       }
       ch.subscribe((status) => setLive(status === "SUBSCRIBED"));
 
@@ -77,7 +89,8 @@ export function RealtimeSync() {
     });
 
     const onVisible = () => {
-      if (!document.hidden) router.refresh();
+      if (document.hidden) hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > STALE_AFTER_MS) refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
 

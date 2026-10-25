@@ -33,12 +33,17 @@ export const STAGE_LABEL: Record<Stage, string> = {
 /** Days after the period ends that a payment is due, when no due date is set. */
 export const DEFAULT_DUE_DAYS = 7;
 
-/** Which Accounts tab a payment line is in, on a given day (YYYY-MM-DD). */
+/**
+ * Which Accounts tab a payment line is in, on a given day (YYYY-MM-DD, Dublin business date).
+ * Must match public.client_payment_stage() in supabase/migrations/20261026000001_accounts_speed.sql.
+ * An invoiced line with no due date stays in For collection; an invoiced zero line has nothing to collect.
+ */
 export function stageOf(p: Pick<ClientPayment, "amount" | "paid_amount" | "invoice_no" | "due_on">, today: string): Stage {
   const amount = Number(p.amount) || 0;
   const paid = Number(p.paid_amount) || 0;
   if (paid > 0 && paid + 0.005 >= amount) return "paid";
   if (!p.invoice_no?.trim()) return "for-invoice";
+  if (amount <= 0) return "paid";
   if (p.due_on && p.due_on < today) return "not-paid";
   return "for-collection";
 }
@@ -57,8 +62,10 @@ export function parsePeriod(label: string): { start: string; end: string } | nul
   if (mi < 0) return null;
   const y = Number(m[4]);
   const last = new Date(Date.UTC(y, mi + 1, 0)).getUTCDate();
-  const d1 = Math.min(Number(m[1]), last);
+  // "16-31 September" is the team's shorthand for "to the end of the month": the end day is clamped
+  const d1 = Number(m[1]);
   const d2 = Math.min(Number(m[2]), last);
+  if (d1 < 1 || d1 > last || d2 < d1) return null;
   return { start: `${y}-${pad(mi + 1)}-${pad(d1)}`, end: `${y}-${pad(mi + 1)}-${pad(d2)}` };
 }
 
@@ -68,25 +75,53 @@ export function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** A real calendar day (2026-02-31 is not). */
+export function isCalendarDate(y: number, m: number, d: number): boolean {
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+
 /** "25/10/2026", "10/25/2026" (when unambiguous), "2026-10-25", "Oct 25, 2026" → YYYY-MM-DD, or null. */
 export function parseSheetDate(v: string): string | null {
   const s = v.trim();
   if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  if (m) return isCalendarDate(+m[1], +m[2], +m[3]) ? `${m[1]}-${pad(+m[2])}-${pad(+m[3])}` : null;
   m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})$/);
   if (m) {
     let [d, mo] = [+m[1], +m[2]];
     if (mo > 12 && d <= 12) [d, mo] = [mo, d];
     const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
-    return mo >= 1 && mo <= 12 && d >= 1 && d <= 31 ? `${y}-${pad(mo)}-${pad(d)}` : null;
+    return isCalendarDate(y, mo, d) ? `${y}-${pad(mo)}-${pad(d)}` : null;
   }
   const t = Date.parse(s);
   return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
 }
 
+/**
+ * A money or hours amount typed by a person: "1234.5", "1,234.50", "€900.24" → number; anything
+ * else ("abc", "10,50", "1e3", negative) → NaN, so a typo is rejected instead of saved as a wrong value.
+ * Up to 2 decimals and below 10 billion (numeric(12,2)).
+ */
+export function parseAmount(v: string): number {
+  let t = v.trim().replace(/^[€£$]\s*|^(EUR|GBP|USD|NZD|AUD|CAD)\s*/i, "");
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
+  const n = Number(t);
+  return n < 1e10 ? n : NaN;
+}
+
 export const money = (n: number, currency = "EUR") =>
   new Intl.NumberFormat("en-IE", { style: "currency", currency, minimumFractionDigits: 2 }).format(Number(n) || 0);
+
+/** Amounts in more than one currency are never added together: "€1,200.00 + £300.00". */
+export function moneyByCurrency(byCurrency: Record<string, number> | null | undefined): string {
+  const parts = Object.entries(byCurrency ?? {})
+    .filter(([, v]) => Math.abs(Number(v)) >= 0.005)
+    .sort(([a], [b]) => (a === "EUR" ? -1 : b === "EUR" ? 1 : a.localeCompare(b)))
+    .map(([c, v]) => money(Number(v), c));
+  return parts.length ? parts.join(" + ") : money(0);
+}
 
 // ---------------------------------------------------------------------------
 // Matching sheet client names to CRM clients ("Matt Hopely" = "Matt Hopley",

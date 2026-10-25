@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { isPartPaid, money, owedOf, stageOf, STAGE_LABEL, type ClientPayment, type Stage } from "@/lib/client-payments";
+import { isPartPaid, money, moneyByCurrency, owedOf, stageOf, STAGE_LABEL, type ClientPayment, type Stage } from "@/lib/client-payments";
+import type { PaymentLine, StageTotals } from "./data";
 import { markInvoiced, markPaid } from "./actions";
 
 export const STAGE_PILL: Record<Stage, string> = {
@@ -31,6 +32,7 @@ export function QuickAction({ p, today, back }: { p: ClientPayment; today: strin
     return (
       <form action={markInvoiced} className="flex flex-wrap items-center gap-1.5">
         <input type="hidden" name="id" value={p.id} />
+        <input type="hidden" name="updated_at" value={p.updated_at} />
         <input type="hidden" name="back" value={back} />
         <input name="invoice_no" placeholder="Invoice no." aria-label="Invoice number" className={cn(field, "w-28")} required />
         <input type="date" name="invoiced_on" defaultValue={today} aria-label="Invoice date" className={cn(field, "w-36")} />
@@ -40,10 +42,11 @@ export function QuickAction({ p, today, back }: { p: ClientPayment; today: strin
   }
   if (stage === "paid") return <span className="text-xs text-ink-muted">Paid {p.paid_on ? shortDate(p.paid_on) : "(date not recorded)"}</span>;
   return (
-    <form action={markPaid} className="flex flex-wrap items-center gap-1.5">
+    <form action={markPaid} className="flex flex-wrap items-center gap-1.5" title="Total received so far for this line (not just the latest instalment)">
       <input type="hidden" name="id" value={p.id} />
+      <input type="hidden" name="updated_at" value={p.updated_at} />
       <input type="hidden" name="back" value={back} />
-      <input name="paid_amount" defaultValue={(Number(p.amount) || 0).toFixed(2)} aria-label="Amount received" className={cn(field, "w-24 text-right tabular-nums")} required />
+      <input name="paid_amount" defaultValue={(Number(p.amount) || 0).toFixed(2)} aria-label="Total received so far" className={cn(field, "w-24 text-right tabular-nums")} required />
       <input type="date" name="paid_on" defaultValue={today} aria-label="Date paid" className={cn(field, "w-36")} />
       <SubmitButton size="sm" pendingText="Saving…">Mark paid</SubmitButton>
     </form>
@@ -58,8 +61,8 @@ export function PaymentTable({
   back,
   showClient = true,
 }: {
-  rows: ClientPayment[];
-  names: Map<string, string>;
+  rows: PaymentLine[];
+  names?: Map<string, string>;
   today: string;
   back: string;
   showClient?: boolean;
@@ -86,7 +89,7 @@ export function PaymentTable({
                 {showClient && (
                   <td className="px-4 py-2.5">
                     <Link href={`/d/accounts/client/${p.client_id}`} className="font-semibold text-ink hover:text-brand-600 hover:underline">
-                      {names.get(p.client_id) ?? "Client"}
+                      {p.client_name ?? names?.get(p.client_id) ?? "Client"}
                     </Link>
                   </td>
                 )}
@@ -116,30 +119,26 @@ export function PaymentTable({
   );
 }
 
-/** Totals per tab, shown on every Accounts page. */
-export function StageTiles({ payments, today }: { payments: ClientPayment[]; today: string }) {
-  const by = (s: Stage) => payments.filter((p) => stageOf(p, today) === s);
-  const tiles: { s: Stage; href: string; note: (l: ClientPayment[]) => string }[] = [
-    { s: "for-invoice", href: "/d/accounts/for-invoice", note: (l) => `${money(l.reduce((a, p) => a + Number(p.amount), 0))} to invoice` },
-    { s: "for-collection", href: "/d/accounts/for-collection", note: (l) => `${money(l.reduce((a, p) => a + owedOf(p), 0))} coming in` },
-    { s: "not-paid", href: "/d/accounts/not-paid", note: (l) => `${money(l.reduce((a, p) => a + owedOf(p), 0))} overdue` },
-    { s: "paid", href: "/d/accounts/paid", note: (l) => `${money(l.filter((p) => (p.paid_on ?? "") >= today.slice(0, 8) + "01").reduce((a, p) => a + Number(p.paid_amount), 0))} this month` },
+/** Totals per tab (from the database), shown on every Accounts page. Currencies are never added together. */
+export function StageTiles({ totals, receivedThisMonth }: { totals: StageTotals; receivedThisMonth: Record<string, number> }) {
+  const tiles: { s: Stage; href: string; note: string }[] = [
+    { s: "for-invoice", href: "/d/accounts/for-invoice", note: `${moneyByCurrency(totals["for-invoice"].amount)} to invoice` },
+    { s: "for-collection", href: "/d/accounts/for-collection", note: `${moneyByCurrency(totals["for-collection"].owed)} coming in` },
+    { s: "not-paid", href: "/d/accounts/not-paid", note: `${moneyByCurrency(totals["not-paid"].owed)} past due` },
+    { s: "paid", href: "/d/accounts/paid", note: `${moneyByCurrency(receivedThisMonth)} marked paid this month` },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {tiles.map((t) => {
-        const list = by(t.s);
-        return (
-          <Link key={t.s} href={t.href} className="rounded-2xl border border-line bg-surface px-4 py-3 transition-colors hover:border-brand-400">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{STAGE_LABEL[t.s]}</span>
-              <StagePill stage={t.s} />
-            </div>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">{list.length}</p>
-            <p className="text-xs text-ink-muted">{t.note(list)}</p>
-          </Link>
-        );
-      })}
+      {tiles.map((t) => (
+        <Link key={t.s} href={t.href} className="rounded-2xl border border-line bg-surface px-4 py-3 transition-colors hover:border-brand-400">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{STAGE_LABEL[t.s]}</span>
+            <StagePill stage={t.s} />
+          </div>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">{totals[t.s].lines}</p>
+          <p className="text-xs text-ink-muted">{t.note}</p>
+        </Link>
+      ))}
     </div>
   );
 }

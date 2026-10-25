@@ -22,7 +22,8 @@ export function dublinDate(at: Date = new Date()): string {
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isIsoDate(v: unknown): v is string {
-  return typeof v === "string" && ISO_DATE.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+  // the round trip rejects impossible days (Date.parse("2026-02-31") rolls over to 3 March)
+  return typeof v === "string" && ISO_DATE.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 }
 
 /** Calendar arithmetic on YYYY-MM-DD strings (UTC midnight, no DST surprises). */

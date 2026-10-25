@@ -22,13 +22,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const profile = await requireProfile();
   const supabase = await getServerSupabase();
 
-  const areas = await getMyAreas();
-  const service = await getService();
-  const menu = buildMenu(areas, await getMirrorTabs(), await getDeptSheets());
-  const { count } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .is("read_at", null);
+  // independent lookups run together (each one used to wait for the previous)
+  const [areas, service, mirrors, deptSheets, { count }] = await Promise.all([
+    getMyAreas(),
+    getService(),
+    getMirrorTabs(),
+    getDeptSheets(),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
+  ]);
+  const menu = buildMenu(areas, mirrors, deptSheets);
 
   return (
     <div className="flex min-h-screen" data-service={service}>

@@ -4,8 +4,9 @@ import { ChevronLeft } from "lucide-react";
 import { Flash, flashFrom } from "@/components/ops/flash";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
-import { isPartPaid, money, owedOf, stageOf, type ClientPayment } from "@/lib/client-payments";
-import { loadAccounts } from "../../data";
+import { isPartPaid, money, moneyByCurrency, owedOf, stageOf, type ClientPayment } from "@/lib/client-payments";
+import { dublinDate } from "@/lib/ops-core";
+import { getClientPayments } from "../../data";
 import { QuickAction, StagePill } from "../../parts";
 import { deletePayment, savePayment } from "../../actions";
 
@@ -19,14 +20,19 @@ export default async function ClientPaymentsPage(props: PageProps<"/d/accounts/c
   const { id } = await props.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const sp = await props.searchParams;
-  const { clients, payments, today } = await loadAccounts();
-  const client = clients.find((c) => c.id === id);
+  const { client, payments: mine } = await getClientPayments(id);
   if (!client) notFound();
-  const mine = payments.filter((p) => p.client_id === id);
+  const today = dublinDate();
   const back = `/d/accounts/client/${id}`;
-  const billed = mine.reduce((a, p) => a + Number(p.amount), 0);
-  const paid = mine.reduce((a, p) => a + Number(p.paid_amount), 0);
-  const owed = mine.filter((p) => stageOf(p, today) !== "paid" && p.invoice_no).reduce((a, p) => a + owedOf(p), 0);
+  const sum = (pick: (p: ClientPayment) => number, keep: (p: ClientPayment) => boolean = () => true) => {
+    const out: Record<string, number> = {};
+    for (const p of mine) if (keep(p)) out[p.currency] = (out[p.currency] ?? 0) + pick(p);
+    return out;
+  };
+  const billed = sum((p) => Number(p.amount));
+  const paid = sum((p) => Number(p.paid_amount));
+  const owed = sum(owedOf, (p) => stageOf(p, today) !== "paid" && !!p.invoice_no);
+  const owedAny = Object.values(owed).some((v) => v > 0.005);
   const late = mine.filter((p) => stageOf(p, today) === "not-paid");
   const vaNames = [...new Set(mine.map((p) => p.va_name).filter(Boolean))] as string[];
   const latestVas = [...new Set(mine.filter((p) => p.period_start === mine[0]?.period_start).map((p) => p.va_name).filter(Boolean))];
@@ -54,10 +60,10 @@ export default async function ClientPaymentsPage(props: PageProps<"/d/accounts/c
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          ["Billed", money(billed), `${mine.length} billing line${mine.length === 1 ? "" : "s"}`, ""],
-          ["Paid", money(paid), "received so far", "text-emerald-600 dark:text-emerald-400"],
-          ["Owed", money(owed), "invoiced, not paid", owed > 0 ? "text-ink" : ""],
-          ["Not paid yet", String(late.length), late.length ? `${money(late.reduce((a, p) => a + owedOf(p), 0))} past due` : "nothing past due", late.length ? "text-red-600 dark:text-red-400" : ""],
+          ["Billed", moneyByCurrency(billed), `${mine.length} billing line${mine.length === 1 ? "" : "s"}`, ""],
+          ["Paid", moneyByCurrency(paid), "received so far", "text-emerald-600 dark:text-emerald-400"],
+          ["Owed", moneyByCurrency(owed), "invoiced, not paid", owedAny ? "text-ink" : ""],
+          ["Not paid yet", String(late.length), late.length ? `${moneyByCurrency(sum(owedOf, (p) => stageOf(p, today) === "not-paid"))} past due` : "nothing past due", late.length ? "text-red-600 dark:text-red-400" : ""],
         ].map(([k, v, n, tone]) => (
           <div key={k} className="rounded-2xl border border-line bg-surface px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{k}</p>
@@ -81,7 +87,8 @@ export default async function ClientPaymentsPage(props: PageProps<"/d/accounts/c
               <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-4 py-2.5">
                 <h2 className="text-sm font-semibold text-ink">{period}</h2>
                 <span className="text-xs text-ink-muted">
-                  {money(lines.reduce((a, p) => a + Number(p.amount), 0))} billed · {money(lines.reduce((a, p) => a + Number(p.paid_amount), 0))} paid
+                  {moneyByCurrency(lines.reduce<Record<string, number>>((o, p) => ({ ...o, [p.currency]: (o[p.currency] ?? 0) + Number(p.amount) }), {}))} billed ·{" "}
+                  {moneyByCurrency(lines.reduce<Record<string, number>>((o, p) => ({ ...o, [p.currency]: (o[p.currency] ?? 0) + Number(p.paid_amount) }), {}))} paid
                 </span>
               </header>
               <ul className="divide-y divide-line">
@@ -108,6 +115,7 @@ export default async function ClientPaymentsPage(props: PageProps<"/d/accounts/c
                         <PaymentForm clientId={id} back={back} vaNames={vaNames} p={p} />
                         <form action={deletePayment} className="flex flex-wrap items-center gap-2 px-4 pb-3">
                           <input type="hidden" name="id" value={p.id} />
+                          <input type="hidden" name="updated_at" value={p.updated_at} />
                           <input type="hidden" name="back" value={back} />
                           <input name="confirm" placeholder="Type DELETE" autoComplete="off" className={cn(field, "w-36")} />
                           <SubmitButton variant="danger" size="sm" pendingText="Removing…">Remove this line</SubmitButton>
@@ -131,6 +139,7 @@ function PaymentForm({ clientId, back, vaNames, p }: { clientId: string; back: s
   return (
     <form action={savePayment} className="grid grid-cols-1 gap-3 px-4 pb-4 pt-1 sm:grid-cols-2 lg:grid-cols-4">
       {p && <input type="hidden" name="id" value={p.id} />}
+      {p && <input type="hidden" name="updated_at" value={p.updated_at} />}
       <input type="hidden" name="client_id" value={clientId} />
       <input type="hidden" name="back" value={back} />
       <label className={label}>
@@ -174,7 +183,7 @@ function PaymentForm({ clientId, back, vaNames, p }: { clientId: string; back: s
         <input type="date" name="due_on" defaultValue={p?.due_on ?? ""} className={field} />
       </label>
       <label className={label}>
-        Paid amount
+        Total received
         <input name="paid_amount" inputMode="decimal" defaultValue={p ? Number(p.paid_amount).toFixed(2) : ""} className={field} />
       </label>
       <label className={label}>

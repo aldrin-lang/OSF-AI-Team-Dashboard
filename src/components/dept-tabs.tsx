@@ -6,7 +6,7 @@ import { Tabs } from "@/components/motion/tabs";
 
 /**
  * The sub-tabs of the department the current page belongs to, shown above the page
- * like a sheet's tabs (Accounts: Collections, Payments, then its sheet tabs).
+ * (e.g. Accounts: All clients, For invoice, For collection, Not paid yet, Paid).
  * Pages outside a department (My desk, Settings, Admin) show nothing.
  */
 export function DeptTabs({ menu }: { menu: DeptMenu[] }) {
