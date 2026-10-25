@@ -59,8 +59,12 @@ export const DEPARTMENTS: Record<DepartmentKey, { label: string; area: Area; pag
     label: "Accounts",
     area: "payments",
     pages: [
-      // the dashboard's own invoice tracker (/payments) is left out for now: Maria's real data is in the sheets
-      { label: "Collections", href: "/d/accounts", area: "payments", exact: true },
+      // every client's payment records (client_payments); the old test invoice tracker (/payments) is left out
+      { label: "All clients", href: "/d/accounts", area: "payments", exact: true, also: ["/d/accounts/client"] },
+      { label: "For invoice", href: "/d/accounts/for-invoice", area: "payments" },
+      { label: "For collection", href: "/d/accounts/for-collection", area: "payments" },
+      { label: "Not paid yet", href: "/d/accounts/not-paid", area: "payments" },
+      { label: "Paid", href: "/d/accounts/paid", area: "payments" },
     ],
   },
 };
@@ -91,6 +95,7 @@ const SHEET_DEPT: Record<string, DepartmentKey> = {
 /**
  * The menu for one person: their departments, each with the pages they can open, then the editable
  * Sheets shared with that department (in the order they were made), then read-only sheet copies.
+ * Accounts is CRM records only (client payments), so it never lists sheets.
  * RLS already filtered the sheets and copies to what this person can open.
  */
 export function buildMenu(areas: readonly Area[], mirrors: MirrorTabInfo[], sheets: DeptSheetInfo[] = []): DeptMenu[] {
@@ -98,10 +103,10 @@ export function buildMenu(areas: readonly Area[], mirrors: MirrorTabInfo[], shee
     const d = DEPARTMENTS[key];
     const pages = d.pages.filter((p) => areas.includes(p.area)).map((p) => ({ label: p.label, href: p.href, exact: p.exact, also: p.also }));
     const editable = sheets
-      .filter((sh) => sh.departments.some((dk) => SHEET_DEPT[dk] === key))
+      .filter((sh) => key !== "accounts" && sh.departments.some((dk) => SHEET_DEPT[dk] === key))
       .map((sh) => ({ label: sh.name, href: `/sheets/${sh.id}` }));
     const copies = mirrors
-      .filter((m) => m.department === key)
+      .filter((m) => key !== "accounts" && m.department === key)
       .sort((a, b) => a.position - b.position || a.label.localeCompare(b.label))
       .map((m) => ({ label: m.label, href: `/d/${key}/${m.key}` }));
     return { key, label: d.label, tabs: [...pages, ...editable, ...copies] };
