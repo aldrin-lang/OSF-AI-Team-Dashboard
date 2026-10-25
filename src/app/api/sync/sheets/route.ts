@@ -30,7 +30,11 @@ export async function POST(request: Request) {
   const secret = process.env.SHEET_SYNC_SECRET?.trim();
   if (!secret) return NextResponse.json({ error: "sync not configured" }, { status: 503 });
   const provided = (request.headers.get("x-sync-secret") ?? "").trim();
-  if (!provided || !safeEqual(provided, secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!provided || !safeEqual(provided, secret)) {
+    // fingerprints (first 6 hex of SHA-256) let the owner see which side holds a different secret, without revealing either
+    const fp = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 6);
+    return NextResponse.json({ error: "unauthorized", server: fp(secret), sent: fp(provided) }, { status: 401 });
+  }
 
   let b: Record<string, unknown>;
   try {
