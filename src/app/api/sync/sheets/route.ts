@@ -26,9 +26,10 @@ const int = (v: unknown, max: number) => (Number.isInteger(v) && (v as number) >
 const nums = (v: unknown, max: number) => (Array.isArray(v) ? v.filter((x) => Number.isInteger(x)).slice(0, max) : []);
 
 export async function POST(request: Request) {
-  const secret = process.env.SHEET_SYNC_SECRET;
+  // trimmed: a secret pasted from `openssl rand -hex 32` easily carries a trailing newline
+  const secret = process.env.SHEET_SYNC_SECRET?.trim();
   if (!secret) return NextResponse.json({ error: "sync not configured" }, { status: 503 });
-  const provided = request.headers.get("x-sync-secret") ?? "";
+  const provided = (request.headers.get("x-sync-secret") ?? "").trim();
   if (!provided || !safeEqual(provided, secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let b: Record<string, unknown>;
