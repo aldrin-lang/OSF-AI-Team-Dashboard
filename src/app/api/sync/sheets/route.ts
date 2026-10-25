@@ -7,7 +7,7 @@ import { validRows } from "@/lib/mirror";
 
 // Receives the team's Google Sheet tabs from the "OSF Morning Report" Apps Script
 // (syncDashboard, every 30 min) and stores them in sheet_mirror for the department pages.
-// A tab arrives in parts (Vercel caps a request at ~4.5 MB). Parts go in under the
+// A tab arrives in parts (Vercel caps a request at ~4.5 MB; the last one says final: true). Parts go in under the
 // upload's sync_id; the last part switches the tab over and removes the old parts.
 // Body { prune: true, keep: [keys] } removes tabs the script no longer sends.
 // Auth: `x-sync-secret` header = SHEET_SYNC_SECRET. Fails CLOSED.
@@ -56,7 +56,8 @@ export async function POST(request: Request) {
   const key = str(b.key, 60);
   const syncId = str(b.sync_id, 40);
   const part = int(b.part, 10_000);
-  const parts = int(b.parts, 10_000);
+  // big tabs are streamed: the script only knows the count when it sends the last part (final: true)
+  const parts = b.final === true ? part + 1 : int(b.parts, 10_000);
   if (!KEY_RE.test(key) || !/^[A-Za-z0-9_-]{4,40}$/.test(syncId) || parts < 1 || part >= parts) {
     return NextResponse.json({ error: "bad key, sync_id or part" }, { status: 422 });
   }
