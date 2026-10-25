@@ -36,7 +36,10 @@ export const DEPARTMENTS: Record<DepartmentKey, { label: string; area: Area; pag
     label: "Recruitment",
     area: "candidates",
     pages: [
-      { label: "Open roles", href: "/roles", area: "candidates" },
+      // CRM records: every client request by stage, closed sales → onboarding, hiring fees (old /roles is left out)
+      { label: "Client requests", href: "/d/recruitment/requests", area: "candidates", also: ["/d/recruitment"] },
+      { label: "Onboarding", href: "/d/recruitment/onboarding", area: "candidates" },
+      { label: "Hiring fees", href: "/d/recruitment/hiring-fees", area: "candidates" },
       { label: "Candidates", href: "/candidates", area: "candidates" },
     ],
   },
@@ -51,7 +54,10 @@ export const DEPARTMENTS: Record<DepartmentKey, { label: string; area: Area; pag
     pages: [
       { label: "Clients", href: "/", area: "clients", exact: true, also: ["/clients"] },
       { label: "VAs", href: "/vas", area: "clients" },
-      { label: "Check-ins", href: "/check-ins", area: "checkins" },
+      { label: "Monthly check-ins", href: "/d/va-managers/checkins", area: "clients" },
+      { label: "Red flags", href: "/d/va-managers/red-flags", area: "clients" },
+      { label: "Replacements & cancellations", href: "/d/va-managers/changes", area: "clients" },
+      { label: "Check-in messages", href: "/check-ins", area: "checkins" },
       { label: "Concerns", href: "/concerns", area: "clients" },
     ],
   },
@@ -95,18 +101,20 @@ const SHEET_DEPT: Record<string, DepartmentKey> = {
 /**
  * The menu for one person: their departments, each with the pages they can open, then the editable
  * Sheets shared with that department (in the order they were made), then read-only sheet copies.
- * Accounts is CRM records only (client payments), so it never lists sheets.
+ * Accounts, VA Managers and Recruitment are CRM records only, so they never list sheets or sheet copies.
  * RLS already filtered the sheets and copies to what this person can open.
  */
+const CRM_ONLY: readonly DepartmentKey[] = ["accounts", "va-managers", "recruitment"];
+
 export function buildMenu(areas: readonly Area[], mirrors: MirrorTabInfo[], sheets: DeptSheetInfo[] = []): DeptMenu[] {
   return DEPARTMENT_KEYS.map((key) => {
     const d = DEPARTMENTS[key];
     const pages = d.pages.filter((p) => areas.includes(p.area)).map((p) => ({ label: p.label, href: p.href, exact: p.exact, also: p.also }));
     const editable = sheets
-      .filter((sh) => key !== "accounts" && sh.departments.some((dk) => SHEET_DEPT[dk] === key))
+      .filter((sh) => !CRM_ONLY.includes(key) && sh.departments.some((dk) => SHEET_DEPT[dk] === key))
       .map((sh) => ({ label: sh.name, href: `/sheets/${sh.id}` }));
     const copies = mirrors
-      .filter((m) => key !== "accounts" && m.department === key)
+      .filter((m) => !CRM_ONLY.includes(key) && m.department === key)
       .sort((a, b) => a.position - b.position || a.label.localeCompare(b.label))
       .map((m) => ({ label: m.label, href: `/d/${key}/${m.key}` }));
     return { key, label: d.label, tabs: [...pages, ...editable, ...copies] };

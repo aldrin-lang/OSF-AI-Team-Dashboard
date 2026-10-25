@@ -94,8 +94,13 @@ export function parseSheetDate(v: string): string | null {
     const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
     return isCalendarDate(y, mo, d) ? `${y}-${pad(mo)}-${pad(d)}` : null;
   }
-  const t = Date.parse(s);
-  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+  // "Aug 5, 2024", "October 1 2026", "5 Aug 2024", "5-Aug-2024" (read the parts, so no time zone can shift the day)
+  const mon = (w: string) => MONTHS.findIndex((x) => x.startsWith(w.toLowerCase().slice(0, 3))) + 1;
+  m = s.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,\s*|\s+)(\d{4})$/);
+  if (m && mon(m[1]) > 0) return isCalendarDate(+m[3], mon(m[1]), +m[2]) ? `${m[3]}-${pad(mon(m[1]))}-${pad(+m[2])}` : null;
+  m = s.match(/^(\d{1,2})[\s-]+([A-Za-z]{3,})[\s,-]+(\d{4})$/);
+  if (m && mon(m[2]) > 0) return isCalendarDate(+m[3], mon(m[2]), +m[1]) ? `${m[3]}-${pad(mon(m[2]))}-${pad(+m[1])}` : null;
+  return null;
 }
 
 /**

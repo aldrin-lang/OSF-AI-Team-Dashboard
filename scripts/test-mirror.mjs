@@ -61,23 +61,25 @@ t("menu: areas decide departments; sheet tabs follow pages", () => {
     { key: "acc-pnl", department: "accounts", label: "P&L", position: 5 },
   ]);
   assert.deepEqual(menu.map((d) => d.key), ["recruitment", "accounts"]);
-  assert.deepEqual(menu[0].tabs.map((x) => x.href), ["/roles", "/candidates", "/d/recruitment/rec-openings"]);
-  // Accounts is CRM records only: its tabs are the payment views, never sheet copies
+  // Recruitment and Accounts are CRM records only: their own pages, never sheet copies
+  assert.deepEqual(menu[0].tabs.map((x) => x.href), ["/d/recruitment/requests", "/d/recruitment/onboarding", "/d/recruitment/hiring-fees", "/candidates"]);
+  assert.equal(findActive(menu, "/d/recruitment")?.tab.label, "Client requests");
   assert.deepEqual(menu[1].tabs.map((x) => x.label), ["All clients", "For invoice", "For collection", "Not paid yet", "Paid"]);
   assert.equal(findActive(menu, "/d/accounts/client/abc")?.tab.label, "All clients");
   assert.equal(findActive(menu, "/d/accounts/not-paid")?.tab.label, "Not paid yet");
   assert.equal(findActive(menu, "/settings"), null);
 });
-t("menu: sheets shared with a department become its sub-tabs (not in Accounts)", () => {
-  const menu = buildMenu(["candidates"], [], [
+t("menu: sheets shared with a department become its sub-tabs (not in the CRM departments)", () => {
+  const menu = buildMenu(["candidates", "leads"], [{ key: "mk-ads", department: "marketing", label: "Ads", position: 1 }], [
     { id: "s1", name: "Client VA Payments", departments: ["accounts"] },
     { id: "s2", name: "Ops notes", departments: ["operations"] },
     { id: "s3", name: "Sourcing", departments: ["recruitment"] },
+    { id: "s4", name: "Campaigns", departments: ["marketing"] },
   ]);
-  // a sheet the person can open shows under its department; Accounts never lists sheets
-  assert.deepEqual(menu.map((d) => d.key), ["recruitment", "va-managers"]);
-  assert.deepEqual(menu[0].tabs.map((x) => x.href), ["/roles", "/candidates", "/sheets/s3"]);
-  assert.equal(findActive(menu, "/sheets/s2")?.tab.label, "Ops notes");
+  // Accounts, VA Managers and Recruitment never list sheets; other departments still do
+  assert.deepEqual(menu.map((d) => d.key), ["marketing", "recruitment"]);
+  assert.deepEqual(menu[0].tabs.map((x) => x.href), ["/leads", "/sheets/s4", "/d/marketing/mk-ads"]);
+  assert.ok(!menu[1].tabs.some((x) => x.href.startsWith("/sheets/")));
 });
 t("menu: client pages belong to VA Managers › Clients", () => {
   const menu = buildMenu(["clients"], []);

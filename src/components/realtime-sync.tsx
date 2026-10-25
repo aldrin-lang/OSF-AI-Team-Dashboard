@@ -9,7 +9,7 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
  * matters there (busy tables like leads or the activity log used to reload every open page).
  */
 const TABLES: Record<string, string[]> = {
-  clients: ["/", "/clients", "/pipeline", "/vas", "/check-ins", "/concerns", "/my-desk", "/d/accounts"],
+  clients: ["/", "/clients", "/pipeline", "/vas", "/check-ins", "/concerns", "/my-desk", "/d/accounts", "/d/va-managers", "/d/recruitment"],
   client_lines: ["/clients"],
   checklist_items: ["/clients", "/my-desk"],
   concerns: ["/concerns", "/clients", "/my-desk"],
@@ -22,15 +22,18 @@ const TABLES: Record<string, string[]> = {
   leads: ["/leads"],
   lead_events: ["/leads"],
   candidates: ["/candidates", "/roles"],
-  checkins: ["/check-ins", "/vas", "/clients", "/my-desk"],
+  checkins: ["/check-ins", "/vas", "/clients", "/my-desk", "/d/va-managers/checkins"],
   invoices: ["/payments"],
   payment_reminders: ["/payments"],
   setters: ["/leads"],
   sheets: ["/sheets"],
-  va_roles: ["/roles", "/candidates"],
+  va_roles: ["/roles", "/candidates", "/d/recruitment/requests"],
   va_role_candidates: ["/roles", "/candidates"],
   va_placements: ["/vas", "/clients", "/roles"],
   client_payments: ["/d/accounts"],
+  red_flags: ["/d/va-managers/red-flags"],
+  va_changes: ["/d/va-managers/changes"],
+  onboardings: ["/d/recruitment/onboarding", "/d/recruitment/hiring-fees"],
 };
 const MIN_GAP_MS = 3000; // at most one refresh every 3 s, however many changes arrive
 const STALE_AFTER_MS = 60_000; // coming back to the tab only refreshes after a minute away

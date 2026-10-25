@@ -54,6 +54,12 @@ t("dates", () => {
   assert.equal(parseSheetDate(""), null);
   assert.equal(parseSheetDate("31/02/2026"), null);
   assert.equal(parseSheetDate("2026-02-31"), null);
+  assert.equal(parseSheetDate("Aug 5, 2024"), "2024-08-05");
+  assert.equal(parseSheetDate("October 1, 2026"), "2026-10-01");
+  assert.equal(parseSheetDate("September 29 2025"), "2025-09-29");
+  assert.equal(parseSheetDate("5-Aug-2024"), "2024-08-05");
+  assert.equal(parseSheetDate("March 6,2025"), "2025-03-06");
+  assert.equal(parseSheetDate("June 30"), null);
   assert.equal(isIsoDate("2026-02-31"), false);
   assert.equal(isIsoDate("2026-02-28"), true);
 });
