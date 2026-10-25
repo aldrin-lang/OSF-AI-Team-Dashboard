@@ -59,8 +59,8 @@ export const DEPARTMENTS: Record<DepartmentKey, { label: string; area: Area; pag
     label: "Accounts",
     area: "payments",
     pages: [
+      // the dashboard's own invoice tracker (/payments) is left out for now: Maria's real data is in the sheets
       { label: "Collections", href: "/d/accounts", area: "payments", exact: true },
-      { label: "Payments", href: "/payments", area: "payments" },
     ],
   },
 };

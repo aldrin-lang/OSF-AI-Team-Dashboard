@@ -2,25 +2,28 @@ import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { requireArea } from "@/lib/auth";
 import { getMirror } from "@/lib/server/mirror";
-import { euro, parsePayRuns, pct, type PayLine, type PayStatus } from "@/lib/mirror";
+import { bucketOf, euro, parsePayRuns, pct, reminderEmail, type PayBucket, type PayLine, type PayStatus } from "@/lib/mirror";
 import { relativeTime, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardBody, CardHeader, CardTitle, EmptyState } from "@/components/ui/primitives";
+import { Card, CardBody, EmptyState } from "@/components/ui/primitives";
 import { Tabs } from "@/components/motion/tabs";
+import { ReminderDraft } from "./reminder-draft";
 
 /** The synced copy of Customer Payments › " Client VA Payments" (key set in the sync script). */
 const PAYMENTS_KEY = "acc-client-payments";
-const STATUSES: PayStatus[] = ["Unpaid", "Part paid", "Paid", "Not invoiced"];
 const PILL: Record<PayStatus, string> = {
   Paid: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
   "Part paid": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   Unpaid: "bg-red-500/12 text-red-700 dark:text-red-300",
   "Not invoiced": "bg-fill-strong text-ink-muted",
 };
+const LISTS = ["remind", "check", "paid", "all"] as const;
+type List = (typeof LISTS)[number];
+const LIST_LABEL: Record<List, string> = { remind: "Needs a reminder", check: "Needs checking", paid: "Paid", all: "All lines" };
 
 /**
- * Accounts › Collections: Maria's pay-runs made easy to read. Pick a pay-run and see
- * how much was invoiced and collected, who still owes, and who wasn't invoiced and why.
+ * Accounts › Collections: Maria's pay-runs as three worklists. Pick a pay-run, then see
+ * who needs a reminder (with a ready-to-paste email), which lines need checking and why, and who paid.
  */
 export async function Collections({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   await requireArea("payments");
@@ -48,23 +51,32 @@ export async function Collections({ searchParams }: { searchParams: Record<strin
     return (
       <div className="space-y-4">
         {header}
-        <EmptyState>The payments sheet hasn&apos;t synced yet. It appears here within 30 minutes of the sync being switched on.</EmptyState>
+        <EmptyState>The payments sheet hasn&apos;t been copied in yet.</EmptyState>
       </div>
     );
   }
 
   const recent = runs.slice(-8).reverse(); // newest first
-  const want = typeof searchParams.run === "string" ? searchParams.run : "";
-  const run = recent.find((r) => r.label === want) ?? recent[0];
-  const status = STATUSES.find((s) => s === searchParams.status) ?? null;
+  const run = recent.find((r) => r.label === searchParams.run) ?? recent[0];
   const month = runs.filter((r) => r.month === run.month);
   const mInv = month.reduce((a, r) => a + r.invoiced, 0);
   const mGot = month.reduce((a, r) => a + r.received, 0);
-  const unpaid = run.lines.filter((l) => l.status === "Unpaid" || l.status === "Part paid").sort((a, b) => b.invoice - b.received - (a.invoice - a.received));
-  const notInvoiced = run.lines.filter((l) => l.status === "Not invoiced");
-  const owed = unpaid.reduce((a, l) => a + l.invoice - l.received, 0);
-  const lines = status ? run.lines.filter((l) => l.status === status) : run.lines;
-  const q = (extra: Record<string, string>) => "/d/accounts?" + new URLSearchParams({ run: run.label, ...extra }).toString();
+
+  const sorted = run.lines.map((l) => ({ l, ...bucketOf(l) }));
+  const of = (b: PayBucket) => sorted.filter((x) => x.bucket === b);
+  const remind = of("remind");
+  const check = of("check");
+  const paid = of("paid");
+  const owed = run.lines.reduce((a, l) => a + Math.max(l.invoice - l.received, 0), 0);
+  const counts: Record<List, number> = { remind: remind.length, check: check.length, paid: paid.length, all: run.lines.length };
+  const want = typeof searchParams.list === "string" ? searchParams.list : "";
+  const list: List = (LISTS as readonly string[]).includes(want) ? (want as List) : remind.length ? "remind" : check.length ? "check" : "paid";
+  const href = (extra: Record<string, string>) => "/d/accounts?" + new URLSearchParams({ run: run.label, ...extra }).toString();
+
+  // one reminder per client: all of that client's unpaid lines in this pay-run together
+  const byClient = new Map<string, PayLine[]>();
+  for (const { l } of remind) byClient.set(l.client, [...(byClient.get(l.client) ?? []), l]);
+  const clients = [...byClient.entries()].sort((a, b) => sum(b[1]) - sum(a[1]));
 
   return (
     <div className="space-y-5">
@@ -86,125 +98,146 @@ export async function Collections({ searchParams }: { searchParams: Record<strin
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Invoiced this pay-run" value={euro(run.invoiced)} note={`${run.lines.length - notInvoiced.length} invoices`} />
+        <Stat label={`Invoiced · ${run.label}`} value={euro(run.invoiced)} note={`${run.lines.length} lines`} />
         <Stat label="Collected" value={euro(run.received)} note={`${pct(run.received, run.invoiced)}% of invoiced`} tone="good" />
-        <Stat label="Still owed" value={euro(owed)} note={`${unpaid.length} client line${unpaid.length === 1 ? "" : "s"} unpaid`} tone={owed > 0 ? "bad" : undefined} />
-        <Stat label="Not invoiced" value={String(notInvoiced.length)} note="see reasons below" tone={notInvoiced.length ? "warn" : undefined} />
+        <Stat label="Still owed" value={euro(owed)} note={`${clients.length} client${clients.length === 1 ? "" : "s"} to remind`} tone={owed > 0 ? "bad" : undefined} />
+        <Stat label="Needs checking" value={String(check.length)} note="see the reasons" tone={check.length ? "warn" : undefined} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Who still owes · {run.label}</CardTitle>
-          </CardHeader>
-          <CardBody className="p-0">
-            {unpaid.length ? (
+      <div className="flex flex-wrap gap-2">
+        {LISTS.map((k) => (
+          <Link
+            key={k}
+            href={href({ list: k })}
+            aria-current={list === k ? "page" : undefined}
+            className={cn(
+              "rounded-xl border px-3.5 py-2 text-sm font-semibold",
+              list === k ? "border-brand-600 bg-brand-600 text-white" : "border-line text-ink-muted hover:bg-fill hover:text-ink",
+            )}
+          >
+            {LIST_LABEL[k]}
+            <span className={cn("ml-2 rounded-full px-1.5 text-xs", list === k ? "bg-white/25" : k === "remind" && counts[k] ? "bg-red-500/12 text-red-700 dark:text-red-300" : k === "check" && counts[k] ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-fill")}>
+              {counts[k]}
+            </span>
+          </Link>
+        ))}
+      </div>
+
+      {list === "remind" &&
+        (clients.length ? (
+          <div className="space-y-3">
+            <p className="text-sm text-ink-muted">Unpaid in {run.label}. One email per client covers all of their unpaid lines.</p>
+            {clients.map(([client, lines]) => {
+              const email = reminderEmail(client, lines, run.label);
+              return (
+                <Card key={client}>
+                  <CardBody className="space-y-2.5">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-base font-semibold text-ink">{client}</span>
+                      {lines[0].country && <span className="text-xs text-ink-faint">{lines[0].country}</span>}
+                      <span className="ml-auto text-base font-semibold tabular-nums text-red-600 dark:text-red-400">{euro(sum(lines))}</span>
+                    </div>
+                    <ul className="space-y-1 text-sm">
+                      {lines.map((l) => (
+                        <li key={l.row} className="flex flex-wrap gap-x-3 text-ink-muted">
+                          <span>VA {l.va}</span>
+                          <span className="text-ink">{l.xero || "no invoice no."}</span>
+                          <span className="tabular-nums">{euro(l.invoice - l.received)}</span>
+                          {(l.remark || l.notes) && <span className="w-full text-xs text-ink-faint">Maria&apos;s note: {[l.remark, l.notes].filter(Boolean).join(" · ")}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                    <ReminderDraft subject={email.subject} body={email.body} />
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState>Nobody needs a reminder for {run.label}.</EmptyState>
+        ))}
+
+      {list === "check" &&
+        (check.length ? (
+          <Card>
+            <CardBody className="p-0">
               <ul className="divide-y divide-line">
-                {unpaid.map((l) => (
-                  <li key={l.row} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-5 py-2.5 text-sm">
+                {check.map(({ l, reason }) => (
+                  <li key={l.row} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-3 text-sm">
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">{reason}</span>
                     <span className="font-semibold text-ink">{l.client}</span>
                     <span className="text-ink-muted">VA {l.va}</span>
-                    <span className="ml-auto font-semibold tabular-nums text-red-600 dark:text-red-400">{euro(l.invoice - l.received)}</span>
+                    <span className="ml-auto tabular-nums text-ink">{l.invoice ? euro(l.invoice) : "—"}</span>
                     <span className="w-full text-xs text-ink-faint">
-                      {[l.xero, l.status === "Part paid" ? `paid ${euro(l.received)} of ${euro(l.invoice)}` : "", l.remark, l.notes].filter(Boolean).join(" · ")}
+                      {[l.xero, l.datePaid && `paid ${l.datePaid}`, l.sheetStatus && `status: ${l.sheetStatus}`, l.remark, l.notes].filter(Boolean).join(" · ") ||
+                        `Sheet row ${l.row}`}
                     </span>
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="px-5 py-6 text-sm text-ink-muted">Everyone in this pay-run has paid.</p>
-            )}
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
+        ) : (
+          <EmptyState>Nothing to check in {run.label}.</EmptyState>
+        ))}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Not invoiced · and why</CardTitle>
-          </CardHeader>
-          <CardBody className="p-0">
-            {notInvoiced.length ? (
-              <ul className="divide-y divide-line">
-                {notInvoiced.map((l) => (
-                  <li key={l.row} className="px-5 py-2.5 text-sm">
-                    <span className="font-semibold text-ink">{l.client}</span> <span className="text-ink-muted">· VA {l.va}</span>
-                    <p className="text-xs text-ink-faint">{[l.remark, l.notes].filter(Boolean).join(" · ") || "No reason written in the sheet"}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="px-5 py-6 text-sm text-ink-muted">Every line in this pay-run was invoiced.</p>
-            )}
-          </CardBody>
-        </Card>
-      </div>
+      {list === "paid" && (paid.length ? <LineTable lines={paid.map((x) => x.l)} /> : <EmptyState>No payments received yet for {run.label}.</EmptyState>)}
 
-      <Card>
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>All lines · {run.label}</CardTitle>
-          <div className="flex flex-wrap gap-1.5 text-xs">
-            <FilterLink href={q({})} active={!status}>All {run.lines.length}</FilterLink>
-            {STATUSES.map((s) => {
-              const n = run.lines.filter((l) => l.status === s).length;
-              return n ? (
-                <FilterLink key={s} href={q({ status: s })} active={status === s}>
-                  {s} {n}
-                </FilterLink>
-              ) : null;
-            })}
-          </div>
-        </CardHeader>
-        <CardBody className="overflow-x-auto p-0">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-faint">
-                <th className="px-5 py-2 font-semibold">Client</th>
-                <th className="px-3 py-2 font-semibold">VA</th>
-                <th className="px-3 py-2 text-right font-semibold">Invoice</th>
-                <th className="px-3 py-2 text-right font-semibold">Received</th>
-                <th className="px-3 py-2 font-semibold">Status</th>
-                <th className="px-3 py-2 font-semibold">Invoice no.</th>
-                <th className="px-5 py-2 font-semibold">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {lines.map((l) => (
-                <Line key={l.row} l={l} />
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-line-strong font-semibold text-ink">
-                <td className="px-5 py-2.5" colSpan={2}>
-                  Total ({lines.length})
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{euro(lines.reduce((a, l) => a + l.invoice, 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{euro(lines.reduce((a, l) => a + l.received, 0))}</td>
-                <td colSpan={3} />
-              </tr>
-            </tfoot>
-          </table>
-        </CardBody>
-      </Card>
+      {list === "all" && <LineTable lines={run.lines} />}
     </div>
   );
 }
 
-function Line({ l }: { l: PayLine }) {
+const sum = (lines: PayLine[]) => lines.reduce((a, l) => a + l.invoice - l.received, 0);
+
+function LineTable({ lines }: { lines: PayLine[] }) {
   return (
-    <tr className="align-top">
-      <td className="px-5 py-2 font-medium text-ink">
-        {l.client}
-        {l.country && <span className="ml-1.5 text-xs font-normal text-ink-faint">{l.country}</span>}
-      </td>
-      <td className="px-3 py-2 text-ink-muted">{l.va}</td>
-      <td className="px-3 py-2 text-right tabular-nums text-ink">{l.invoice ? euro(l.invoice) : "—"}</td>
-      <td className="px-3 py-2 text-right tabular-nums text-ink">{l.received ? euro(l.received) : "—"}</td>
-      <td className="px-3 py-2">
-        <span className={cn("inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", PILL[l.status])}>{l.status}</span>
-        {l.datePaid && <span className="ml-1.5 text-xs text-ink-faint">{l.datePaid}</span>}
-      </td>
-      <td className="px-3 py-2 text-ink-muted">{l.xero || "—"}</td>
-      <td className="px-5 py-2 text-xs text-ink-muted">{[l.sheetStatus, l.remark, l.notes].filter(Boolean).join(" · ")}</td>
-    </tr>
+    <Card>
+      <CardBody className="overflow-x-auto p-0">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-faint">
+              <th className="px-5 py-2 font-semibold">Client</th>
+              <th className="px-3 py-2 font-semibold">VA</th>
+              <th className="px-3 py-2 text-right font-semibold">Invoice</th>
+              <th className="px-3 py-2 text-right font-semibold">Received</th>
+              <th className="px-3 py-2 font-semibold">Status</th>
+              <th className="px-3 py-2 font-semibold">Invoice no.</th>
+              <th className="px-5 py-2 font-semibold">Notes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {lines.map((l) => (
+              <tr key={l.row} className="align-top">
+                <td className="px-5 py-2 font-medium text-ink">
+                  {l.client}
+                  {l.country && <span className="ml-1.5 text-xs font-normal text-ink-faint">{l.country}</span>}
+                </td>
+                <td className="px-3 py-2 text-ink-muted">{l.va}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-ink">{l.invoice ? euro(l.invoice) : "—"}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-ink">{l.received ? euro(l.received) : "—"}</td>
+                <td className="px-3 py-2">
+                  <span className={cn("inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", PILL[l.status])}>{l.status}</span>
+                  {l.datePaid && <span className="ml-1.5 text-xs text-ink-faint">{l.datePaid}</span>}
+                </td>
+                <td className="px-3 py-2 text-ink-muted">{l.xero || "—"}</td>
+                <td className="px-5 py-2 text-xs text-ink-muted">{[l.sheetStatus, l.remark, l.notes].filter(Boolean).join(" · ")}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-line-strong font-semibold text-ink">
+              <td className="px-5 py-2.5" colSpan={2}>
+                Total ({lines.length})
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums">{euro(lines.reduce((a, l) => a + l.invoice, 0))}</td>
+              <td className="px-3 py-2.5 text-right tabular-nums">{euro(lines.reduce((a, l) => a + l.received, 0))}</td>
+              <td colSpan={3} />
+            </tr>
+          </tfoot>
+        </table>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -232,16 +265,5 @@ function Bar({ value }: { value: number }) {
     <div className="h-2.5 overflow-hidden rounded-full bg-fill-strong" role="img" aria-label={`${value}% collected`}>
       <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-500" style={{ width: `${Math.min(value, 100)}%` }} />
     </div>
-  );
-}
-
-function FilterLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={cn("rounded-full border px-2.5 py-1 font-medium", active ? "border-brand-600 bg-brand-600 text-white" : "border-line text-ink-muted hover:bg-fill")}
-    >
-      {children}
-    </Link>
   );
 }

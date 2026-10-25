@@ -170,3 +170,42 @@ export function parsePayRuns(rows: MirrorRow[]): PayRun[] {
 }
 
 export const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+
+// ---------------------------------------------------------------------------
+// Collections worklists: every line lands in exactly one of three lists.
+// ---------------------------------------------------------------------------
+export type PayBucket = "remind" | "check" | "paid";
+
+/** Which list a pay-run line belongs in, and (for "check") why it needs a look. */
+export function bucketOf(l: PayLine): { bucket: PayBucket; reason: string } {
+  const sheet = l.sheetStatus.toLowerCase();
+  const sheetSaysPaid = /\bpaid\b/.test(sheet) && !/unpaid|not paid|partial/.test(sheet);
+  const sheetSaysUnpaid = /unpaid|not paid|overdue/.test(sheet);
+  if (l.status === "Not invoiced") return { bucket: "check", reason: "Not invoiced yet" + (l.remark || l.notes ? "" : " (no reason written)") };
+  if (l.status === "Part paid") return { bucket: "check", reason: `Part paid: ${euro(l.received)} of ${euro(l.invoice)}` };
+  if (l.received > l.invoice + 0.5) return { bucket: "check", reason: `Paid more than invoiced (${euro(l.received)} of ${euro(l.invoice)})` };
+  if (l.status === "Paid" && !l.datePaid) return { bucket: "check", reason: "Paid, but no date paid" };
+  if (l.status === "Paid" && sheetSaysUnpaid) return { bucket: "check", reason: `Amount received, but status says "${l.sheetStatus}"` };
+  if (l.status === "Unpaid" && l.datePaid) return { bucket: "check", reason: `Has a date paid (${l.datePaid}) but no amount received` };
+  if (l.status === "Unpaid" && sheetSaysPaid) return { bucket: "check", reason: `Status says "${l.sheetStatus}", but no amount received` };
+  return l.status === "Paid" ? { bucket: "paid", reason: "" } : { bucket: "remind", reason: "" };
+}
+
+/** A ready-to-paste reminder for one client's unpaid lines in a pay-run (Maria copies it into Gmail). */
+export function reminderEmail(client: string, lines: PayLine[], runLabel: string): { subject: string; body: string } {
+  const first = client.split(/[\/&,]| and /i)[0].trim().split(/\s+/)[0] || "there";
+  const total = lines.reduce((a, l) => a + l.invoice - l.received, 0);
+  const refs = lines.map((l) => l.xero).filter(Boolean);
+  const list = lines
+    .map((l) => `- ${l.xero || "Invoice"} · VA ${l.va} · ${euro(l.invoice - l.received)}`)
+    .join("\n");
+  return {
+    subject: `Payment reminder: ${refs.length ? refs.join(", ") : runLabel} (${euro(total)})`,
+    body:
+      `Hi ${first},\n\n` +
+      `I hope you're well. This is a friendly reminder that the following ${lines.length === 1 ? "invoice" : "invoices"} for ${runLabel} ` +
+      `${lines.length === 1 ? "is" : "are"} still showing as unpaid on our side:\n\n${list}\n\nTotal: ${euro(total)}\n\n` +
+      `If you've already paid, please ignore this or let me know the payment date so I can update our records.\n\n` +
+      `Thank you,\nMaria\nOutsourceForce`,
+  };
+}
