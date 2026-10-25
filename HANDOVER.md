@@ -26,6 +26,7 @@ See `.env.example` for the full list. After changing any, **redeploy**.
 - `GHL_WEBHOOK_SECRET` — **required for leads**. Webhook refuses (503) without it.
 - `GHL_API_TOKEN`, `GHL_LOCATION_ID`, `GHL_PIPELINE_ID` — read-only GHL access for "Sync now". Token needs `opportunities.readonly` and `contacts.readonly` only.
 - `GOOGLE_CHAT_WEBHOOK_URL` — optional extra alert channel.
+- `SHEET_SYNC_SECRET` — shared with the sheet-sync Apps Script (Script Property `DASHBOARD_SYNC_SECRET`). Without it `/api/sync/sheets` refuses every upload (503).
 - `ANTHROPIC_API_KEY` — optional. Turns on the AI parts (candidate screening, check-in drafts and reply reading, daily report summary). Without it everything still works with plain templates. `AI_MODEL` overrides the model (default `claude-opus-5-5`, with Anthropic's server-side refusal fallback on).
 - `EMAIL_REPLY_TO` — optional. Inbox that receives replies to check-ins and payment reminders (e.g. accounts@…). Set it, otherwise replies go to the `EMAIL_FROM` address.
 
@@ -74,6 +75,13 @@ Migration `20261007000001_departments.sql`. Each person belongs to one or more d
 ## Service switch: VA first, AI on the side
 The dashboard is VA-outsourcing first; AI receptionist is the smaller side. A switch under the logo (**VA · AI · All**, cookie `osf-service`, default VA) filters every page: Leads (service va/premium or ai; unknown shows on both), Clients, Pipeline (one board per pipeline), Concerns, Check-ins, Payments (invoices via the client's pipeline), Reports, My desk, and Donna (prompt + recommendations). VA side = full menu and a violet accent; AI side = Leads, Clients, Pipeline, Payments. View filter only (no access change). Code: `src/lib/service.ts`, `src/lib/server/service.ts` (`getService`, `scopeClientIds`), `src/components/service-switch.tsx`, `[data-service="va"]` in globals.css.
 - VA client pipeline restored by migration `20261009000001_va_pipeline.sql` (stages Sale closed → Interview scheduled → VA matched → Start scheduled → Active/Inactive, VA checklist, gate on "VA matched"). Gates only apply within their own pipeline; moving a client into the other pipeline's stage is refused. VA/Premium leads convert into VA clients. VA client pages show open roles + placements instead of phone lines.
+
+## Department menu + sheet tabs (read-only copies of the Google Sheets)
+- The menu is by department (`src/lib/departments.ts`): Today, Leads & Marketing, Sales, Recruitment, Client Interviews, VA Managers, Accounts. Each has sub-tabs above the page (`DeptTabs`): the existing pages, then that department's Google Sheet tabs. A department shows when the person has its area.
+- Sheet tabs live in `sheet_mirror` / `sheet_mirror_parts` (migration `20261025000001_sheet_mirror.sql`), read with RLS `has_area(area)`. The Google Sheets stay the source of truth; the dashboard copy is read-only and shows "Updated x min ago" plus an "Open in Google Sheets" link.
+- The copy is made by the Apps Script project **OSF Morning Report** (`outsourceforce-ai-ops/morning-report/DashboardSync.gs`, function `syncDashboard`, every 30 min via `installSyncTrigger`). It reads each tab with the Sheets API (values, notes, colours, bold, merges, widths, frozen rows/cols; hidden rows/cols left out) and POSTs it in ~2.5 MB parts to `/api/sync/sheets` (`x-sync-secret`). The last part switches the tab over, so a page never shows half an upload. Tabs removed from the script are pruned after a clean full run.
+- Add or move a tab: one line in `dashTabList_()` in that script (key, department, area, label, spreadsheet, tab name). Roel's External Hires file is added tab by tab automatically.
+- Accounts › Collections (`/d/accounts`) reads the `acc-client-payments` copy and splits it into pay-runs (marker rows like "1-15 October 2026"): invoiced, collected, who still owes, who wasn't invoiced and why. Parsing: `parsePayRuns` in `src/lib/mirror.ts` (tested by `scripts/test-mirror.mjs`).
 
 ## Sheets (team trackers inside the CRM)
 Migration `20261008000001_sheets_and_staffing.sql`. **Sheets** in the menu (everyone). Like a shared Google Sheet: pick a template (Daily KPIs, Experiments, Content calendar, Ad spend & leads, VA hours log, Blank), then edit in place.

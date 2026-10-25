@@ -23,8 +23,9 @@ Read `HANDOVER.md` first (architecture, env vars, runbook).
 - `src/lib/areas.ts` + `getMyAreas`/`requireArea` (`src/lib/auth.ts`) + `requireActorArea` (`src/lib/server/rbac.ts`) — department access. Every new page/table must pick an area (RLS uses `public.has_area()`).
 - `src/lib/server/sourci.ts` (tools/prompt) + `sourci-exec.ts` (confirmed changes) + `src/components/sourci.tsx` + `src/app/api/sourci/` — Donna, the voice assistant (files/routes still named `sourci`). Changes only via propose → user confirms → executeProposal.
 - `src/lib/sheets.ts` + `src/app/(app)/sheets/` — Sheets (team trackers; RLS `sheet_access()`/`can_view_sheet()`, cell edits via `set_sheet_cell()`). `src/lib/server/staffing.ts` + `src/app/(app)/{roles,vas}/` — open roles, matching, hire → placement.
+- `src/lib/departments.ts` (menu by department + sub-tabs) + `src/lib/mirror.ts` + `src/lib/server/mirror.ts` + `src/app/api/sync/sheets/route.ts` + `src/app/(app)/d/` — read-only copies of the team's Google Sheet tabs, synced by the Apps Script `outsourceforce-ai-ops/morning-report/DashboardSync.gs`.
 - Theme: tokens in `globals.css` (`html.dark` overrides). Use `bg-surface`/`text-ink`/`border-line`, not `bg-white`/slate, so dark mode works.
 - `supabase/migrations/` — schema, RLS, `allocate_lead`. `supabase/demo_ops_*.sql` — demo data add/remove (not migrations).
 
 ## Check before saying done
-`npx tsc --noEmit`, `npx eslint <files>`, `npm run build`, `node scripts/test-leads-core.mjs`, `node scripts/test-ops-core.mjs`, `node scripts/test-confirm-words.mjs`.
+`npx tsc --noEmit`, `npx eslint <files>`, `npm run build`, `node scripts/test-leads-core.mjs`, `node scripts/test-ops-core.mjs`, `node scripts/test-confirm-words.mjs`, `node scripts/test-mirror.mjs`.

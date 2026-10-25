@@ -12,6 +12,9 @@ import { Sourci } from "@/components/sourci";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { getService } from "@/lib/server/service";
+import { getMirrorTabs } from "@/lib/server/mirror";
+import { buildMenu } from "@/lib/departments";
+import { DeptTabs } from "@/components/dept-tabs";
 import { initials } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -21,6 +24,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   const areas = await getMyAreas();
   const service = await getService();
+  const menu = buildMenu(areas, await getMirrorTabs());
   const { count } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
@@ -37,7 +41,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent" />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-12 pt-4">
-          <AppNav isManager={hasRole(profile, "manager")} areas={areas} service={service} />
+          <AppNav isManager={hasRole(profile, "manager")} menu={menu} service={service} />
         </div>
       </aside>
 
@@ -45,7 +49,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-line bg-bg/85 px-4 backdrop-blur-xl md:px-8">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-1 md:hidden">
-            <MobileNav isManager={hasRole(profile, "manager")} areas={areas} service={service} />
+            <MobileNav isManager={hasRole(profile, "manager")} menu={menu} service={service} />
             <Logo size={24} />
           </div>
           <div className="hidden md:block">
@@ -85,6 +89,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </header>
 
         <main className="page-enter flex-1 px-4 py-6 md:px-8 md:py-8">
+          <DeptTabs menu={menu} />
           <MotionProvider>{children}</MotionProvider>
         </main>
         {profile.role === "admin" && <Sourci />}

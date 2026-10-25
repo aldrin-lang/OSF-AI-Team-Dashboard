@@ -6,41 +6,33 @@ import { useId, useState } from "react";
 import { LayoutGroup, motion } from "motion/react";
 import {
   Users,
-  KanbanSquare,
-  AlertTriangle,
   BarChart3,
   LayoutDashboard,
   Settings,
   ShieldCheck,
-  Inbox,
   UserSearch,
-  MessageCircleHeart,
-  Receipt,
-  Briefcase,
-  Contact,
+  Megaphone,
+  PhoneCall,
+  Mic,
+  Wallet,
   Sheet as SheetIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Area } from "@/lib/areas";
+import { findActive, type DepartmentKey, type DeptMenu } from "@/lib/departments";
 import type { Service } from "@/lib/service";
 import { ServiceSwitch } from "@/components/service-switch";
 
-type Side = Service;
-const BOTH: Side[] = ["va", "ai", "all"];
-const VA: Side[] = ["va", "all"];
-// VA outsourcing is the core (full menu); AI receptionist is the side (just the essentials).
-const MAIN: { href: string; label: string; icon: typeof Inbox; area: Area; also?: Area; match?: string; exact?: boolean; sides: Side[] }[] = [
-  { href: "/leads", label: "Leads", icon: Inbox, area: "leads", match: "/leads", sides: BOTH },
-  { href: "/", label: "Clients", icon: Users, area: "clients", exact: true, sides: BOTH },
-  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, area: "clients", match: "/pipeline", sides: BOTH },
-  { href: "/roles", label: "Open roles", icon: Briefcase, area: "candidates", also: "clients", match: "/roles", sides: VA },
-  { href: "/candidates", label: "Candidates", icon: UserSearch, area: "candidates", match: "/candidates", sides: VA },
-  { href: "/vas", label: "VAs", icon: Contact, area: "clients", match: "/vas", sides: VA },
-  { href: "/check-ins", label: "Check-ins", icon: MessageCircleHeart, area: "checkins", match: "/check-ins", sides: VA },
-  { href: "/payments", label: "Payments", icon: Receipt, area: "payments", match: "/payments", sides: BOTH },
-  { href: "/concerns", label: "Concerns", icon: AlertTriangle, area: "clients", match: "/concerns", sides: VA },
-  { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", match: "/reports", sides: VA },
-];
+// The menu follows the team's departments (like their Google Sheets); each one opens on
+// its first sub-tab and the sub-tabs show above the page (DeptTabs).
+const ICON: Record<DepartmentKey, typeof Users> = {
+  today: BarChart3,
+  marketing: Megaphone,
+  sales: PhoneCall,
+  recruitment: UserSearch,
+  interviews: Mic,
+  "va-managers": Users,
+  accounts: Wallet,
+};
 
 function itemClass(active: boolean) {
   return cn(
@@ -60,7 +52,7 @@ function ActivePill() {
   );
 }
 
-function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof Inbox; active: boolean }) {
+function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof Users; active: boolean }) {
   return (
     <Link href={href} title={label} className={itemClass(active)}>
       {active && <ActivePill />}
@@ -70,12 +62,13 @@ function NavLink({ href, label, icon: Icon, active }: { href: string; label: str
   );
 }
 
-export function AppNav({ isManager, areas, service }: { isManager: boolean; areas: Area[]; service: Service }) {
+export function AppNav({ isManager, menu, service }: { isManager: boolean; menu: DeptMenu[]; service: Service }) {
   const group = useId(); // the desktop rail and the mobile drawer each slide their own highlight
   const actual = usePathname();
   // Move the highlight the moment a menu item is clicked, not when the page arrives.
   const [clicked, setClicked] = useState<{ to: string; from: string } | null>(null);
   const pathname = clicked && clicked.from === actual ? clicked.to : actual;
+  const activeDept = findActive(menu, pathname)?.dept.key ?? null;
   const onNavClick = (e: React.MouseEvent) => {
     const a = (e.target as HTMLElement).closest("a");
     const to = a?.getAttribute("href");
@@ -87,17 +80,18 @@ export function AppNav({ isManager, areas, service }: { isManager: boolean; area
       <nav className="flex flex-1 flex-col px-3 collapsed:px-2.5" onClickCapture={onNavClick}>
         <ServiceSwitch service={service} />
         <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint collapsed:hidden">
-          Operations
+          Departments
         </p>
         <div className="flex flex-col gap-1">
-          {MAIN.filter((item) => item.sides.includes(service) && (areas.includes(item.area) || (item.also && areas.includes(item.also)))).map((item) => {
-            const active = item.exact
-              ? pathname === "/"
-              : pathname.startsWith(item.match ?? item.href);
-            return (
-              <NavLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={active} />
-            );
-          })}
+          {menu.map((d) => (
+            <NavLink
+              key={d.key}
+              href={d.tabs[0].href}
+              label={d.label}
+              icon={ICON[d.key]}
+              active={activeDept === d.key}
+            />
+          ))}
         </div>
 
         <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint collapsed:mx-2 collapsed:mb-3 collapsed:mt-4 collapsed:h-px collapsed:overflow-hidden collapsed:bg-line collapsed:p-0 collapsed:text-transparent">

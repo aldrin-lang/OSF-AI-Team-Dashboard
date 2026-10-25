@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { AppNav } from "@/components/app-nav";
 import { LogoWordmark } from "@/components/logo";
-import type { Area } from "@/lib/areas";
+import type { DeptMenu } from "@/lib/departments";
 import type { Service } from "@/lib/service";
 
-export function MobileNav({ isManager, areas, service }: { isManager: boolean; areas: Area[]; service: Service }) {
+export function MobileNav({ isManager, menu, service }: { isManager: boolean; menu: DeptMenu[]; service: Service }) {
   const pathname = usePathname();
   // The menu is open only for the page it was opened on, so navigating closes it.
   const [openAt, setOpenAt] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export function MobileNav({ isManager, areas, service }: { isManager: boolean; a
               </button>
             </div>
             <div className="flex-1 overflow-y-auto py-4">
-              <AppNav isManager={isManager} areas={areas} service={service} />
+              <AppNav isManager={isManager} menu={menu} service={service} />
             </div>
           </div>
         </div>
