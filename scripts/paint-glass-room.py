@@ -39,25 +39,22 @@ for cx, cy, n, r in ((220, 1120, 46, 120), (2280, 1000, 40, 110), (1600, 1150, 2
 d.rounded_rectangle([700, 1060, 1500, 1300], 60, fill=(196, 184, 168, 255))
 d.rounded_rectangle([740, 1000, 1460, 1110], 50, fill=(206, 196, 182, 255))
 img = img.filter(ImageFilter.GaussianBlur(26))
-# OSF sign on the back wall: painted on its own layer and blurred less, so it still reads as the logo
-from PIL import ImageFont
+# OSF mark on the back wall (no name): painted on its own layer and blurred less, so it still reads as the logo.
+# Same geometry as src/components/logo.tsx (viewBox 100): navy ring 39-49, blue ring 30.2-39 in three quarters
+# (none bottom-right), orange ring 8.3-13.3, thin straight cuts at N/E/S/W.
 sign = Image.new("RGBA", (W, H), (0, 0, 0, 0))
 g = ImageDraw.Draw(sign)
-cx, cy, k = 1240, 430, 6.2
-def ring(r, width, colour, gap):
-    for q in range(4):
-        g.arc([cx - r * k, cy - r * k, cx + r * k, cy + r * k], q * 90 + gap / 2, q * 90 + 90 - gap / 2, fill=colour, width=int(width * k))
-ring(42 + 5, 10, (20, 40, 77, 255), 15)     # outer navy ring (PIL draws the width inwards)
-ring(30 + 4.5, 9, (43, 127, 255, 255), 15)  # inner blue ring
-r = 11 + 3.5
-g.ellipse([cx - r * k, cy - r * k, cx + r * k, cy + r * k], outline=(242, 105, 31, 255), width=int(7 * k))
-font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 104)
-a, b = "OutsourceForce", ".ai"
-wa = g.textlength(a, font=font); wb = g.textlength(b, font=font)
-x0 = cx - (wa + wb) / 2
-g.text((x0, cy + 340), a, font=font, fill=(20, 40, 77, 255))
-g.text((x0 + wa, cy + 340), b, font=font, fill=(43, 127, 255, 255))
-sign = sign.filter(ImageFilter.GaussianBlur(9))
+cx, cy, k = 1240, 520, 7.0   # 1 logo unit = 7 px (700 px across)
+def box(r):
+    return [cx - r * k, cy - r * k, cx + r * k, cy + r * k]
+g.ellipse(box(49), outline=(20, 40, 77, 255), width=int(10 * k))
+g.arc(box(39), 90, 360, fill=(36, 125, 245, 255), width=int(8.8 * k))  # PIL: clockwise from 3 o'clock
+g.ellipse(box(13.3), outline=(236, 110, 10, 255), width=int(5 * k))
+cut = 2.1 * k
+for x0, y0, x1, y1 in ((cx - cut, cy - 50 * k, cx + cut, cy - 26 * k), (cx - cut, cy + 26 * k, cx + cut, cy + 50 * k),
+                       (cx - 50 * k, cy - cut, cx - 26 * k, cy + cut), (cx + 26 * k, cy - cut, cx + 50 * k, cy + cut)):
+    g.rectangle([x0, y0, x1, y1], fill=(0, 0, 0, 0))
+sign = sign.convert("RGBa").filter(ImageFilter.GaussianBlur(8)).convert("RGBA")  # premultiplied: no dark fringe
 img = Image.alpha_composite(img.convert("RGBA"), sign).convert("RGB")
 a = np.asarray(img).astype(np.float32)
 a += np.random.default_rng(1).normal(0, 2.2, a.shape)  # fine grain: no colour banding

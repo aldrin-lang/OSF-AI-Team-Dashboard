@@ -1,6 +1,16 @@
 import { cn } from "@/lib/utils";
 
-/** OutsourceForce.ai reticle mark — navy + blue broken rings, orange centre. */
+/** One ring segment from angle a0 to a1 (degrees, 0 = east, clockwise), centred on 50,50. */
+function arc(r: number, a0: number, a1: number) {
+  const pt = (a: number) => `${(50 + r * Math.cos((a * Math.PI) / 180)).toFixed(2)} ${(50 + r * Math.sin((a * Math.PI) / 180)).toFixed(2)}`;
+  return `M ${pt(a0)} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${pt(a1)}`;
+}
+// thin straight cuts at N/E/S/W (half-gap angle at each ring's radius)
+const NAVY = [0, 1, 2, 3].map((q) => arc(44, q * 90 + 2.7, q * 90 + 90 - 2.7));
+// the blue ring has no bottom-right quarter
+const BLUE = [1, 2, 3].map((q) => arc(34.6, q * 90 + 3.5, q * 90 + 90 - 3.5));
+
+/** OutsourceForce.ai mark: navy ring in four quarters, blue ring in three (none bottom-right), orange centre ring. */
 export function Logo({ className, size = 28 }: { className?: string; size?: number }) {
   return (
     <svg
@@ -10,14 +20,15 @@ export function Logo({ className, size = 28 }: { className?: string; size?: numb
       className={cn("shrink-0", className)}
       aria-hidden
     >
-      {/* outer navy ring, split into 4 arcs by N/E/S/W gaps */}
       <g fill="none" strokeLinecap="butt">
-        <circle cx="50" cy="50" r="42" stroke="#14284d" strokeWidth="10" strokeDasharray="55 10.9" strokeDashoffset="27.5" />
-        {/* inner bright-blue ring */}
-        <circle cx="50" cy="50" r="30" stroke="#2b7fff" strokeWidth="9" strokeDasharray="39.3 7.8" strokeDashoffset="19.6" />
+        {NAVY.map((d) => (
+          <path key={d} d={d} stroke="#14284d" strokeWidth="10" />
+        ))}
+        {BLUE.map((d) => (
+          <path key={d} d={d} stroke="#247df5" strokeWidth="8.8" />
+        ))}
       </g>
-      {/* orange centre */}
-      <circle cx="50" cy="50" r="11" fill="none" stroke="#f2691f" strokeWidth="7" />
+      <circle cx="50" cy="50" r="10.8" fill="none" stroke="#ec6e0a" strokeWidth="5" />
     </svg>
   );
 }
