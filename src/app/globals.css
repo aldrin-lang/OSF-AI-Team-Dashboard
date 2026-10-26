@@ -57,7 +57,7 @@ html {
   --glass-from: rgba(255, 255, 255, 0.38);
   --glass-to: rgba(255, 255, 255, 0.24);
   --glass-border: rgba(255, 255, 255, 0.6);
-  --glass-blur: blur(26px) saturate(150%);
+  --glass-blur: blur(20px);
   /* the big panel the page sits on: see-through, no blur of its own (the cards inside blur) */
   --glass-panel: rgba(255, 255, 255, 0.16);
   /* the room behind everything (public/glass-room.webp, painted by hand: no photo licence needed) */
@@ -169,24 +169,21 @@ body {
   min-height: 100%;
   color: var(--color-ink);
   background-color: var(--color-bg);
-  /* soft colour fields behind the frosted surfaces: the "glass" needs something to show through */
-  background-image: var(--page-shade), var(--page-image), linear-gradient(160deg, var(--page-from) 0%, var(--page-to) 100%);
-  background-size: auto, cover, auto;
-  background-position: center;
   transition: background-color 0.2s ease, color 0.2s ease;
-  background-attachment: fixed;
 }
 
-/* very faint dot grid */
+/* The room behind the glass, on its own fixed layer. (background-attachment: fixed on body made the
+   browser repaint the whole page, and re-blur every glass panel, on each scroll step.) */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(56rem 46rem at 50% 0%, #000 25%, transparent 72%);
+  background-image: var(--page-shade), var(--page-image), linear-gradient(160deg, var(--page-from) 0%, var(--page-to) 100%);
+  background-size: auto, cover, auto;
+  background-position: center;
+  transform: translateZ(0);
 }
 body > * {
   position: relative;
@@ -212,13 +209,18 @@ body > * {
   }
 }
 
-/* Cards built from the tokens (rounded panel + bg-surface) get the same frosted finish.
+/* Cards built from the tokens (rounded panel + bg-surface) get the same glass edge and shadow.
    Not applied to fixed/absolute layers: those are popovers and need the solid variant below. */
 :is(.rounded-xl, .rounded-2xl).bg-surface:not(.absolute, .fixed) {
   border-color: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+}
+/* Speed: only the sidebar, the top bar and the page panel blur what's behind them. Cards inside the
+   page sit on the already-blurred panel, so a blur of their own looked the same but cost a lot
+   (a long table or a list of 40 cards re-blurred on every scroll). */
+main .glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 /* The big see-through panel each page sits on (like the video: cards float on a glass sheet) */
 .glass-panel {
@@ -237,8 +239,8 @@ body > * {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
-  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   pointer-events: none;
 }
 
@@ -307,11 +309,11 @@ body > * {
    =========================================================================== */
 :root {
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --rise-step: 55ms;
+  --rise-step: 25ms; /* was 55ms: the last section waited ~0.45 s before it even started */
 }
 @keyframes rise {
   /* no blur here: the glass panels already blur, and both together make pages slow to appear */
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes fade-in {
@@ -336,16 +338,16 @@ body > * {
 
 /* 1. Page entrance: the page's sections rise in one after another */
 .page-enter > * > * {
-  animation: rise 0.55s var(--ease-out-soft) backwards;
+  animation: rise 0.3s var(--ease-out-soft) backwards;
 }
 /* 2. Cards and tiles in any grid follow the same rhythm */
 .page-enter .grid > *,
 .stagger > * {
-  animation: rise 0.5s var(--ease-out-soft) backwards;
+  animation: rise 0.3s var(--ease-out-soft) backwards;
 }
 /* 3. Table rows slide in gently (first screenful only) */
 .page-enter tbody > tr:nth-child(-n + 14) {
-  animation: rise 0.45s var(--ease-out-soft) backwards;
+  animation: rise 0.25s var(--ease-out-soft) backwards;
 }
 .page-enter > * > *:nth-child(2),  .page-enter .grid > *:nth-child(2),  .stagger > *:nth-child(2),  .page-enter tbody > tr:nth-child(2)  { animation-delay: calc(var(--rise-step) * 1); }
 .page-enter > * > *:nth-child(3),  .page-enter .grid > *:nth-child(3),  .stagger > *:nth-child(3),  .page-enter tbody > tr:nth-child(3)  { animation-delay: calc(var(--rise-step) * 2); }

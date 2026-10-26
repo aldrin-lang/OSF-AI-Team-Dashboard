@@ -1,4 +1,5 @@
 import { getServerSupabase } from "@/lib/supabase/server";
+import { allRows } from "@/lib/server/paged";
 import {
   getStagesCached,
   getStageGatesCached,
@@ -64,8 +65,16 @@ export async function getClients(filters: ClientListFilters): Promise<Client[]> 
 // One query set for the spreadsheet-style grid: every client + the rollups
 // the grid shows (checklist progress, RB summary, concerns, next action).
 // ---------------------------------------------------------------------------
+/** Only the client fields the grid shows or edits (the full row is ~50 columns; all of them for every
+ *  client made the Clients page send ~700 KB to the browser). */
+const GRID_CLIENT_COLS = "id, name, company_name, pipeline, status, stage_id, stage_entered_at, manager_id, country, source, setup_fee, hiring_fee_status, start_date, portal_url";
+export type GridClient = Pick<
+  Client,
+  "id" | "name" | "company_name" | "pipeline" | "status" | "stage_id" | "stage_entered_at" | "manager_id" | "country" | "source" | "setup_fee" | "hiring_fee_status" | "start_date" | "portal_url"
+>;
+
 export interface GridRow {
-  client: Client;
+  client: GridClient;
   stage: PipelineStage | null;
   daysInStage: number | null;
   overSla: boolean;
@@ -83,29 +92,33 @@ export async function getClientsGrid(pipelines: PipelineType[] = ["ai"]): Promis
   profiles: Profile[];
 }> {
   const supabase = await getServerSupabase();
-  // one round trip: the clients on this side with just the bits the grid rolls up
-  const [{ data: clientRows }, stages, profiles] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("*, client_lines(regulatory_bundle_status), checklist_items(status), concerns(status)")
-      .in("pipeline", pipelines),
+  // the clients on this side with just the bits the grid rolls up (paged: more than the API's 1,000-row cap)
+  const [clientRows, stages, profiles] = await Promise.all([
+    allRows<unknown>((a, b) =>
+      supabase
+        .from("clients")
+        .select(`${GRID_CLIENT_COLS}, client_lines(regulatory_bundle_status), checklist_items(status), concerns(status)`)
+        .in("pipeline", pipelines)
+        .order("id")
+        .range(a, b),
+    ),
     pipelines.length === 1 ? getStages(pipelines[0]) : getStages(),
     getProfiles(),
   ]);
 
-  type Joined = Client & {
+  type Joined = GridClient & {
     client_lines: { regulatory_bundle_status: string }[] | null;
     checklist_items: { status: string }[] | null;
     concerns: { status: string }[] | null;
   };
   const joined = (clientRows as Joined[]) ?? [];
   // drop the joined arrays so they aren't shipped to the browser with every row
-  const clients: Client[] = joined.map((j) => {
+  const clients: GridClient[] = joined.map((j) => {
     const c: Partial<Joined> = { ...j };
     delete c.client_lines;
     delete c.checklist_items;
     delete c.concerns;
-    return c as Client;
+    return c as GridClient;
   });
   const stageById = new Map(stages.map((s) => [s.id, s]));
   const pm = new Map(profiles.map((p) => [p.id, p]));
