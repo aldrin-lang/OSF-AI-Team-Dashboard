@@ -7,7 +7,7 @@
 
 /* ===========================================================================
    OSF AI Team Dashboard — glass theme
-   Frosted see-through surfaces over a soft blue/orange backdrop ·
+   See-through frosted panels floating over a soft, out-of-focus room ·
    electric blue #2b7fff primary · orange #f2691f accent
    =========================================================================== */
 @theme {
@@ -16,16 +16,17 @@
 
   /* surfaces */
   --color-bg: #eef2fb;
-  --color-surface: rgba(255, 255, 255, 0.5);
+  --color-surface: rgba(255, 255, 255, 0.3);
   --color-fill: rgba(15, 23, 42, 0.04);
   --color-fill-strong: rgba(15, 23, 42, 0.075);
-  --color-line: rgba(15, 23, 42, 0.09);
+  --color-line: rgba(255, 255, 255, 0.5);
   --color-line-strong: rgba(15, 23, 42, 0.16);
 
   /* text */
   --color-ink: #0e1729;
-  --color-ink-muted: #4a5b76;
-  --color-ink-faint: #8a99b3;
+  /* a touch darker than before: text sits on see-through glass, not white */
+  --color-ink-muted: #3b4a62;
+  --color-ink-faint: #5f6d84;
 
   /* brand */
   --color-brand-50: #eef5ff;
@@ -48,18 +49,23 @@
   --color-accent-600: #d9540f;
 
   /* row hover tint (tables) */
-  --color-row-hover: rgba(255, 255, 255, 0.55);
+  --color-row-hover: rgba(255, 255, 255, 0.4);
 }
 
 html {
   color-scheme: light;
-  --glass-from: rgba(255, 255, 255, 0.58);
-  --glass-to: rgba(255, 255, 255, 0.38);
-  --glass-border: rgba(255, 255, 255, 0.75);
-  --glass-blur: blur(22px) saturate(170%);
+  --glass-from: rgba(255, 255, 255, 0.38);
+  --glass-to: rgba(255, 255, 255, 0.24);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur: blur(26px) saturate(150%);
+  /* the big panel the page sits on: see-through, no blur of its own (the cards inside blur) */
+  --glass-panel: rgba(255, 255, 255, 0.16);
+  /* the room behind everything (public/glass-room.webp, painted by hand: no photo licence needed) */
+  --page-image: url("/glass-room.webp");
+  --page-shade: linear-gradient(rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0.26));
   /* popovers, menus and drawers sit on top of other content: more solid so they stay readable */
   --glass-solid: rgba(255, 255, 255, 0.86);
-  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(15, 23, 42, 0.04), 0 22px 48px -22px rgba(30, 50, 100, 0.28);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(40, 30, 20, 0.05), 0 24px 50px -24px rgba(40, 30, 20, 0.35);
   --glass-highlight: rgba(255, 255, 255, 0.95);
   --page-glow-a: rgba(43, 127, 255, 0.55);
   --page-glow-b: rgba(242, 105, 31, 0.45);
@@ -67,7 +73,7 @@ html {
   --page-glow-d: rgba(34, 211, 238, 0.32);
   --page-from: #f3f6fd;
   --page-to: #e9eef9;
-  --dot: rgba(15, 23, 42, 0.035);
+  --dot: transparent;
   --scroll: rgba(15, 23, 42, 0.16);
 }
 
@@ -77,17 +83,19 @@ html {
 html.dark {
   color-scheme: dark;
   --color-bg: #070c19;
-  --color-surface: rgba(20, 30, 52, 0.55);
+  --color-surface: rgba(16, 24, 44, 0.42);
   --color-fill: rgba(148, 163, 184, 0.07);
   --color-fill-strong: rgba(148, 163, 184, 0.13);
   --color-line: rgba(148, 163, 184, 0.14);
   --color-line-strong: rgba(148, 163, 184, 0.26);
   --color-ink: #e6ecf7;
-  --color-ink-muted: #a3b1c9;
-  --color-ink-faint: #6d7c97;
+  --color-ink-muted: #b8c4d9;
+  --color-ink-faint: #8b99b3;
   --color-row-hover: rgba(148, 163, 184, 0.08);
-  --glass-from: rgba(24, 36, 62, 0.6);
-  --glass-to: rgba(15, 24, 43, 0.5);
+  --glass-from: rgba(24, 36, 62, 0.46);
+  --glass-to: rgba(15, 24, 43, 0.36);
+  --glass-panel: rgba(10, 16, 32, 0.22);
+  --page-shade: linear-gradient(rgba(6, 10, 22, 0.74), rgba(6, 10, 22, 0.74));
   --glass-border: rgba(148, 197, 255, 0.14);
   --glass-solid: rgba(14, 22, 40, 0.9);
   --glass-shadow: inset 0 1px 0 rgba(148, 197, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.3), 0 22px 48px -22px rgba(0, 0, 0, 0.7);
@@ -98,7 +106,7 @@ html.dark {
   --page-glow-d: rgba(34, 211, 238, 0.18);
   --page-from: #0a1124;
   --page-to: #070c19;
-  --dot: rgba(148, 163, 184, 0.06);
+  --dot: transparent;
   --scroll: rgba(148, 163, 184, 0.22);
 }
 
@@ -131,7 +139,7 @@ html[data-switching] main {
   --color-brand-500: #8b5cf6;
   --color-brand-600: #7c3aed;
   --color-brand-700: #6d28d9;
-  --color-row-hover: rgba(255, 255, 255, 0.55);
+  --color-row-hover: rgba(255, 255, 255, 0.4);
 }
 html.dark [data-service="va"] {
   --color-row-hover: rgba(139, 92, 246, 0.1);
@@ -162,12 +170,9 @@ body {
   color: var(--color-ink);
   background-color: var(--color-bg);
   /* soft colour fields behind the frosted surfaces: the "glass" needs something to show through */
-  background-image:
-    radial-gradient(38rem 30rem at 88% 4%, var(--page-glow-a), transparent 60%),
-    radial-gradient(34rem 30rem at 4% 30%, var(--page-glow-b), transparent 60%),
-    radial-gradient(36rem 28rem at 62% 96%, var(--page-glow-c), transparent 62%),
-    radial-gradient(24rem 20rem at 42% 46%, var(--page-glow-d), transparent 64%),
-    linear-gradient(160deg, var(--page-from) 0%, var(--page-to) 100%);
+  background-image: var(--page-shade), var(--page-image), linear-gradient(160deg, var(--page-from) 0%, var(--page-to) 100%);
+  background-size: auto, cover, auto;
+  background-position: center;
   transition: background-color 0.2s ease, color 0.2s ease;
   background-attachment: fixed;
 }
@@ -215,6 +220,13 @@ body > * {
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
 }
+/* The big see-through panel each page sits on (like the video: cards float on a glass sheet) */
+.glass-panel {
+  background-color: var(--glass-panel);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 30px 80px -40px rgba(20, 14, 8, 0.45);
+}
+
 /* Popovers, drop-down forms, drawers and the command palette: frosted but nearly solid */
 .glass.card-glow,
 .glass:is(.absolute, .fixed),
@@ -283,8 +295,9 @@ body > * {
   --rise-step: 55ms;
 }
 @keyframes rise {
-  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
-  to { opacity: 1; transform: none; filter: none; }
+  /* no blur here: the glass panels already blur, and both together make pages slow to appear */
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes fade-in {
   from { opacity: 0; }

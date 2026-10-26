@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen" data-service={service}>
       <RealtimeSync />
-      <aside className="side-rail sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface backdrop-blur-xl transition-[width] duration-200 collapsed:w-[72px] md:flex">
+      <aside className="side-rail glass sticky! top-3 z-30 m-3 mr-0 hidden h-[calc(100vh-1.5rem)] w-64 shrink-0 flex-col overflow-hidden rounded-3xl transition-[width] duration-200 collapsed:w-[72px] md:flex">
         <div className="relative flex h-16 items-center justify-between gap-2 border-b border-line pl-5 pr-3 collapsed:flex-col collapsed:justify-center collapsed:gap-0 collapsed:px-0">
           <LogoWordmark className="collapsed:hidden" />
           <Logo size={24} className="hidden collapsed:block" />
@@ -48,7 +48,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-line bg-surface px-4 backdrop-blur-xl md:px-8">
+        <header className="glass sticky! top-3 z-40 mx-3 mt-3 flex h-16 items-center justify-between rounded-2xl px-4 md:px-6">
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-500/40 to-transparent" />
           <div className="flex items-center gap-1 md:hidden">
             <MobileNav isManager={hasRole(profile, "manager")} menu={menu} service={service} />
@@ -90,7 +90,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
 
-        <main className="page-enter flex-1 px-4 py-6 md:px-8 md:py-8">
+        <main className="page-enter glass-panel m-3 flex-1 rounded-[28px] px-4 py-6 md:px-8 md:py-8">
           <DeptTabs menu={menu} />
           <MotionProvider>{children}</MotionProvider>
         </main>
